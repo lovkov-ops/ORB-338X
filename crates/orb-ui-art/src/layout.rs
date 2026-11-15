@@ -138,9 +138,10 @@ impl Builder<'_> {
         self.push(id, "fader", "fader_track", x, y, Extra::Fader { v });
     }
 
-    /// A seven-segment display: the rectangle holds `digits` frames of 9 x 16.
+    /// A seven-segment display: the rectangle holds `digits` frames of 9 x 16. This fork draws
+    /// every display with the lighter unlit segments ("segb").
     fn display(&mut self, id: &str, x: f32, y: f32, w: f32, digits: usize, text: &str) {
-        self.display_of("seg", id, x, y, w, digits, text);
+        self.display_of("segb", id, x, y, w, digits, text);
     }
 
     /// A display drawn with the digit parts `<prefix>_0..9` and `<prefix>_blank` ("seg", or

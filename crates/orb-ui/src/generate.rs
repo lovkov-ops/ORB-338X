@@ -37,7 +37,7 @@ use crate::random::{self, Rng};
 use crate::scale::{self, KEYS, SCALES, ScaleKeys};
 
 /// The row names in column A (A1 to A4).
-pub const ROWS: [&str; 4] = ["SCALE/KEY", "RANDOM", "ALTER", "MOVE"];
+pub const ROWS: [&str; 4] = ["SCALE/KEY", "GENERATE", "ALTER", "MOVE"];
 /// The widths of columns A and B in panel pixels: B is twice as wide as A.
 pub const COL_W: [f32; 2] = [48.0, 96.0];
 /// The height of every row (and of a list's item) in panel pixels.

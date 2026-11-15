@@ -890,7 +890,7 @@ fn mask(c: char) -> u8 {
 
 /// The 11 frames of the seven-segment display: digits 0..9 and blank. The
 /// unlit segments stay faintly visible (a blank is the disabled display). `segb_*` (this fork)
-/// are the same with the unlit segments a little lighter: the BAR, START and LENGTH displays.
+/// are the same with the unlit segments a little lighter: every display of the panel.
 fn digits(out: &mut Vec<Part>) {
     for (prefix, off) in [("seg", pal::LCD_OFF), ("segb", LCD_OFF_LIGHT)] {
         for c in "0123456789 ".chars() {
@@ -909,7 +909,7 @@ fn digits(out: &mut Vec<Part>) {
     }
 }
 
-/// The unlit segments of the BAR, START and LENGTH displays: a little lighter than `LCD_OFF`.
+/// The unlit segments of the panel's displays (this fork): a little lighter than `LCD_OFF`.
 const LCD_OFF_LIGHT: &str = "#3a1a17";
 
 /// A level meter with 10 segments and 11 states (0 = silent, 10 = clip).

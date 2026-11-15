@@ -144,7 +144,7 @@ fn escape_and_a_click_outside_close_the_menu_and_a_click_inside_does_not() {
 
 #[test]
 fn the_menu_is_under_its_button_inside_the_panel_with_column_b_twice_as_wide() {
-    assert_eq!(ROWS, ["SCALE/KEY", "RANDOM", "ALTER", "MOVE"]);
+    assert_eq!(ROWS, ["SCALE/KEY", "GENERATE", "ALTER", "MOVE"]);
     assert_eq!(COL_W[1], 2.0 * COL_W[0]);
     let h = Harness::new();
     for synth in 0..2 {

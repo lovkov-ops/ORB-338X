@@ -1,6 +1,6 @@
 id	section	kind	part	x	y	w	h
 transport.shuffle	transport	knob	knob_22	27	10.3	22	22
-transport.tempo	transport	display	seg_0..9,seg_blank	60	27	27	16
+transport.tempo	transport	display	segb_0..9,segb_blank	60	27	27	16
 transport.tempo_up	transport	repeat	arrow_inc_rest	89	26	11	9
 transport.tempo_down	transport	repeat	arrow_dec_rest	89	35	11	9
 transport.mode	transport	switch	switch_mode_1	177	2	26	19
@@ -33,7 +33,7 @@ pattern1.bankB	pattern1	grid	bank_btn_B_off	36	114	14	15
 pattern1.bankC	pattern1	grid	bank_btn_C_off	52	114	14	15
 pattern1.bankD	pattern1	grid	bank_btn_D_off	68	114	14	15
 pattern1.shuffle	pattern1	toggle	toggle_shuffle_off	19	147	30	12
-pattern1.steps	pattern1	display	seg_0..9,seg_blank	52	145	19	16
+pattern1.steps	pattern1	display	segb_0..9,segb_blank	52	145	19	16
 pattern1.steps_up	pattern1	repeat	arrow_inc_rest	72	144	11	9
 pattern1.steps_down	pattern1	repeat	arrow_dec_rest	72	153	11	9
 pattern2.on	pattern2	toggle	power_13x13_on	20	169	13	13
@@ -50,7 +50,7 @@ pattern2.bankB	pattern2	grid	bank_btn_B_off	36	229	14	15
 pattern2.bankC	pattern2	grid	bank_btn_C_off	52	229	14	15
 pattern2.bankD	pattern2	grid	bank_btn_D_off	68	229	14	15
 pattern2.shuffle	pattern2	toggle	toggle_shuffle_off	19	262	30	12
-pattern2.steps	pattern2	display	seg_0..9,seg_blank	52	260	19	16
+pattern2.steps	pattern2	display	segb_0..9,segb_blank	52	260	19	16
 pattern2.steps_up	pattern2	repeat	arrow_inc_rest	72	259	11	9
 pattern2.steps_down	pattern2	repeat	arrow_dec_rest	72	268	11	9
 pattern3.on	pattern3	toggle	power_13x13_on	20	284	13	13
@@ -67,7 +67,7 @@ pattern3.bankB	pattern3	grid	bank_btn_B_off	36	344	14	15
 pattern3.bankC	pattern3	grid	bank_btn_C_off	52	344	14	15
 pattern3.bankD	pattern3	grid	bank_btn_D_off	68	344	14	15
 pattern3.shuffle	pattern3	toggle	toggle_shuffle_off	19	377	30	12
-pattern3.steps	pattern3	display	seg_0..9,seg_blank	52	375	19	16
+pattern3.steps	pattern3	display	segb_0..9,segb_blank	52	375	19	16
 pattern3.steps_up	pattern3	repeat	arrow_inc_rest	72	374	11	9
 pattern3.steps_down	pattern3	repeat	arrow_dec_rest	72	383	11	9
 pattern4.on	pattern4	toggle	power_13x13_on	20	399	13	13
@@ -84,7 +84,7 @@ pattern4.bankB	pattern4	grid	bank_btn_B_off	36	459	14	15
 pattern4.bankC	pattern4	grid	bank_btn_C_off	52	459	14	15
 pattern4.bankD	pattern4	grid	bank_btn_D_off	68	459	14	15
 pattern4.shuffle	pattern4	toggle	toggle_shuffle_off	19	492	30	12
-pattern4.steps	pattern4	display	seg_0..9,seg_blank	52	490	19	16
+pattern4.steps	pattern4	display	segb_0..9,segb_blank	52	490	19	16
 pattern4.steps_up	pattern4	repeat	arrow_inc_rest	72	489	11	9
 pattern4.steps_down	pattern4	repeat	arrow_dec_rest	72	498	11	9
 tb303_1.wave	tb303_1	hswitch	switch_wave_0	102	89.25	34	14
@@ -372,7 +372,7 @@ master.fader	master	fader	fader_track	559	75	15	54
 master.comp	master	radio	mixsw_comp_off	553	132	28	13
 pcf.on	pcf	toggle	power_14x14_on	530	152	14	14
 pcf.meter	pcf	meter	meter_8x14_4	596	152	8	14
-pcf.pattern	pcf	display	seg_0..9,seg_blank	536	171	18	16
+pcf.pattern	pcf	display	segb_0..9,segb_blank	536	171	18	16
 pcf.pattern_up	pcf	repeat	arrow_inc_rest	555	170	11	9
 pcf.pattern_down	pcf	repeat	arrow_dec_rest	555	179	11	9
 pcf.mode	pcf	vswitch	switch_fx_1	575	170	9	18
@@ -382,7 +382,7 @@ pcf.amt	pcf	fader	fader_track	568	194	15	54
 pcf.dec	pcf	fader	fader_track	587	194	15	54
 delay.on	delay	toggle	power_14x14_off	530	263	14	14
 delay.meter	delay	meter	meter_8x14_0	596	263	8	14
-delay.steps	delay	display	seg_0..9,seg_blank	535	282	19	16
+delay.steps	delay	display	segb_0..9,segb_blank	535	282	19	16
 delay.steps_up	delay	repeat	arrow_inc_rest	555	281	11	9
 delay.steps_down	delay	repeat	arrow_dec_rest	555	290	11	9
 delay.triplet	delay	vswitch	switch_fx_0	575	281	9	18
