@@ -68,17 +68,34 @@ The command line tool orb is inside the app. To use it from a terminal:
 Licensed under the GNU General Public License, version 3 only (GPL-3.0-only; see LICENSE).
 EOF
 
+# The image's volume shows the app's icon when mounted (this fork): .VolumeIcon.icns at its
+# root and the root's "custom icon" Finder flag (0x0400 of the FinderInfo's flags, set with
+# xattr: SetFile needs Xcode).
+cp "$stage/OpenRB-338x.app/Contents/Resources/OpenRB-338x.icns" "$stage/.VolumeIcon.icns"
+
 dmg=$out/OpenRB-338x-$version-$target.dmg
-rm -f "$dmg"
+rw=$out/OpenRB-338x-rw.dmg
+rm -f "$dmg" "$rw"
 # the same fixed times as the bundle (macos-app.sh)
 stamp=$(TZ=UTC date -r "${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m%d%H%M.%S)
 find "$stage" -exec touch -h -t "$stamp" {} +
 # hdiutil sometimes reports "Resource busy" right after the files were written; retry.
 for attempt in 1 2 3; do
     hdiutil create -quiet -volname "OpenRB-338x" -srcfolder "$stage" -fs HFS+ \
-        -format UDZO -ov "$dmg" && break
+        -format UDRW -ov "$rw" && break
     [ "$attempt" -lt 3 ] || { echo "hdiutil create failed" >&2; exit 1; }
     sleep 5
 done
+mnt=$(hdiutil attach -nobrowse -noverify -noautoopen -readwrite "$rw" | awk -F'\t' 'END { print $NF }')
+[ -d "$mnt" ] || { echo "cannot mount $rw" >&2; exit 1; }
+xattr -wx com.apple.FinderInfo \
+    0000000000000000040000000000000000000000000000000000000000000000 "$mnt"
+for attempt in 1 2 3; do
+    hdiutil detach -quiet "$mnt" && break
+    [ "$attempt" -lt 3 ] || { echo "hdiutil detach failed" >&2; exit 1; }
+    sleep 5
+done
+hdiutil convert -quiet "$rw" -format UDZO -o "$dmg"
+rm -f "$rw"
 rm -rf "$stage"
 ls -l "$dmg"

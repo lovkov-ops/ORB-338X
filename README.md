@@ -27,16 +27,20 @@ extra features for the two bass synths. Everything the original does, it does to
 - **GENERATE menu** on each bass synth (the RNDM button in the step editor):
   - **SCALE AND KEY:** 37 scales and every key. The keys of the chosen scale glow green, and
     the second synth is offered only the scales that fit the first one.
-  - **RANDOM:** writes a new pattern in the scale: any of down, up, accent, slide and note
+  - **GENERATE:** writes a new pattern in the scale: any of down, up, accent, slide and note
     (with rests).
   - **ALTER:** changes the pattern that is there instead of starting over.
   - **MOVE:** shifts the pattern by -2, -1, a random amount, +1 or +2 steps.
+  - **RESET:** puts the menu back as it starts (the pattern stays).
 - **An LFO on CUTOFF, RESO, ENV MOD, DECAY and ACCENT,** in a row under each knob: RATE and
   AMOUNT knobs, a note button that ties the rate to the song's tempo, and a wave button that
   flips between a sine and a random sine. The knob's arc shows the moving value.
 - **Step LEDs:** 16 LEDs in the step editor choose the step to edit (green); the steps of the
   pattern's length are lit red.
-- **The waveform as two pictures** (saw and square) to click, under the TUNE knob.
+- **The waveform as two pictures** (saw and square) to click, under TUNE, now a large knob
+  like the others.
+- **Hear the note in pitch mode:** while the song is stopped, a key pressed in pitch mode plays
+  its note with the synth's current sound.
 - **`.rbsx` songs:** a ReBirth song plus the GENERATE and LFO settings. Plain `.rbs` songs still
   open and save as before; Save As has a button for each format.
 - **Copy, Cut and Paste of a pattern:** Cmd+C, Cmd+X and Cmd+V on macOS (Ctrl on Windows and
@@ -85,19 +89,19 @@ extra features for the two bass synths. Everything the original does, it does to
 
    | System | File |
    |---|---|
-   | macOS, Apple silicon | `OpenRB-338x-<version>-aarch64-apple-darwin.dmg` |
-   | macOS, Intel | `OpenRB-338x-<version>-x86_64-apple-darwin.dmg` |
-   | Windows, x64 | `OpenRB-338x-<version>-x64-setup.exe` |
-   | Windows, ARM64 | `OpenRB-338x-<version>-arm64-setup.exe` |
-   | Linux, x86_64 | `OpenRB-338x-<version>-x86_64.AppImage` |
-   | Linux, ARM64 | `OpenRB-338x-<version>-aarch64.AppImage` |
+   | macOS, Apple silicon | `OpenRB-338x-install-macOS-AppleSilicon.dmg` |
+   | macOS, Intel | `OpenRB-338x-install-macOS-Intel.dmg` |
+   | Windows, x64 | `OpenRB-338x-install-Windows-x64.exe` |
+   | Windows, ARM64 | `OpenRB-338x-install-Windows-ARM64.exe` |
+   | Linux, x86_64 | `OpenRB-338x-Linux-x86_64.AppImage` |
+   | Linux, ARM64 | `OpenRB-338x-Linux-ARM64.AppImage` |
 
    Plain archives (`.tar.gz`, or `.zip` on Windows) with the two binaries are there too.
 
 2. **Install it.**
    - macOS: open the `.dmg` and drag OpenRB-338x to Applications.
    - Windows: run the installer. It can add `orb` to the PATH.
-   - Linux: make the AppImage executable (`chmod +x OpenRB-338x-*.AppImage`).
+   - Linux: make the AppImage executable (`chmod +x OpenRB-338x-Linux-*.AppImage`).
 
 3. **Optionally, get songs and mods:** download the
    [song collection](https://github.com/pingw33n/rb-songs) and the
