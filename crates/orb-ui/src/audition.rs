@@ -5,11 +5,16 @@
 //! and rests after it, every other mixer channel is muted, and half a second of pattern-mode
 //! playback is rendered. The player plays that as its preview sample (the one the mod's startup
 //! sound uses), mixed after the song, so the song and the running engine are not touched.
+//!
+//! A click on a drum machine's instrument button (the legend over its steps) plays that drum
+//! the same way, at any time: one hit of the instrument on the first step, with the knobs as
+//! they are and the kit that plays (`render_drum`).
 
 use std::sync::Arc;
 
 use orb_engine::frame::export::REALTIME_FRAMES;
 use orb_engine::frame::{Activation, Devices, Engine};
+use orb_engine::samples::SampleSet;
 use orb_engine::song::{Device, Song};
 use orb_engine::tables::Tables;
 
@@ -18,6 +23,72 @@ use crate::model::Step303;
 
 /// How long the heard note is, in frames (44100 a second): the step and the tail of its decay.
 pub const FRAMES: usize = 26_460;
+/// How long a heard drum hit is: long enough for a cymbal's tail.
+pub const DRUM_FRAMES: usize = 66_150;
+
+/// `engine`'s pattern-mode playback from the start, `frames` long, mono (left and right
+/// averaged).
+fn play_mono(engine: &mut Engine, frames: usize) -> Vec<i16> {
+    engine.locate(0);
+    engine.play();
+    let mut buf = vec![0i16; 2 * REALTIME_FRAMES];
+    let mut out = Vec::with_capacity(frames);
+    while out.len() < frames {
+        let n = REALTIME_FRAMES.min(frames - out.len());
+        engine.render(&mut buf, n);
+        out.extend(
+            buf[..2 * n]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|[l, r]| ((*l as i32 + *r as i32) / 2) as i16),
+        );
+    }
+    engine.stop();
+    out
+}
+
+/// Renders one hit of drum `inst` (the panel's instrument index, 1 BD .. 11; 0 the accent,
+/// which makes no sound of its own: None) of the 808 (`is808`) or the 909, as the first step of
+/// its pattern `pattern` of `song`, the other channels muted, with the drum `samples` of the
+/// kit that plays: mono, [`DRUM_FRAMES`] long.
+pub fn render_drum(
+    tables: Arc<Tables>,
+    samples: Option<Arc<SampleSet>>,
+    song: &Song,
+    is808: bool,
+    pattern: u8,
+    inst: usize,
+) -> Option<Vec<i16>> {
+    if inst == 0 || inst >= 12 {
+        return None;
+    }
+    let mut engine = Engine::new(tables, Devices::implemented(samples));
+    engine.load(song).ok()?;
+    engine.activate(Activation::ReplacesCurrent {
+        current_playing: false,
+    });
+    engine.stop();
+    engine.set_song_mode(0);
+    let (dev, channel) = if is808 {
+        (Device::Tr808, 2)
+    } else {
+        (Device::Tr909, 3)
+    };
+    for s in 0..16u8 {
+        let mut bytes = [0u8; 12];
+        if s == 0 {
+            bytes[inst] = 1;
+        }
+        engine.step(dev, pattern, s, &bytes);
+    }
+    engine.pattern_field(dev, pattern, 1, 16);
+    engine.device_param(dev, 1, pattern);
+    for c in 0..4u8 {
+        engine.mixer_channel(c, 0, (c == channel) as u8);
+    }
+    Some(play_mono(&mut engine, DRUM_FRAMES))
+}
 
 /// Renders 303 `synth`'s `step` as the first step of its pattern `pattern` of `song`, the other
 /// channels muted: mono int16 (left and right averaged), [`FRAMES`] long. None when the engine
@@ -66,26 +137,40 @@ pub fn render_note(
     for c in 0..4u8 {
         engine.mixer_channel(c, 0, (c as usize == synth) as u8);
     }
-    engine.locate(0);
-    engine.play();
-    let mut buf = vec![0i16; 2 * REALTIME_FRAMES];
-    let mut out = Vec::with_capacity(FRAMES);
-    while out.len() < FRAMES {
-        let n = REALTIME_FRAMES.min(FRAMES - out.len());
-        engine.render(&mut buf, n);
-        out.extend(
-            buf[..2 * n]
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .map(|[l, r]| ((*l as i32 + *r as i32) / 2) as i16),
-        );
-    }
-    engine.stop();
-    Some(out)
+    Some(play_mono(&mut engine, FRAMES))
 }
 
 impl App {
+    /// A click on a drum machine's instrument button: the drum is heard (any time, the song
+    /// playing or not). Nothing for the accent or without a player.
+    pub(crate) fn audition_drum(&mut self, is808: bool, inst: usize) {
+        if inst == 0 || self.link.is_none() {
+            return;
+        }
+        let Some(song) = self.audition_song() else {
+            return;
+        };
+        let tables = self
+            .audition_tables
+            .get_or_insert_with(|| Arc::new(Tables::new()))
+            .clone();
+        let row = if is808 { 2 } else { 3 };
+        let pattern = self.panel.rows[row].pattern;
+        let Some(link) = &mut self.link else {
+            return;
+        };
+        if let Some(audio) = render_drum(tables, link.kit(), &song, is808, pattern, inst) {
+            link.preview(&audio);
+        }
+    }
+
+    /// The song as the panel shows it, for the engine of a heard note or drum.
+    fn audition_song(&mut self) -> Option<Song> {
+        let bytes = self.song_bytes().ok()?;
+        let parsed = rbs::Song::parse(&bytes).ok()?;
+        orb_engine::load::convert(&parsed).ok()
+    }
+
     /// A key pressed in pitch mode this frame ([`crate::model::Panel::audition`]): heard while
     /// the song is stopped and there is a player.
     pub(crate) fn audition_step(&mut self) {
@@ -95,11 +180,7 @@ impl App {
         if self.panel.transport.playing || self.link.is_none() {
             return;
         }
-        let song = self.song_bytes().ok().and_then(|bytes| {
-            let parsed = rbs::Song::parse(&bytes).ok()?;
-            orb_engine::load::convert(&parsed).ok()
-        });
-        let Some(song) = song else {
+        let Some(song) = self.audition_song() else {
             return;
         };
         let tables = self
@@ -129,6 +210,23 @@ mod tests {
 
     fn peak(a: &[i16]) -> i32 {
         a.iter().map(|&s| (s as i32).abs()).max().unwrap_or(0)
+    }
+
+    #[test]
+    fn a_drum_button_plays_its_drum() {
+        let tables = Arc::new(Tables::new());
+        let song = song();
+        let kit = Some(rbm::standard::builtin_samples());
+        // the accent makes no sound of its own
+        assert!(render_drum(tables.clone(), kit.clone(), &song, true, 0, 0).is_none());
+        for is808 in [true, false] {
+            let bd = render_drum(tables.clone(), kit.clone(), &song, is808, 0, 1).unwrap();
+            let sd = render_drum(tables.clone(), kit.clone(), &song, is808, 0, 2).unwrap();
+            assert_eq!(bd.len(), DRUM_FRAMES);
+            assert!(peak(&bd) > 1000, "808 {is808}: BD peak {}", peak(&bd));
+            assert!(peak(&sd) > 1000, "808 {is808}: SD peak {}", peak(&sd));
+            assert_ne!(bd, sd, "each button its own drum");
+        }
     }
 
     #[test]

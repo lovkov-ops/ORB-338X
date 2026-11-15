@@ -1262,6 +1262,10 @@ impl App {
             };
             if let Some(i) = hit {
                 self.panel.select_instrument(is808, i);
+                // this fork: the click (not the held button) plays the drum (audition.rs)
+                if ui.input(|i| i.pointer.primary_pressed()) {
+                    self.audition_drum(is808, i);
+                }
             }
         }
         // The selection frames.

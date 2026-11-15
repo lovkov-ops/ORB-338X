@@ -621,6 +621,11 @@ impl Link {
         self.flush();
     }
 
+    /// The drum samples of the kit that plays (this fork: a heard drum, `audition.rs`).
+    pub fn kit(&self) -> Option<Arc<SampleSet>> {
+        self.kit.clone()
+    }
+
     /// The preview player plays `audio` (mono int16, this fork: the note a 303 key plays in
     /// pitch mode, `audition.rs`), in place of what it played.
     pub fn preview(&mut self, audio: &[i16]) {
