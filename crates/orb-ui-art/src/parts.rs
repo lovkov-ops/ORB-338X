@@ -763,12 +763,14 @@ fn leds(out: &mut Vec<Part>) {
         }));
     }
     // The 303's step LEDs (this fork): lit red for a step of the pattern's length, off past it
-    // (as `led_8_off`), green for the edit step.
+    // (as `led_8_off`), green for the edit step, yellow with a bright glow for the step that
+    // plays (the running light).
     let d = STEP_LED_303;
     for (state, color, glow) in [
         ("off", "#4a2a28", None),
         ("on", pal::RED, Some("#e2413b40")),
         ("sel", pal::GREEN, Some("#53d86a59")),
+        ("play", pal::YELLOW, Some("#f2c53199")),
     ] {
         // square, with a square glow when lit
         out.push(Part::new(format!("stepled_{state}"), d, d, |s| {

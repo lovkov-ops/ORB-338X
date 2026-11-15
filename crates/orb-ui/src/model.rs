@@ -1116,8 +1116,9 @@ impl Panel {
                 }
             }
             "steps" => self.step_part(c),
-            // the 303's step LEDs (this fork): green the edit step, red a step of the selected
-            // pattern's length, off past it
+            // the 303's step LEDs (this fork): yellow the step that plays (the running light, as
+            // the 909's), green the edit step, red a step of the selected pattern's length, off
+            // past it
             "stepled" => {
                 let k = index_of(sec, "tb303_").unwrap_or(0).min(1);
                 let i: usize = name
@@ -1125,7 +1126,9 @@ impl Panel {
                     .and_then(|n| n.parse().ok())
                     .unwrap_or(1);
                 let row = &self.rows[k];
-                let state = if self.synth[k].edit as usize == i - 1 {
+                let state = if self.playing_step303[k] == Some(i - 1) {
+                    "play"
+                } else if self.synth[k].edit as usize == i - 1 {
                     "sel"
                 } else if i <= row.len[row.pattern as usize] as usize {
                     "on"
@@ -1236,6 +1239,7 @@ mod tests {
             (1..=16)
                 .map(|i| match p.part_name(&led(i), false, 0.0).as_str() {
                     "stepled_sel" => 'S',
+                    "stepled_play" => 'P',
                     "stepled_on" => 'o',
                     _ => '.',
                 })
@@ -1254,6 +1258,12 @@ mod tests {
         assert_eq!(p.synth[1].edit, 0);
         p.press("pattern1.pattern2", 0.0);
         assert_eq!(states(&p), "oooooooooooooooS");
+        // the step that plays is yellow, over the edit step's green too (the running light)
+        p.playing_step303[0] = Some(2);
+        assert_eq!(states(&p), "ooPooooooooooooS");
+        p.playing_step303[0] = Some(15);
+        assert_eq!(states(&p), "oooooooooooooooP");
+        assert!(p.playing_step303[1].is_none());
     }
 
     #[test]
