@@ -6,9 +6,9 @@
 //! the whole range above and below the knob's value, clipped to 0..=127). They sit under the
 //! knob, left and right of two buttons that choose how: the note ties the rate to the song's
 //! tempo (off: free, in hertz), and the wave button flips between the sine (a smooth up and
-//! down) and the random sine, sample & hold: every half cycle a new random height anywhere in
-//! the range, at least `MIN_JUMP` away from the last, glided to smoothly. It moves as often as
-//! the sine but goes up or down at random, by random amounts.
+//! down) and the random sine, sample & hold: glides to random heights anywhere in the range,
+//! each at least `MIN_JUMP` away from the last, each glide 1 to 4 half cycles long (at random),
+//! so it goes up or down at random, by random amounts, and in an uneven time.
 //!
 //! Free, the rate knob goes from `FREE_MIN_HZ` to `FREE_MAX_HZ` on a log scale. Tied to the
 //! tempo it picks one cycle's length from `SYNC_BEATS`, and while the song plays the cycle is
@@ -104,6 +104,14 @@ pub struct Mode {
 /// enough that every half cycle moves audibly.
 pub const MIN_JUMP: f64 = 0.6;
 
+/// The longest glide of the random sine, in half cycles.
+pub const MAX_GLIDE: i64 = 4;
+
+/// A random sine glide's length: 1 to `MAX_GLIDE` half cycles.
+fn glide(rng: &mut Rng) -> i64 {
+    1 + rng.below(MAX_GLIDE as usize) as i64
+}
+
 /// The random sine's next height after `from`: anywhere in -1..=1, at least `MIN_JUMP` away.
 fn peak(rng: &mut Rng, from: f64) -> f64 {
     loop {
@@ -139,10 +147,11 @@ pub fn modulate(base: u8, amount: f64, v: f64) -> u8 {
 pub struct Runner {
     /// Cycles run so far (the whole part counts the cycles, the fraction is the phase).
     pub cycles: f64,
-    /// The sample & hold: the peak the half cycle starts from and the one it glides to.
+    /// The sample & hold: the height its glide starts from and the one it glides to.
     held: (f64, f64),
-    /// The half cycle whose peaks `held` are.
+    /// The glide's first half cycle and its length in half cycles (1..=`MAX_GLIDE`).
     held_cycle: i64,
+    held_len: i64,
     rng: Rng,
     /// The knob's value the LFO moves around while it runs (None: not running).
     pub base: Option<u8>,
@@ -155,10 +164,12 @@ impl Runner {
         let mut rng = Rng::new(seed);
         let first = rng.unit() * 2.0 - 1.0;
         let second = peak(&mut rng, first);
+        let len = glide(&mut rng);
         Self {
             cycles: 0.0,
             held: (first, second),
             held_cycle: 0,
+            held_len: len,
             rng,
             base: None,
             sent: None,
@@ -185,21 +196,30 @@ impl Runner {
         match shape {
             Shape::Sine => (std::f64::consts::TAU * phase).sin(),
             Shape::SampleHold => {
-                // two glides a cycle, as often as the sine turns: every half cycle a new random
-                // height, up or down
-                let half = (self.cycles * 2.0).floor() as i64;
-                if half != self.held_cycle {
-                    // one half on: glide on from where it was; a jump draws two new heights
-                    self.held = if half == self.held_cycle + 1 {
-                        (self.held.1, peak(&mut self.rng, self.held.1))
-                    } else {
-                        let a = self.rng.unit() * 2.0 - 1.0;
-                        (a, peak(&mut self.rng, a))
-                    };
+                // glides of 1 to 4 half cycles, each to a new random height, up or down
+                let u = self.cycles * 2.0;
+                let half = u.floor() as i64;
+                let end = self.held_cycle + self.held_len;
+                if half >= end && half < end + MAX_GLIDE {
+                    // the glide ended: the next one glides on from where it was
+                    self.held = (self.held.1, peak(&mut self.rng, self.held.1));
+                    self.held_cycle = end;
+                    self.held_len = glide(&mut self.rng);
+                    // a step longer than a glide (a slow frame) may skip one more
+                    while half >= self.held_cycle + self.held_len {
+                        self.held = (self.held.1, peak(&mut self.rng, self.held.1));
+                        self.held_cycle += self.held_len;
+                        self.held_len = glide(&mut self.rng);
+                    }
+                } else if half < self.held_cycle || half >= end {
+                    // a jump (the song located elsewhere): new heights from here
+                    let a = self.rng.unit() * 2.0 - 1.0;
+                    self.held = (a, peak(&mut self.rng, a));
                     self.held_cycle = half;
+                    self.held_len = glide(&mut self.rng);
                 }
                 let (a, b) = self.held;
-                let t = (self.cycles * 2.0).fract();
+                let t = (u - self.held_cycle as f64) / self.held_len as f64;
                 let k = (1.0 - (std::f64::consts::PI * t).cos()) / 2.0;
                 a + (b - a) * k
             }
@@ -449,33 +469,44 @@ mod tests {
         (dist, turns)
     }
 
-    /// (this fork) The random sine is no sine: it moves as often (a new height every half
-    /// cycle), but up or down at random and by random amounts, over the whole range.
+    /// (this fork) The random sine is no sine: it glides to random heights over the whole
+    /// range, up or down at random, each glide 1 to 4 half cycles long at random.
     #[test]
-    fn the_random_sine_moves_often_but_at_random() {
+    fn the_random_sine_moves_at_random_heights_and_times() {
         let (sine, sine_turns) = travel(Shape::Sine);
         let (random, random_turns) = travel(Shape::SampleHold);
         assert!((39..=41).contains(&sine_turns), "{sine_turns}");
-        // it turns at random: often, but not at every half cycle as the sine does
-        assert!((15..39).contains(&random_turns), "{random_turns}");
-        // it travels a good part of the sine's way: as lively
+        assert!((4..30).contains(&random_turns), "{random_turns}");
         assert!(
-            random > 0.4 * sine && random < 1.1 * sine,
+            random > 0.15 * sine && random < 1.1 * sine,
             "{random} vs {sine}"
         );
-        // its heights spread over the range, the small ones too; two in a row can go the same
-        // way
+        // the glides: their heights and lengths, half a cycle (10 s at 0.05 Hz) at a time
         let mut r = Runner::new(11);
         let mode = Mode {
             sync: false,
             shape: Shape::SampleHold,
         };
-        let mut peaks = vec![];
-        for _ in 0..200 {
-            r.advance(10.0, 0.0, mode, 0, None); // half a cycle at 0.05 Hz
+        let mut glides: Vec<(i64, i64, f64)> = vec![];
+        for _ in 0..400 {
+            r.advance(10.0, 0.0, mode, 0, None);
             r.value(Shape::SampleHold); // the heights are drawn as the wave is read
-            peaks.push(r.held.0);
+            let g = (r.held_cycle, r.held_len, r.held.1);
+            if glides.last() != Some(&g) {
+                glides.push(g);
+            }
         }
+        // one after another, no gap; every length from 1 to 4
+        for w in glides.windows(2) {
+            assert_eq!(w[0].0 + w[0].1, w[1].0);
+        }
+        for len in 1..=MAX_GLIDE {
+            assert!(glides.iter().any(|g| g.1 == len), "a glide of {len}");
+        }
+        assert!(glides.iter().all(|g| (1..=MAX_GLIDE).contains(&g.1)));
+        // the heights spread over the range, the small ones too; two in a row can go the same
+        // way; each one at least MIN_JUMP from the last
+        let peaks: Vec<f64> = glides.iter().map(|g| g.2).collect();
         assert!(peaks.iter().any(|&h| h > 0.8) && peaks.iter().any(|&h| h < -0.8));
         assert!(peaks.iter().any(|&h| h.abs() < 0.3), "small heights too");
         let ups: Vec<bool> = peaks.windows(2).map(|w| w[1] > w[0]).collect();
@@ -486,19 +517,14 @@ mod tests {
         for w in peaks.windows(2) {
             assert!((w[1] - w[0]).abs() >= MIN_JUMP - 1e-9);
         }
-        // and its curve is not the sine's
-        let (mut a, mut b) = (Runner::new(5), Runner::new(5));
-        let (mut dot, mut na, mut nb) = (0.0, 0.0, 0.0);
-        for _ in 0..4000 {
-            a.advance(0.05, 0.0, Mode::default(), 0, None);
-            b.advance(0.05, 0.0, mode, 0, None);
-            let (x, y) = (a.value(Shape::Sine), b.value(Shape::SampleHold));
-            dot += x * y;
-            na += x * x;
-            nb += y * y;
-        }
-        let corr = dot / (na.sqrt() * nb.sqrt());
-        assert!(corr.abs() < 0.5, "like the sine: {corr}");
+        // a jump back (the song located to its start) starts anew, without a gap in the curve
+        let mut r = Runner::new(3);
+        r.advance(1000.0, 0.0, mode, 0, None);
+        r.value(Shape::SampleHold);
+        r.cycles = 0.0;
+        let v = r.value(Shape::SampleHold);
+        assert!((-1.0..=1.0).contains(&v));
+        assert_eq!(r.held_cycle, 0);
     }
 
     #[test]
