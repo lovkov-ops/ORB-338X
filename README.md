@@ -38,13 +38,15 @@ extra features for the two bass synths. Everything the original does, it does to
   AMOUNT knobs, a note button that ties the rate to the song's tempo, and a wave button that
   flips between a sine and a random sine. The knob's arc shows the moving value.
 - **Step LEDs:** 16 LEDs in the step editor choose the step to edit (green); the steps of the
-  pattern's length are lit red.
+  pattern's length are lit red, and the step that plays flashes yellow.
 - **The waveform as two pictures** (saw and square) to click, under TUNE, now a large knob
   like the others.
 - **Hear the note in pitch mode:** while the song is stopped, a key pressed in pitch mode plays
   its note with the synth's current sound.
 - **`.rbsx` songs:** a ReBirth song plus the GENERATE and LFO settings. Plain `.rbs` songs still
   open and save as before; Save As has a button for each format.
+- **The Inter typeface** for the panel's labels, the logo and the windows, and this fork's own
+  startup sound.
 - **Copy, Cut and Paste of a pattern:** Cmd+C, Cmd+X and Cmd+V on macOS (Ctrl on Windows and
   Linux) work on the selected pattern of the row with the focus, with its steps, length and
   shuffle. The Edit menu and a right click on the lit pattern button have them too. A 303's
