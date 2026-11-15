@@ -7,8 +7,9 @@
 //! knob, left and right of two buttons that choose how: the note ties the rate to the song's
 //! tempo (off: free, in hertz), and the wave button flips between the sine (a smooth up and
 //! down) and the random sine, sample & hold: glides to random heights anywhere in the range,
-//! each at least `MIN_JUMP` away from the last, each glide 1 to 4 half cycles long (at random),
-//! so it goes up or down at random, by random amounts, and in an uneven time.
+//! each at least `MIN_JUMP` away from the last, each glide 1, 2 or 3 half cycles long (at
+//! random: 70%, 20%, 10%), so it goes up or down at random, by random amounts, and in an
+//! uneven time.
 //!
 //! Free, the rate knob goes from `FREE_MIN_HZ` to `FREE_MAX_HZ` on a log scale. Tied to the
 //! tempo it picks one cycle's length from `SYNC_BEATS`, and while the song plays the cycle is
@@ -104,12 +105,21 @@ pub struct Mode {
 /// enough that every half cycle moves audibly.
 pub const MIN_JUMP: f64 = 0.6;
 
+/// The random sine's glide lengths in half cycles and how often each comes (they add up to 1).
+pub const GLIDES: [(i64, f64); 3] = [(1, 0.7), (2, 0.2), (3, 0.1)];
 /// The longest glide of the random sine, in half cycles.
-pub const MAX_GLIDE: i64 = 4;
+pub const MAX_GLIDE: i64 = 3;
 
-/// A random sine glide's length: 1 to `MAX_GLIDE` half cycles.
+/// A random sine glide's length: 1, 2 or 3 half cycles, as often as `GLIDES` says.
 fn glide(rng: &mut Rng) -> i64 {
-    1 + rng.below(MAX_GLIDE as usize) as i64
+    let mut x = rng.unit();
+    for (len, p) in GLIDES {
+        if x < p {
+            return len;
+        }
+        x -= p;
+    }
+    1
 }
 
 /// The random sine's next height after `from`: anywhere in -1..=1, at least `MIN_JUMP` away.
@@ -470,7 +480,7 @@ mod tests {
     }
 
     /// (this fork) The random sine is no sine: it glides to random heights over the whole
-    /// range, up or down at random, each glide 1 to 4 half cycles long at random.
+    /// range, up or down at random, each glide 1, 2 or 3 half cycles long at random.
     #[test]
     fn the_random_sine_moves_at_random_heights_and_times() {
         let (sine, sine_turns) = travel(Shape::Sine);
@@ -496,7 +506,7 @@ mod tests {
                 glides.push(g);
             }
         }
-        // one after another, no gap; every length from 1 to 4
+        // one after another, no gap; every length from 1 to 3
         for w in glides.windows(2) {
             assert_eq!(w[0].0 + w[0].1, w[1].0);
         }
@@ -504,6 +514,16 @@ mod tests {
             assert!(glides.iter().any(|g| g.1 == len), "a glide of {len}");
         }
         assert!(glides.iter().all(|g| (1..=MAX_GLIDE).contains(&g.1)));
+        // as often as GLIDES says: 70%, 20%, 10% (of many draws, within a few percent)
+        let mut rng = Rng::new(17);
+        let mut count = [0usize; 4];
+        for _ in 0..20_000 {
+            count[glide(&mut rng) as usize] += 1;
+        }
+        for (len, p) in GLIDES {
+            let share = count[len as usize] as f64 / 20_000.0;
+            assert!((share - p).abs() < 0.02, "{len}: {share} vs {p}");
+        }
         // the heights spread over the range, the small ones too; two in a row can go the same
         // way; each one at least MIN_JUMP from the last
         let peaks: Vec<f64> = glides.iter().map(|g| g.2).collect();
