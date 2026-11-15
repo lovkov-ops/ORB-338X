@@ -5,7 +5,8 @@
 //! The menu (this fork's second design) is a black table with rounded corners and white lines
 //! between the cells, five rows of one height. A wide left column holds the choices, a narrow
 //! right column what they are for. Every choice reads in one of three colors: gray while it
-//! cannot be used yet, white when it can, green (with a glow) once chosen or done, so the menu
+//! cannot be used yet, white when it can, green once chosen or done (the text only, on the
+//! menu's black), so the menu
 //! shows the next step by itself:
 //!
 //! 1. SCALE | KEY: a press opens the field's list under it (the mouse wheel or the slider scroll
@@ -672,23 +673,9 @@ fn paint_table(ui: &Ui, r: Rect, scale: f32) {
     vline(r.max.x - bw, last, r.max.y);
 }
 
-/// The green glow under a chosen or done cell.
-fn paint_cell_glow(ui: &Ui, r: Rect, scale: f32) {
-    let glow = r.shrink(1.5 * scale);
-    for (grow, alpha) in [(1.5, 40), (0.0, 90)] {
-        ui.painter().rect_filled(
-            glow.expand(grow * scale),
-            CornerRadius::same((2.0 * scale) as u8),
-            Color32::from_rgba_unmultiplied(GREEN.r(), GREEN.g(), GREEN.b(), alpha),
-        );
-    }
-}
-
-/// A cell with a word: an action, RESET, UNDO or REDO, in its color, glowing when `glow`.
-fn paint_text_cell(ui: &Ui, (r, text, color, glow): (Rect, &str, Color32, bool), scale: f32) {
-    if glow {
-        paint_cell_glow(ui, r, scale);
-    }
+/// A cell with a word: an action, RESET, UNDO or REDO, in its color (green when done) on the
+/// black of the menu.
+fn paint_text_cell(ui: &Ui, (r, text, color, _): (Rect, &str, Color32, bool), scale: f32) {
     ui.painter()
         .text(r.center(), Align2::CENTER_CENTER, text, font(scale), color);
 }
@@ -697,17 +684,14 @@ fn font(scale: f32) -> FontId {
     FontId::proportional(CELL_H * 0.5 * scale)
 }
 
-/// Row 1's scale and key note: the choice in green with a glow, else the field's name, white
+/// Row 1's scale and key note: the choice in green, else the field's name, white
 /// when it can be chosen and gray while it cannot (the key before the scale, BAZE 2 before
 /// BAZE 1).
 fn paint_fields(ui: &Ui, sk: &ScaleKeys, synth: usize, sf: Rect, kf: Rect, scale: f32) {
     let c = sk.get(synth);
     let field = |r: Rect, chosen: Option<&'static str>, name: &'static str, usable: bool| {
         let (t, color) = match chosen {
-            Some(t) => {
-                paint_cell_glow(ui, r, scale);
-                (t, GREEN)
-            }
+            Some(t) => (t, GREEN),
             None => (name, if usable { INK } else { OFF }),
         };
         ui.painter()
@@ -779,7 +763,7 @@ fn paint_list(ui: &Ui, sk: &ScaleKeys, l: &List, r: Rect, hover: Option<Pos2>, s
 }
 
 /// A row's five buttons (GENERATE, ALTER, SHIFT): (rect, on, ink of the symbol). A chosen button
-/// glows green; thin lines part the buttons, stopping short of the row's edges like the table's.
+/// is green (the symbol only); thin lines part the buttons, stopping short of the row's edges.
 fn paint_op_buttons(ui: &Ui, op: Op, buttons: &[(Rect, bool, Color32); 5], scale: f32) {
     let p = ui.painter();
     let inset = LINE_INSET * scale;
@@ -793,10 +777,7 @@ fn paint_op_buttons(ui: &Ui, op: Op, buttons: &[(Rect, bool, Color32); 5], scale
             line,
         );
     }
-    for (param, &(r, on, ink)) in buttons.iter().enumerate() {
-        if on {
-            paint_cell_glow(ui, r, scale);
-        }
+    for (param, &(r, _, ink)) in buttons.iter().enumerate() {
         if op == Op::Move {
             // MOVE's steps as text, bold: drawn twice, a hair apart
             let f = FontId::proportional(CELL_H * 0.6 * scale);
