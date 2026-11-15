@@ -418,15 +418,15 @@ fn lfo_modes(out: &mut Vec<Part>) {
 fn switches(out: &mut Vec<Part>) {
     lfo_modes(out);
     // The 303's waveform (this fork): no slider, the saw and the square side by side on one
-    // black frame as wide as the pitch/clear block under it, each half a click target; the
+    // black frame of the LFO mode buttons' size and look, each half a click target; the
     // chosen one (position 0 saw, 1 square) green with a soft glow, the other a dull red.
-    let w = WAVE_W_303;
+    let (w, h) = (WAVE_W_303, WAVE_H_303);
     let half = w / 2.0;
     for pos in 0..2 {
-        out.push(Part::new(format!("switch_wave_{pos}"), w, 14.0, |s| {
-            s.rect(0.0, 0.0, w, 14.0, 3.0, pal::BLACK);
-            s.rect(0.6, 0.6, w - 1.2, 12.8, 2.5, "#26282b");
-            s.line(half, 3.0, half, 11.0, "#0e0f10", 1.0);
+        out.push(Part::new(format!("switch_wave_{pos}"), w, h, |s| {
+            s.rect(0.0, 0.0, w, h, 2.5, pal::BLACK);
+            s.rect(0.6, 0.6, w - 1.2, h - 1.2, 2.0, "#26282b");
+            s.line(half, 2.5, half, h - 2.5, "#0e0f10", 1.0);
             let (sx, qx) = (half / 2.0 - 3.75, half + half / 2.0 - 3.75);
             let on = if pos == 0 {
                 (pal::GREEN, WAVE_OFF)
@@ -438,8 +438,8 @@ fn switches(out: &mut Vec<Part>) {
             } else {
                 ("none", WAVE_GLOW)
             };
-            wave_glyphs(s, sx, qx, 7.0, glow, 2.8);
-            wave_glyphs(s, sx, qx, 7.0, on, 1.3);
+            wave_glyphs(s, sx, qx, h / 2.0, glow, 2.8);
+            wave_glyphs(s, sx, qx, h / 2.0, on, 1.3);
         }));
     }
     switch(out, "switch_808", 11.0, 17.0, false);
@@ -1184,9 +1184,6 @@ pub fn rndm_303() -> (f32, f32) {
 /// knob under the waveform.
 pub const KNOB_W_303: f32 = 27.0;
 pub const KNOB_Y_303: f32 = 9.0;
-/// The space left of the first large knob's group (from the waveform/TUNE column) and right of
-/// the last one (to the section's right edge).
-const KNOB_MARGIN_303: f32 = 3.0;
 
 /// How far a large knob's group reaches from its center: the row under it, left to the RATE
 /// knob or its label, right to the AMOUNT knob or its label (the wider).
@@ -1197,20 +1194,22 @@ fn lfo_reach_303() -> (f32, f32) {
     (reach("RATE"), reach("AMOUNT"))
 }
 
-/// The left edge of large knob `k` (0 CUTOFF to 4 ACCENT): the five knobs with their LFOs are
-/// spread evenly from the waveform/TUNE column (46) to the section's right edge (366), the
-/// same space before the first RATE label and after the last AMOUNT label.
+/// The left edge of large knob `k` (0 CUTOFF to 4 ACCENT). The six large knobs, TUNE first,
+/// are evenly spaced (this fork): TUNE centered on the pitch/clear column (`LEFT_X_303`), and
+/// the space from the section's left edge to TUNE's group (its knob, wider than the waveform
+/// under it) the same as from the last group (its AMOUNT label) to the right edge (366).
 pub fn knob_x_303(k: usize) -> f32 {
-    let (left, right) = lfo_reach_303();
-    let first = 46.0 + KNOB_MARGIN_303 + left;
-    let last = 366.0 - KNOB_MARGIN_303 - right;
-    first + (last - first) * k as f32 / 4.0 - KNOB_W_303 / 2.0
+    let (_, right) = lfo_reach_303();
+    let margin = LEFT_X_303 - KNOB_W_303.max(WAVE_W_303) / 2.0;
+    let last = 366.0 - margin - right.max(KNOB_W_303 / 2.0);
+    let pitch = (last - LEFT_X_303) / 5.0;
+    LEFT_X_303 + pitch * (k + 1) as f32 - KNOB_W_303 / 2.0
 }
 /// The LFO row under each large knob (this fork): the mode buttons centered under it, the RATE
 /// knob left of them and the AMOUNT knob right of them (the 909's small knob), 2 px apart,
 /// each labeled above. The knobs' centers' offset from the large knob's center line and their
 /// center height, the labels' center height and cap height, the mode buttons' top.
-pub const LFO_DX_303: f32 = LFO_MODE_W / 2.0 + 2.0 + 6.0;
+pub const LFO_DX_303: f32 = LFO_MODE_W / 2.0 + 1.0 + 6.0;
 const LFO_KNOB_CY_303: f32 = 48.0;
 const LFO_LABEL_Y_303: f32 = 39.3;
 const LFO_LABEL_CAP_303: f32 = 2.4;
@@ -1232,17 +1231,18 @@ const TUNE_LABEL_Y_303: f32 = 5.5;
 /// The center x of the pitch mode and clear block.
 pub const LEFT_X_303: f32 = 29.0;
 
-/// The waveform switch: over the pitch/clear block (`BAND_303[0]`), as wide as it, halfway
-/// between the TUNE knob (bottom 36) and the block (top 56); no label.
-pub const WAVE_X_303: f32 = 12.0;
-pub const WAVE_Y_303: f32 = 39.0;
-pub const WAVE_W_303: f32 = 34.0;
+/// The waveform switch under TUNE, centered on its column (this fork): as wide and as high as
+/// the LFO mode buttons under the other knobs, and in their row; no label.
+pub const WAVE_W_303: f32 = LFO_MODE_W;
+pub const WAVE_H_303: f32 = LFO_MODE_H;
+pub const WAVE_X_303: f32 = LEFT_X_303 - WAVE_W_303 / 2.0;
+pub const WAVE_Y_303: f32 = LFO_MODE_Y_303;
 /// The waveform not chosen (a dull red) and the glow under the one chosen.
 const WAVE_OFF: &str = "#8a3a33";
 const WAVE_GLOW: &str = "#53d86a40";
 /// The LFO mode buttons (`lfo_mode_*`): their size (two equal cells, the note and the wave),
 /// and the note's color when off (a dull blue).
-pub const LFO_MODE_W: f32 = 2.0 * 14.0;
+pub const LFO_MODE_W: f32 = 2.0 * 13.0;
 pub const LFO_MODE_H: f32 = 11.0;
 const LFO_SYNC_OFF: &str = "#34557f";
 

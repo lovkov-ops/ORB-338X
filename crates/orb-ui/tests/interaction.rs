@@ -162,10 +162,10 @@ fn fader_jumps_to_the_pointer_and_drags() {
 #[test]
 fn two_position_switch_flips_on_a_click_anywhere() {
     let mut h = Harness::new();
-    // The 303 waveform (this fork) is the saw and the square side by side at (102, 89.25),
-    // 34 x 14, under TUNE: a click on a picture chooses it, a click on the chosen one keeps it.
-    let saw = Pos2::new(102.0 + 8.0, 96.25);
-    let square = Pos2::new(102.0 + 26.0, 96.25);
+    // The 303 waveform (this fork) is the saw and the square side by side at (106, 92.5),
+    // 26 x 11, under TUNE: a click on a picture chooses it, a click on the chosen one keeps it.
+    let saw = Pos2::new(106.0 + 6.5, 98.0);
+    let square = Pos2::new(106.0 + 19.5, 98.0);
     assert_eq!(h.app.panel.switch("tb303_1.wave"), 0);
     h.move_to(saw);
     h.down(Modifiers::NONE);
