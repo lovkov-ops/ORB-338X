@@ -23,6 +23,7 @@ pub mod export;
 mod tests;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::process::ProcessState;
 use crate::samples::{Retired, SampleSet};
@@ -798,6 +799,9 @@ pub struct Frame {
     /// object (`song+0x30C`, a heap address). Set by [`Engine::render`]; the delay leaves it on
     /// the stack ([`SendEffect::stack_word`]).
     pub out_end: Option<i32>,
+    /// This fork's gain on the drum machines' channels: `DRUM_GAIN` when
+    /// [`set_fork_drum_gain`] was on at the frame's making, else 1 (the original's sound).
+    pub drum_gain: f64,
 }
 
 /// `unk_100F012C`: the right channel's float output of a render call (0x10013A3A), at the
@@ -842,6 +846,11 @@ impl Frame {
             blocks: 0,
             stack_word: None,
             out_end: None,
+            drum_gain: if FORK_DRUM_GAIN.load(Ordering::Relaxed) {
+                DRUM_GAIN
+            } else {
+                1.0
+            },
         }
     }
 
@@ -961,6 +970,13 @@ impl Frame {
                     self.stack_word = ins.stack_word(self.stack_word);
                 }
             }
+            // this fork (not the original): the drum machines' channels (808, 909) 10% louder,
+            // after their inserts, as a channel gain would be (only with the fork's gain on)
+            if (c == 2 || c == 3) && self.drum_gain != 1.0 {
+                for x in bus.iter_mut() {
+                    *x = st(*x as f64 * self.drum_gain);
+                }
+            }
             // 0x100135FA: the channel's peak meter
             let v = abs_bits(bus[mi]);
             if v > ch.peak {
@@ -1016,6 +1032,19 @@ impl Frame {
         }
         Ok(())
     }
+}
+
+/// This fork's gain on the drum machines' channels (808 and 909): 10% louder than the original
+/// (the only place the engine leaves the original's numbers on purpose).
+pub const DRUM_GAIN: f64 = 1.1;
+
+static FORK_DRUM_GAIN: AtomicBool = AtomicBool::new(false);
+
+/// Turns this fork's drum gain on or off for the engines made from now on. Off by default, so
+/// the engine is the original's bit for bit (the reference tests); the app and the `orb` tool
+/// turn it on at their start.
+pub fn set_fork_drum_gain(on: bool) {
+    FORK_DRUM_GAIN.store(on, Ordering::Relaxed);
 }
 
 /// The float-to-int16 conversion of `sub_100139E0` (0x10013C4E): `x = f * 32768` in f64,

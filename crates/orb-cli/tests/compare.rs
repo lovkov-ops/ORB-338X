@@ -37,11 +37,13 @@ fn a_song_equals_its_flac_and_its_wav() {
     assert!(o.status.success(), "{}", out(&o));
     assert!(out(&o).contains("808_snare.rbs: EQUAL"), "{}", out(&o));
 
-    // the WAV orb render writes is the reference for itself, byte for byte
+    // the WAV orb render writes is the reference for itself, byte for byte (with the
+    // original's sound: this fork's render makes the drum machines louder unless --original)
     let dir = tempfile::tempdir().unwrap();
     let wav = dir.path().join("s.wav");
     let r = Command::new(env!("CARGO_BIN_EXE_orb"))
         .arg("render")
+        .arg("--original")
         .arg(&song)
         .arg("-o")
         .arg(&wav)

@@ -229,6 +229,24 @@ mod tests {
         }
     }
 
+    /// (this fork) With the fork's drum gain on (the app turns it on at its start), the drum
+    /// machines are 10% louder than the original; off, they are the original's.
+    #[test]
+    fn the_drum_machines_are_ten_percent_louder_with_the_forks_gain() {
+        let tables = Arc::new(Tables::new());
+        let song = song();
+        let kit = Some(rbm::standard::builtin_samples());
+        let render = |on: bool| {
+            orb_engine::frame::set_fork_drum_gain(on);
+            let a = render_drum(tables.clone(), kit.clone(), &song, false, 0, 1).unwrap();
+            orb_engine::frame::set_fork_drum_gain(false);
+            a
+        };
+        let (orig, loud) = (render(false), render(true));
+        let ratio = peak(&loud) as f64 / peak(&orig) as f64;
+        assert!((ratio - 1.1).abs() < 0.02, "{ratio}");
+    }
+
     #[test]
     fn a_note_is_heard_quickly_and_dies_out() {
         let tables = Arc::new(Tables::new());

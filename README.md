@@ -47,6 +47,9 @@ extra features for the two bass synths. Everything the original does, it does to
   open and save as before; Save As has a button for each format.
 - **The Inter typeface** for the panel's labels, the logo and the windows, and this fork's own
   startup sound.
+- **The drum machines 10% louder** than the original, in the app, its export and `orb render`
+  (`orb render --original` keeps the original's sound bit for bit). A click on a drum's name
+  over the steps plays it.
 - **Copy, Cut and Paste of a pattern:** Cmd+C, Cmd+X and Cmd+V on macOS (Ctrl on Windows and
   Linux) work on the selected pattern of the row with the focus, with its steps, length and
   shuffle. The Edit menu and a right click on the lit pattern button have them too. A 303's

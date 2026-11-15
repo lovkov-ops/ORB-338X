@@ -215,6 +215,8 @@ fn main() -> eframe::Result {
     attach_parent_console();
     // before anything that can panic: a panic writes a crash log and shows a box (task-157)
     orb_ui::crash::install(orb_ui::about::VERSION);
+    // this fork: the drum machines 10% louder, in the player, the export and the heard drums
+    orb_engine::frame::set_fork_drum_gain(true);
     let Args {
         demo,
         about,

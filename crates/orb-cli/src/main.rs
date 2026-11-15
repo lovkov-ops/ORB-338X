@@ -69,6 +69,9 @@ enum Cmd {
         /// instead of failing; the original offers the same as "Standard".
         #[arg(long)]
         standard_kit: bool,
+        /// The original's sound, bit for bit: without OpenRB-338x's 10% louder drum machines.
+        #[arg(long)]
+        original: bool,
     },
     /// Play a song through the default audio output device with the real-time player, for
     /// listening (no UI): from its song position (or --bar) until the song stops (or Ctrl+C).
@@ -266,6 +269,15 @@ enum ModCmd {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    // this fork: the drum machines 10% louder (orb_engine::frame::DRUM_GAIN) where orb makes
+    // sound to hear or keep (render, play); `compare` keeps the original's sound, which its
+    // references are
+    let gain = match &cli.command {
+        Cmd::Render { original, .. } => !original,
+        Cmd::Play { .. } => true,
+        _ => false,
+    };
+    orb_engine::frame::set_fork_drum_gain(gain);
     let result = match cli.command {
         Cmd::Render {
             input,
@@ -276,6 +288,7 @@ fn main() -> ExitCode {
             mod_dir,
             mod_file,
             standard_kit,
+            original: _,
         } => render(
             &input,
             &output,
