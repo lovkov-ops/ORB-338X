@@ -1052,7 +1052,9 @@ pub const LOGO_PIECES: [&str; 8] = [
 /// The left edge of the wordmark, its underline and its subtitle in the logo part.
 pub const LOGO_TEXT_X: f32 = 5.0;
 /// The wordmark's cap height.
-pub const LOGO_CAP: f32 = 14.0;
+pub const LOGO_CAP: f32 = 12.5;
+/// The wordmark's vertical center: the descender of its `p` clear of the underline (y 28).
+pub const LOGO_TEXT_Y: f32 = 16.0;
 /// The space between the underline's four segments.
 const LOGO_LINE_GAP: f32 = 1.5;
 
@@ -1076,9 +1078,10 @@ fn logo(out: &mut Vec<Part>) {
     // the x's round stroke ends half a stroke past its box: the underline goes there too
     let word_w = x_x + font::text_width(cap, "x") + font::stroke(cap) / 2.0 - x0;
     let seg_w = (word_w - 3.0 * LOGO_LINE_GAP) / 4.0;
-    let openrb = |s: &mut Svg| text(s, x0, 17.0, cap, Anchor::Start, pal::INK, "OpenRB-");
-    let n338 = |s: &mut Svg| text(s, x_338, 17.0, cap, Anchor::Start, pal::ORANGE, "338");
-    let x = |s: &mut Svg| text(s, x_x, 17.0, cap, Anchor::Start, pal::WHITE, "x");
+    let y = LOGO_TEXT_Y;
+    let openrb = |s: &mut Svg| text(s, x0, y, cap, Anchor::Start, pal::INK, "OpenRB-");
+    let n338 = |s: &mut Svg| text(s, x_338, y, cap, Anchor::Start, pal::ORANGE, "338");
+    let x = |s: &mut Svg| text(s, x_x, y, cap, Anchor::Start, pal::WHITE, "x");
     let line = |s: &mut Svg, i: usize| {
         let x = x0 + (seg_w + LOGO_LINE_GAP) * i as f32;
         s.rect(x, 28.0, seg_w, 1.5, 0.75, STEP_COLORS[i]);

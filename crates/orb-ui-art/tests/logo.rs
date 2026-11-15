@@ -57,15 +57,31 @@ fn segments() -> [(f32, f32); 4] {
 /// underline and the subtitle (as task-068 drew it into `bg_transport`, in this fork's form).
 fn wordmark_as_one_run() -> String {
     use orb_ui_art::font::{Anchor, gap, text, text_width};
-    use orb_ui_art::parts::{LOGO_CAP, LOGO_TEXT_X};
+    use orb_ui_art::parts::{LOGO_CAP, LOGO_TEXT_X, LOGO_TEXT_Y};
     use orb_ui_art::svg::Svg;
     let mut s = Svg::new();
     let (cap, x0) = (LOGO_CAP, LOGO_TEXT_X);
-    text(&mut s, x0, 17.0, cap, Anchor::Start, pal::INK, "OpenRB-");
+    text(
+        &mut s,
+        x0,
+        LOGO_TEXT_Y,
+        cap,
+        Anchor::Start,
+        pal::INK,
+        "OpenRB-",
+    );
     let x1 = x0 + text_width(cap, "OpenRB-") + gap(cap);
-    text(&mut s, x1, 17.0, cap, Anchor::Start, pal::ORANGE, "338");
+    text(
+        &mut s,
+        x1,
+        LOGO_TEXT_Y,
+        cap,
+        Anchor::Start,
+        pal::ORANGE,
+        "338",
+    );
     let x2 = x1 + text_width(cap, "338") + gap(cap);
-    text(&mut s, x2, 17.0, cap, Anchor::Start, pal::WHITE, "x");
+    text(&mut s, x2, LOGO_TEXT_Y, cap, Anchor::Start, pal::WHITE, "x");
     // the underline: four segments in the 808's step colors
     for ((x, w), color) in
         segments()

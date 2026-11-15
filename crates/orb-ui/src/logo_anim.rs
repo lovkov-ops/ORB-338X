@@ -45,8 +45,8 @@ pub const LOGO_PART: &str = "logo";
 pub const LOGO_W: f32 = 134.0;
 pub const LOGO_H: f32 = 48.0;
 /// The center of the x in the logo part, where it flashes (orb-ui-art's `logo_x_pos`; a test
-/// checks it).
-pub const X_CENTER: (f32, f32) = (127.033_3, 17.0);
+/// checks it): in Inter (this fork), the middle of the x-height over the baseline at 22.25.
+pub const X_CENTER: (f32, f32) = (124.745_8, 17.6);
 
 /// The animation's state at one moment: each piece's opacity, and the x's flash (0 to 1).
 #[derive(Clone, Copy, Debug, PartialEq)]

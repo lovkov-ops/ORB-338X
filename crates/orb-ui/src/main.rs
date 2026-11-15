@@ -292,6 +292,8 @@ fn main() -> eframe::Result {
         Box::new(move |cc| {
             // always dark, whatever the system theme (task-127; `App::show` keeps it)
             cc.egui_ctx.set_theme(egui::ThemePreference::Dark);
+            // Inter for the menus and windows (this fork, fonts.rs)
+            orb_ui::fonts::install(&cc.egui_ctx);
             // ORB_GPU_INFO=1 prints the adapter wgpu chose (scripts/appimage-smoke.sh)
             if std::env::var_os("ORB_GPU_INFO").is_some_and(|v| v == "1")
                 && let Some(rs) = &cc.wgpu_render_state

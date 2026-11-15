@@ -4,6 +4,10 @@
 - `app_icon.ico`: the Windows icon (the `app_icon` part at 16 to 256 px), made by
   `cargo run --release -p orb-ui-art --bin ui-art -- ico` and embedded in `OpenRB-338.exe` by
   `crates/orb-ui/build.rs` (task-111).
+- `fonts/`: Inter Medium (the windows' text, `crates/orb-ui/src/fonts.rs`) and Inter SemiBold
+  (the panel's labels and the logo, drawn as outlines by `crates/orb-ui-art/src/font.rs`), from
+  Inter 4.1 (github.com/rsms/inter), under the SIL Open Font License 1.1
+  (`fonts/Inter-LICENSE.txt`).
 - `Standard.rbm`: the standard mod, orb's built-in kit (task-067, docs/rbm.md section 13).
 - `readme/`: the README's pictures (CI ignores this folder, `.github/workflows/ci.yml`):
   - `logo.svg`: the README's logo, the OpenRB-338x wordmark: `ui/logo.svg` on the panel's
