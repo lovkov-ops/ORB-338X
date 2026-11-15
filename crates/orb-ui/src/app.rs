@@ -874,10 +874,9 @@ impl App {
             }
             // the logo (`sub_42A799`) plays the mod's startup sound, whatever the preference
             // (it sends msg 58 without testing it, 0x42A7D3..0x42A7F1)
-            if layout::on_logo(p.x, p.y)
-                && let Some(link) = &mut self.link
-            {
-                link.startup_sound();
+            if layout::on_logo(p.x, p.y) {
+                let kit = self.doc.kit.clone();
+                self.play_startup_sound(&kit);
             }
         }
     }

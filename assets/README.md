@@ -8,6 +8,8 @@
   (the panel's labels and the logo, drawn as outlines by `crates/orb-ui-art/src/font.rs`), from
   Inter 4.1 (github.com/rsms/inter), under the SIL Open Font License 1.1
   (`fonts/Inter-LICENSE.txt`).
+- `startup.wav`: this fork's startup sound (`crates/orb-ui/src/startup.rs`), played instead
+  of the standard kit's own: 16-bit PCM, 44100 Hz, stereo averaged to mono.
 - `Standard.rbm`: the standard mod, orb's built-in kit (task-067, docs/rbm.md section 13).
 - `readme/`: the README's pictures (CI ignores this folder, `.github/workflows/ci.yml`):
   - `logo.svg`: the README's logo, the OpenRB-338x wordmark: `ui/logo.svg` on the panel's

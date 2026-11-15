@@ -564,7 +564,7 @@ impl App {
     ) {
         // only a changed kit plays its sound (task-099); the first song has no previous kit
         if !self.settled || self.doc.kit != kit {
-            self.mod_opened();
+            self.mod_opened(&kit);
         }
         self.settled = true;
         self.doc = Document {
@@ -642,12 +642,22 @@ impl App {
     /// `sub_426C67` after a song's mod was opened by its only user (word +1088 is 1,
     /// 0x426C6E): top-level msg 58, the mod's startup sound, when "Play Mod Startup Sound" is
     /// on (`sub_4098C3` at 0x426C85).
-    fn mod_opened(&mut self) {
+    fn mod_opened(&mut self, kit: &Kit) {
         if !self.settings.startup_sound {
             return;
         }
-        if let Some(link) = &mut self.link {
-            link.startup_sound();
+        self.play_startup_sound(kit);
+    }
+
+    /// The startup sound of `kit`: a mod's own, or for the built-in kit this fork's
+    /// (`startup.rs`) instead of the original program's.
+    pub(crate) fn play_startup_sound(&mut self, kit: &Kit) {
+        let Some(link) = &mut self.link else {
+            return;
+        };
+        match kit {
+            Kit::Standard => link.preview_sample(crate::startup::sample()),
+            Kit::Mod(_) => link.startup_sound(),
         }
     }
 
@@ -868,7 +878,7 @@ impl App {
             // `sub_426C67` after the change (0x427030): orb has one song, the only user of
             // its mod; a kit that did not change plays nothing (task-099)
             if kit != self.doc.kit {
-                self.mod_opened();
+                self.mod_opened(&kit);
             }
         }
         // the save writes the mod's INFO URLs with its name (`sub_4270F7`, docs/rbm.md 14.1)

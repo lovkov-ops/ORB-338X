@@ -1007,7 +1007,9 @@ fn a_song_open_plays_its_mods_startup_sound_when_the_preference_is_on() {
         (out, h.audio.preview_position())
     };
     let standard = samples();
-    let audio = standard.get(orb_engine::samples::STARTUP_ID).audio();
+    // (this fork) the built-in kit's startup sound is the fork's (`orb_ui::startup`)
+    let fork = orb_ui::startup::sample();
+    let audio = fork.audio();
     let calls = audio.len().div_ceil(CALL_FRAMES) + 2;
     let (off, pos_off) = run(&src, None, false, calls);
     let (on, pos_on) = run(&src, None, true, calls);
@@ -1044,8 +1046,9 @@ fn a_song_open_plays_its_mods_startup_sound_when_the_preference_is_on() {
 #[test]
 fn the_start_plays_the_startup_sound_when_the_preference_is_on() {
     let src = root().join("tests/songs/diag/songs/drums_kit.rbs");
-    let standard = samples();
-    let audio = standard.get(orb_engine::samples::STARTUP_ID).audio();
+    // (this fork) the built-in kit's startup sound is the fork's (`orb_ui::startup`)
+    let fork = orb_ui::startup::sample();
+    let audio = fork.audio();
     let calls = audio.len().div_ceil(CALL_FRAMES) + 2;
     let run = |song: bool, on: bool| {
         let mut h = Harness::new();
@@ -1080,10 +1083,8 @@ fn the_logo_plays_the_startup_sound() {
     h.click(Pos2::new(540.0, 25.0));
     let out = h.calls(4);
     assert_eq!(h.audio.preview_position(), Some(4 * CALL_FRAMES));
-    let audio = samples()
-        .get(orb_engine::samples::STARTUP_ID)
-        .audio()
-        .to_vec();
+    // (this fork) the built-in kit's startup sound is the fork's (`orb_ui::startup`)
+    let audio = orb_ui::startup::sample().audio().to_vec();
     // the new empty song renders the same in every call while stopped
     assert_eq!(
         before[..2 * CALL_FRAMES],

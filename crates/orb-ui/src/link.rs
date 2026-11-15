@@ -624,7 +624,11 @@ impl Link {
     /// The preview player plays `audio` (mono int16, this fork: the note a 303 key plays in
     /// pitch mode, `audition.rs`), in place of what it played.
     pub fn preview(&mut self, audio: &[i16]) {
-        let sample = Arc::new(orb_engine::samples::Sample::from_audio(audio));
+        self.preview_sample(Arc::new(orb_engine::samples::Sample::from_audio(audio)));
+    }
+
+    /// The preview player plays `sample` (this fork's startup sound, startup.rs).
+    pub fn preview_sample(&mut self, sample: Arc<orb_engine::samples::Sample>) {
         self.backlog
             .push_back(Command::Preview(Box::new(Preview::new(sample))));
         self.flush();
