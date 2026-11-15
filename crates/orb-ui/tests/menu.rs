@@ -2059,7 +2059,12 @@ fn the_about_window_opens_centered_and_closes() {
         shapes.contains(orb_ui::about::VERSION),
         "the version is drawn"
     );
-    assert_eq!(orb_ui::about::URL, "https://github.com/pingw33n/openrb-338");
+    // (this fork) the original creator's page and the fork's latest release
+    assert_eq!(orb_ui::about::CREATOR_URL, "https://github.com/pingw33n");
+    assert_eq!(
+        orb_ui::about::DOWNLOAD_URL,
+        "https://github.com/lovkov-ops/OpenRB-338x/releases/latest"
+    );
     assert_eq!(
         orb_ui::about::SONGS_URL,
         "https://github.com/pingw33n/rb-songs"
@@ -2068,8 +2073,7 @@ fn the_about_window_opens_centered_and_closes() {
         orb_ui::about::MODS_URL,
         "https://github.com/pingw33n/rb-mods"
     );
-    assert!(shapes.contains(orb_ui::about::URL), "the link is drawn");
-    // the fork's credit, next to the original project's page
+    // the fork's credit first
     let (text, who, _) = orb_ui::about::FORK_CREDIT;
     assert_eq!(text, "Xtended features injected by");
     assert_eq!(who, "lovkov-ops");
@@ -2077,9 +2081,9 @@ fn the_about_window_opens_centered_and_closes() {
         shapes.contains(text) && shapes.contains(who),
         "the fork's credit is drawn"
     );
-    for (label, url) in orb_ui::about::COLLECTIONS {
+    for (label, text, _) in orb_ui::about::LINKS {
         assert!(shapes.contains(label), "{label} is drawn");
-        assert!(shapes.contains(url), "{url} is drawn");
+        assert!(shapes.contains(text), "{text} is drawn");
     }
     assert_eq!(orb_ui::about::COLLECTIONS[0].0, "Song collection:");
     assert_eq!(orb_ui::about::COLLECTIONS[1].0, "Mod collection:");

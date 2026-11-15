@@ -20,16 +20,19 @@ const ICON_SIZE: f32 = 64.0;
 const CONTENT_W: f32 = 470.0;
 /// The width of the label column of the collection lines (the links start at TEXT_X + this).
 const LABEL_W: f32 = 120.0;
-/// 156 with one link line (task-115), plus two lines at the same 22 pt spacing (task-138),
-/// plus the fork's credit line (`FORK_CREDIT`).
-const CONTENT_H: f32 = 222.0;
+/// The lines under the wordmark at 22 pt from y 104 (this fork's order): the fork's credit,
+/// the four `LINKS`, the version.
+const CONTENT_H: f32 = 244.0;
 const TEXT_X: f32 = 18.0;
 
 /// The name of the app.
 pub const NAME: &str = "OpenRB-338x";
-/// The project page (the original project, by its author).
-pub const URL: &str = "https://github.com/pingw33n/openrb-338";
-/// The credit of this fork, under the original project's page: the text, then the fork's
+/// The page of the original project's creator (this fork's About names them under its own
+/// credit).
+pub const CREATOR_URL: &str = "https://github.com/pingw33n";
+/// Where the latest release of this fork is downloaded.
+pub const DOWNLOAD_URL: &str = "https://github.com/lovkov-ops/OpenRB-338x/releases/latest";
+/// The credit of this fork, the first line under the wordmark: the text, then the fork's
 /// author linked to the fork.
 pub const FORK_CREDIT: (&str, &str, &str) = (
     "Xtended features injected by",
@@ -45,6 +48,15 @@ pub const MODS_URL: &str = "https://github.com/pingw33n/rb-mods";
 pub const COLLECTIONS: [(&str, &str); 2] = [
     ("Song collection:", SONGS_URL),
     ("Mod collection:", MODS_URL),
+];
+/// The link lines under the fork's credit, in order, as (label, link text, url): the download
+/// of this fork's latest release (its long address shown as words), the original creator, the
+/// collections.
+pub const LINKS: [(&str, &str, &str); 4] = [
+    ("Download:", "OpenRB-338x latest release", DOWNLOAD_URL),
+    ("Original creator:", CREATOR_URL, CREATOR_URL),
+    (COLLECTIONS[0].0, COLLECTIONS[0].1, COLLECTIONS[0].1),
+    (COLLECTIONS[1].0, COLLECTIONS[1].1, COLLECTIONS[1].1),
 ];
 /// The version: `YYYY.MMDD.HHMM (<[dev-]hash[-dirty]>)` (`src/version.rs`).
 pub const VERSION: &str = env!("ORB_UI_VERSION");
@@ -125,14 +137,8 @@ impl App {
                 let line = |ui: &mut egui::Ui, y: f32, f: &dyn Fn(&mut egui::Ui)| {
                     line_at(ui, TEXT_X, y, f);
                 };
+                // the fork's credit first, then the links, the version last
                 line(ui, 104.0, &|ui| {
-                    ui.label(RichText::new(format!("Version {VERSION}")).color(INK_DIM));
-                });
-                line(ui, 126.0, &|ui| {
-                    ui.hyperlink_to(URL, URL);
-                });
-                // the fork's credit, next to the original project's page
-                line(ui, 148.0, &|ui| {
                     let (text, who, url) = FORK_CREDIT;
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 4.0;
@@ -140,17 +146,20 @@ impl App {
                         ui.hyperlink_to(who, url);
                     });
                 });
-                for (i, (label, url)) in COLLECTIONS.into_iter().enumerate() {
+                for (i, (label, text, url)) in LINKS.into_iter().enumerate() {
                     // the label and the link each in a rect of their own, so the links start at
                     // exactly the same x whatever the width of the label
-                    let y = 170.0 + 22.0 * i as f32;
+                    let y = 126.0 + 22.0 * i as f32;
                     line(ui, y, &|ui| {
                         ui.label(RichText::new(label).color(INK_DIM));
                     });
                     line_at(ui, TEXT_X + LABEL_W, y, &|ui| {
-                        ui.hyperlink_to(url, url);
+                        ui.hyperlink_to(text, url);
                     });
                 }
+                line(ui, 126.0 + 22.0 * LINKS.len() as f32, &|ui| {
+                    ui.label(RichText::new(format!("Version {VERSION}")).color(INK_DIM));
+                });
             });
         if !open {
             self.about_open = false;
