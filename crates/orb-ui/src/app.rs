@@ -974,7 +974,11 @@ impl App {
                 if generate::glows(&self.scale_keys, &c.id) {
                     generate::paint_glow(ui, rect, view.scale);
                 }
-                let name = self.panel.part_name(c, down, now);
+                // the RNDM button while its menu is open (this fork): its name glows green
+                let name = match generate::synth_of(&c.id) {
+                    Some(k) if self.generate_open == Some(k) => "btn_rndm_on".to_string(),
+                    _ => self.panel.part_name(c, down, now),
+                };
                 paint_part(ui, &name, rect);
             }
         }

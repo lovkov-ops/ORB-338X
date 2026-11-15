@@ -699,6 +699,21 @@ fn small_buttons(out: &mut Vec<Part>) {
             label(s, w / 2.0, h / 2.0, 4.0, pal::BLACK, "RNDM");
         }));
     }
+    // ... and while its menu is open: pressed in, the name green with a soft glow (a blurred
+    // copy under it)
+    {
+        let (w, h) = (RNDM_W_303, RNDM_H_303);
+        out.push(Part::new("btn_rndm_on", w, h, |s| {
+            key_3d(s, 0.5, 0.0, w - 1.0, h, 2.0, "#a4aab2", pal::STEEL);
+            s.rect(0.5, 0.5, w - 1.0, h - 1.0, 2.0, "#00000073");
+            s.raw(
+                r#"<filter id="rndm_glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.9"/></filter><g filter="url(#rndm_glow)" opacity="0.9">"#,
+            );
+            label(s, w / 2.0, h / 2.0, 4.0, pal::GREEN, "RNDM");
+            s.raw("</g>");
+            label(s, w / 2.0, h / 2.0, 4.0, pal::GREEN, "RNDM");
+        }));
+    }
     for state in ["rest", "pressed"] {
         // The 303's edit step arrows (Step up, Back down), in the paper's colors.
         for (name, up) in [("inc", true), ("dec", false)] {
