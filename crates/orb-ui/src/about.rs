@@ -13,17 +13,17 @@ const LOGO_SCALE: f32 = 2.0;
 /// The app icon part and the size it is shown at.
 pub const ICON_PART: &str = "app_icon";
 const ICON_SIZE: f32 = 64.0;
-/// The content area below the title bar and the x of the version and the link. The mockup's
-/// window is 360 wide; the link lines need about 90 more at this alignment.
-/// Widened from 380 to 450 (task-138): "Song collection: <link>" ends at about 434 pt (x 108 + 326)
-/// and with 380 the line grew the window or touched its edge.
-const CONTENT_W: f32 = 450.0;
+/// The content area below the title bar and the x of the version and the links. This fork
+/// sets the text in Inter, wider than egui's own font: the lines start under the icon (its x,
+/// 18) instead of under the wordmark, and the window is 470 wide, so the longest line
+/// ("Song collection: <link>") fits with room to spare.
+const CONTENT_W: f32 = 470.0;
 /// The width of the label column of the collection lines (the links start at TEXT_X + this).
-const LABEL_W: f32 = 100.0;
+const LABEL_W: f32 = 120.0;
 /// 156 with one link line (task-115), plus two lines at the same 22 pt spacing (task-138),
 /// plus the fork's credit line (`FORK_CREDIT`).
 const CONTENT_H: f32 = 222.0;
-const TEXT_X: f32 = 108.0;
+const TEXT_X: f32 = 18.0;
 
 /// The name of the app.
 pub const NAME: &str = "OpenRB-338x";

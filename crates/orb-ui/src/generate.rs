@@ -66,7 +66,8 @@ const SLIDER_W: f32 = 5.0;
 pub const RED: Color32 = Color32::from_rgb(0xff, 0x3b, 0x2f);
 /// A chosen scale or key note, and the glow of the scale's keys (the panel's `GREEN`).
 pub const GREEN: Color32 = Color32::from_rgb(0x53, 0xd8, 0x6a);
-const LINE: Color32 = Color32::WHITE;
+/// The lines between the cells (this fork: gray, quieter than the white they were).
+const LINE: Color32 = Color32::from_gray(0x6e);
 const FILL: Color32 = Color32::BLACK;
 /// A field that cannot be used yet.
 const OFF: Color32 = Color32::from_gray(0x55);

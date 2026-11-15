@@ -1218,7 +1218,7 @@ pub fn knob_x_303(k: usize) -> f32 {
 pub const LFO_DX_303: f32 = LFO_MODE_W / 2.0 + 1.0 + 6.0;
 const LFO_KNOB_CY_303: f32 = 48.0;
 const LFO_LABEL_Y_303: f32 = 39.3;
-const LFO_LABEL_CAP_303: f32 = 2.4;
+const LFO_LABEL_CAP_303: f32 = 3.0;
 pub const LFO_MODE_Y_303: f32 = LFO_KNOB_CY_303 - LFO_MODE_H / 2.0;
 
 /// The centers of large knob `k`'s RATE and AMOUNT knobs (0 CUTOFF to 4 ACCENT).
@@ -1248,7 +1248,7 @@ const WAVE_OFF: &str = "#8a3a33";
 const WAVE_GLOW: &str = "#53d86a40";
 /// The LFO mode buttons (`lfo_mode_*`): their size (two equal cells, the note and the wave),
 /// and the note's color when off (a dull blue).
-pub const LFO_MODE_W: f32 = 2.0 * 13.0;
+pub const LFO_MODE_W: f32 = 2.0 * 12.0;
 pub const LFO_MODE_H: f32 = 11.0;
 const LFO_SYNC_OFF: &str = "#34557f";
 
@@ -1273,11 +1273,13 @@ fn tb303_bg(out: &mut Vec<Part>) {
         {
             label(s, knob_x_303(k) + KNOB_W_303 / 2.0, 5.5, 3.6, ink, name);
         }
-        // each large knob's LFO row: RATE and AMOUNT labeled above their knobs
+        // each large knob's LFO row: RATE and AMOUNT labeled above their knobs, SYNC above
+        // the mode buttons between them
         let cap = LFO_LABEL_CAP_303;
         for k in 0..5 {
             let ((rx, _), (ax, _)) = lfo_knobs_303(k);
             label(s, rx, LFO_LABEL_Y_303, cap, ink, "RATE");
+            label(s, (rx + ax) / 2.0, LFO_LABEL_Y_303, cap, ink, "SYNC");
             label(s, ax, LFO_LABEL_Y_303, cap, ink, "AMOUNT");
         }
         // The key band: pitch mode and clear, the keys on gray, the flags.
