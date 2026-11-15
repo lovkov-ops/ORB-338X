@@ -159,6 +159,13 @@ impl ScaleKeys {
         true
     }
 
+    /// Clears a synth's scale and key note (the menu's RESET, this fork); BAZE 2's goes too
+    /// when BAZE 1's is cleared, as it no longer fits.
+    pub fn clear(&mut self, synth: usize) {
+        self.0[synth] = ScaleKey::default();
+        self.revalidate();
+    }
+
     /// After a change of BAZE 1: BAZE 2's choice is cleared when it no longer fits.
     fn revalidate(&mut self) {
         let second = self.0[1];

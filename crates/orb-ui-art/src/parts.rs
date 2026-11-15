@@ -33,7 +33,7 @@ pub struct KnobDesign {
     pub track: &'static str,
 }
 
-pub const KNOBS: [KnobDesign; 6] = [
+pub const KNOBS: [KnobDesign; 5] = [
     KnobDesign {
         // (this fork: 10% under the original 30 px, the same look)
         name: "knob_303",
@@ -120,24 +120,6 @@ pub const KNOBS: [KnobDesign; 6] = [
         pointer: pal::INK,
         arc: pal::AMBER,
         track: "#00000040",
-    },
-    // The 303's small TUNE knob (this fork), over the waveform: knob_303 at 20/27 size.
-    KnobDesign {
-        name: "knob_303_small",
-        w: 20.0,
-        h: 20.0,
-        cx: 10.0,
-        cy: 10.0,
-        ring_r: 9.07,
-        ring_w: 1.1,
-        body_r: 7.33,
-        ptr0: 2.0,
-        ptr1: 6.4,
-        ptr_w: 1.2,
-        body: pal::STEEL,
-        pointer: pal::BLACK,
-        arc: pal::ORANGE,
-        track: "#00000026",
     },
 ];
 
@@ -1243,20 +1225,17 @@ pub fn lfo_knobs_303(k: usize) -> ((f32, f32), (f32, f32)) {
     )
 }
 
-/// The TUNE knob (20 px, centered on the column) under its label in the knobs' label row, at
-/// the large knobs' top; the waveform is under it (this fork swapped the two).
-pub const TUNE_Y_303: f32 = 9.0;
+/// The TUNE knob: a large knob like the five others (`knob_303`, this fork), centered on the
+/// column under its label in the knobs' label row, at their top; the waveform is under it.
+pub const TUNE_Y_303: f32 = KNOB_Y_303;
 const TUNE_LABEL_Y_303: f32 = 5.5;
 /// The center x of the pitch mode and clear block.
 pub const LEFT_X_303: f32 = 29.0;
 
-/// The vertical center of the WAVEFORM label: under the TUNE knob (bottom 30), the label and
-/// the switch spaced evenly down to the pitch/clear block (top 56).
-pub const WAVEFORM_Y_303: f32 = 34.75;
-/// The waveform switch: over the pitch/clear block (`BAND_303[0]`), as wide as it, right under
-/// its label.
+/// The waveform switch: over the pitch/clear block (`BAND_303[0]`), as wide as it, halfway
+/// between the TUNE knob (bottom 36) and the block (top 56); no label.
 pub const WAVE_X_303: f32 = 12.0;
-pub const WAVE_Y_303: f32 = 39.25;
+pub const WAVE_Y_303: f32 = 39.0;
 pub const WAVE_W_303: f32 = 34.0;
 /// The waveform not chosen (a dull red) and the glow under the one chosen.
 const WAVE_OFF: &str = "#8a3a33";
@@ -1271,16 +1250,8 @@ fn tb303_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tb303", 366.0, 115.0, |s| {
         face(s, 366.0, 115.0, pal::PAPER);
         let ink = pal::BLACK;
-        // The waveform switch (over the pitch/clear block) is labeled in the middle of the
-        // paper above it.
-        label(
-            s,
-            WAVE_X_303 + WAVE_W_303 / 2.0,
-            WAVEFORM_Y_303,
-            3.6,
-            ink,
-            "WAVEFORM",
-        );
+        // the waveform switch (over the pitch/clear block) has no label (this fork): the saw
+        // and the square say what they are
         // TUNE: the small knob over the waveform, labeled above it
         label(s, LEFT_X_303, TUNE_LABEL_Y_303, 3.6, ink, "TUNE");
         for (k, name) in ["CUTOFF", "RESO", "ENV MOD", "DECAY", "ACCENT"]

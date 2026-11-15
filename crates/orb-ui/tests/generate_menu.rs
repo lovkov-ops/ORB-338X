@@ -149,7 +149,11 @@ fn the_menu_is_under_its_button_inside_the_panel_with_column_b_twice_as_wide() {
     let h = Harness::new();
     for synth in 0..2 {
         let (x, y, w, h_) = h.app.generate_rect(synth).unwrap();
-        assert_eq!((w, h_), (COL_W[0] + COL_W[1], CELL_H * ROWS.len() as f32));
+        // the four named rows and RESET (this fork)
+        assert_eq!(
+            (w, h_),
+            (COL_W[0] + COL_W[1], CELL_H * (ROWS.len() + 1) as f32)
+        );
         let b = button(synth);
         assert!(y > b.y, "the menu is under the button");
         assert!(x >= 0.0 && y >= 0.0 && x + w <= PANEL_W && y + h_ <= PANEL_H);
@@ -476,4 +480,42 @@ fn move_takes_one_button_at_a_time_and_moves_the_whole_pattern_around() {
     h.click_at(m);
     assert!(!h.app.row_done(0, 3), "nothing chosen: nothing moved");
     assert_eq!(h.app.panel.pattern_303(0), made);
+}
+
+#[test]
+fn reset_puts_the_menu_back_as_it_starts_and_keeps_the_pattern() {
+    // (this fork) the menu's last row, RESET, across the whole menu
+    let mut h = Harness::new();
+    h.click_at(button(0));
+    h.choose_scale(0, SCALES[0].0);
+    h.click_field(0, Field::Key);
+    h.click_list_row(0);
+    assert!(h.app.row_done(0, 0));
+    h.app.press_op(0, Op::Random);
+    h.app.press_op_param(0, Op::Random, 0);
+    h.app.press_op(0, Op::Random);
+    assert!(h.app.row_done(0, Op::Random.row()));
+    h.app.press_op(0, Op::Move);
+    h.app.press_op_param(0, Op::Move, 1);
+    assert_eq!(h.app.op_picking(), Some((0, Op::Move)));
+    let pattern = h.app.panel.pattern_303(0);
+
+    let (x, y, w, hh) = h.app.reset_rect(0).unwrap();
+    let (mx, my, mw, mh) = h.app.generate_rect(0).unwrap();
+    // the last row, as wide as the menu
+    assert_eq!((x, w), (mx, mw));
+    assert_eq!(y + hh, my + mh);
+    h.click_at(Pos2::new(x + w / 2.0, y + hh / 2.0));
+    assert_eq!(h.app.scale_keys().get(0).scale, None);
+    assert_eq!(h.app.scale_keys().get(0).key, None);
+    for row in 0..ROWS.len() {
+        assert!(!h.app.row_done(0, row), "row {row}");
+    }
+    for op in Op::ALL {
+        assert_eq!(h.app.op_selection(0, op), [false; 5]);
+    }
+    assert_eq!(h.app.op_picking(), None);
+    assert_eq!(h.app.panel.pattern_303(0), pattern);
+    // the menu stays open
+    assert_eq!(h.app.generate_open(), Some(0));
 }

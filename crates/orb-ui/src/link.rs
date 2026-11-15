@@ -621,6 +621,15 @@ impl Link {
         self.flush();
     }
 
+    /// The preview player plays `audio` (mono int16, this fork: the note a 303 key plays in
+    /// pitch mode, `audition.rs`), in place of what it played.
+    pub fn preview(&mut self, audio: &[i16]) {
+        let sample = Arc::new(orb_engine::samples::Sample::from_audio(audio));
+        self.backlog
+            .push_back(Command::Preview(Box::new(Preview::new(sample))));
+        self.flush();
+    }
+
     /// Fills the model's pattern views from the pattern arrays: the 303s' steps, the lengths and
     /// shuffle flags, and the drum step strips of a section whose selected pattern changed.
     fn fill_views(&mut self, panel: &mut Panel) {

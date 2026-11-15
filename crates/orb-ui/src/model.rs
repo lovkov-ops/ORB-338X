@@ -287,6 +287,9 @@ pub struct Panel {
     pub vintage: bool,
     /// What the engine must hear, drained by the caller.
     pub events: Vec<Event>,
+    /// A 303 key pressed in pitch mode (this fork, `audition.rs`): the synth, the pattern and
+    /// the step it wrote, for the app to play the note; taken by the app.
+    pub audition: Option<(usize, u8, usize)>,
     /// The knob or fader being dragged (set by the window): the engine's value does not move it.
     pub held: Option<String>,
     knobs: HashMap<String, i32>,
@@ -332,6 +335,7 @@ impl Panel {
             gr_leds: [0; 9],
             vintage: false,
             events: Vec::new(),
+            audition: None,
             held: None,
             knobs: HashMap::new(),
             faders: HashMap::new(),
@@ -775,6 +779,7 @@ impl Panel {
             sent = Some((0, note));
             if s.pitch_mode {
                 s.move_edit(1);
+                self.audition = Some((k, pattern, edit));
             }
         } else {
             let st = &mut s.patterns[pattern as usize][edit];

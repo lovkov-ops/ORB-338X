@@ -179,7 +179,6 @@ const KNOB_808_RED: usize = 1;
 const KNOB_808_WHITE: usize = 2;
 const KNOB_909: usize = 3;
 const KNOB_22: usize = 4;
-const KNOB_303_SMALL: usize = 5;
 
 /// The control rectangles of the whole panel, with the demo state used for
 /// the composed preview (pattern mode off, song mode, playing).
@@ -290,7 +289,13 @@ fn tb303(b: &mut Builder, r: usize) {
     // label; a click on either chooses it (orb-ui's App::control).
     b.part("wave", "hswitch", "switch_wave_0", WAVE_X_303, WAVE_Y_303);
     // TUNE over the waveform in its column (this fork); the other five spread along the paper
-    b.knob("tune", KNOB_303_SMALL, LEFT_X_303 - 10.0, TUNE_Y_303, 0.5);
+    b.knob(
+        "tune",
+        KNOB_303,
+        LEFT_X_303 - KNOB_W_303 / 2.0,
+        TUNE_Y_303,
+        0.5,
+    );
     let vals = [0.35, 0.6, 0.45, 0.4, 0.55];
     let half = KNOBS[KNOB_909].w / 2.0;
     for (k, name) in ["cutoff", "reso", "envmod", "decay", "accent"]

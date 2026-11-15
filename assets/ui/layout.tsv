@@ -87,8 +87,8 @@ pattern4.shuffle	pattern4	toggle	toggle_shuffle_off	19	492	30	12
 pattern4.steps	pattern4	display	segb_0..9,segb_blank	52	490	19	16
 pattern4.steps_up	pattern4	repeat	arrow_inc_rest	72	489	11	9
 pattern4.steps_down	pattern4	repeat	arrow_dec_rest	72	498	11	9
-tb303_1.wave	tb303_1	hswitch	switch_wave_0	102	89.25	34	14
-tb303_1.tune	tb303_1	knob	knob_303_small	109	59	20	20
+tb303_1.wave	tb303_1	hswitch	switch_wave_0	102	89	34	14
+tb303_1.tune	tb303_1	knob	knob_303	105.5	59	27	27
 tb303_1.cutoff	tb303_1	knob	knob_303	153.5	59	27	27
 tb303_1.cutoff_lfo	tb303_1	lfoknob	knob_909	139	92	12	12
 tb303_1.cutoff_amt	tb303_1	lfoknob	knob_909	183	92	12	12
@@ -165,8 +165,8 @@ tb303_1.slide	tb303_1	trigger	btn_flag_rest	406.5	143	9	13
 tb303_1.slide_led	tb303_1	led	led_8_off	407	133	8	8
 tb303_1.note_pause	tb303_1	trigger	btn_flag_rest	428.5	143	9	13
 tb303_1.note_led	tb303_1	led	led_8_on	429	133	8	8
-tb303_2.wave	tb303_2	hswitch	switch_wave_0	102	204.25	34	14
-tb303_2.tune	tb303_2	knob	knob_303_small	109	174	20	20
+tb303_2.wave	tb303_2	hswitch	switch_wave_0	102	204	34	14
+tb303_2.tune	tb303_2	knob	knob_303	105.5	174	27	27
 tb303_2.cutoff	tb303_2	knob	knob_303	153.5	174	27	27
 tb303_2.cutoff_lfo	tb303_2	lfoknob	knob_909	139	207	12	12
 tb303_2.cutoff_amt	tb303_2	lfoknob	knob_909	183	207	12	12

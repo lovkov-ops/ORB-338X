@@ -8,6 +8,7 @@
 pub mod about;
 pub mod app;
 pub mod art;
+pub mod audition;
 pub mod behavior;
 pub mod browser;
 pub mod crash;

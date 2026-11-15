@@ -38,6 +38,8 @@ use crate::scale::{self, KEYS, SCALES, ScaleKeys};
 
 /// The row names in column A (A1 to A4).
 pub const ROWS: [&str; 4] = ["SCALE/KEY", "GENERATE", "ALTER", "MOVE"];
+/// The last row (this fork): RESET across the whole menu, after the four named rows.
+pub const RESET: &str = "RESET";
 /// The widths of columns A and B in panel pixels: B is twice as wide as A.
 pub const COL_W: [f32; 2] = [48.0, 96.0];
 /// The height of every row (and of a list's item) in panel pixels.
@@ -191,6 +193,27 @@ impl App {
         self.op_sel[op as usize][synth]
     }
 
+    /// RESET (this fork): the synth's menu back to how it starts: no scale or key note (BAZE 2's
+    /// goes too when it is BAZE 1's), no button of GENERATE, ALTER and MOVE chosen, no row done.
+    /// The pattern stays.
+    pub fn reset_generate(&mut self, synth: usize) {
+        self.scale_keys.clear(synth);
+        for op in Op::ALL {
+            self.op_sel[op as usize][synth] = [false; 5];
+            self.op_done[op as usize][synth] = false;
+        }
+        if self.op_picking.is_some_and(|(s, _)| s == synth) {
+            self.op_picking = None;
+        }
+        self.generate_list = None;
+    }
+
+    /// The panel rectangle of the RESET row: the menu's last row, across both columns.
+    pub fn reset_rect(&self, synth: usize) -> Option<(f32, f32, f32, f32)> {
+        let (x, y, w, _) = self.generate_rect(synth)?;
+        Some((x, y + CELL_H * ROWS.len() as f32, w, CELL_H))
+    }
+
     /// Restarts the random numbers from `seed` (tests).
     pub fn set_random_seed(&mut self, seed: u64) {
         self.rng = Rng::new(seed);
@@ -294,7 +317,8 @@ impl App {
     pub fn generate_rect(&self, synth: usize) -> Option<(f32, f32, f32, f32)> {
         let (bx, by, bw, bh) = self.generate_button(synth)?;
         let w: f32 = COL_W.iter().sum();
-        let h = CELL_H * ROWS.len() as f32;
+        // the named rows and RESET
+        let h = CELL_H * (ROWS.len() + 1) as f32;
         Some((bx + bw - w, by + bh + GAP, w, h))
     }
 
@@ -399,6 +423,7 @@ impl App {
         let screen = |r: Option<(f32, f32, f32, f32)>| r.map(|(x, y, w, h)| view.rect(x, y, w, h));
         let scale_field = screen(self.field_rect(k, Field::Scale)).unwrap_or(Rect::NOTHING);
         let key_field = screen(self.field_rect(k, Field::Key)).unwrap_or(Rect::NOTHING);
+        let reset = screen(self.reset_rect(k)).unwrap_or(Rect::NOTHING);
         let list_rect = self
             .generate_list
             .and_then(|l| screen(self.list_rect(l.synth, l.field)));
@@ -437,6 +462,7 @@ impl App {
                 Some(lr) if lr.contains(p) => self.press_list(lr, p, item_h, slider_w),
                 _ if scale_field.contains(p) => self.press_field(k, Field::Scale),
                 _ if key_field.contains(p) => self.press_field(k, Field::Key),
+                _ if reset.contains(p) => self.reset_generate(k),
                 _ if label.is_some() => self.press_op(k, label.unwrap_or(Op::Random)),
                 _ if param.is_some() => {
                     let (op, i) = param.unwrap_or((Op::Random, 0));
@@ -575,10 +601,11 @@ fn paint_table(ui: &Ui, r: Rect, scale: f32, names: [Option<Color32>; 4]) {
     let inset = LINE_INSET * scale;
     let col_a = COL_W[0] * scale;
     let ch = CELL_H * scale;
-    // the line between columns A and B
+    // the line between columns A and B, down to the RESET row
     let x = r.min.x + col_a;
+    let named = r.min.y + ch * ROWS.len() as f32;
     p.line_segment(
-        [Pos2::new(x, r.min.y + inset), Pos2::new(x, r.max.y - inset)],
+        [Pos2::new(x, r.min.y + inset), Pos2::new(x, named - inset)],
         stroke,
     );
     // row 1: the line between the scale and the key note
@@ -590,8 +617,8 @@ fn paint_table(ui: &Ui, r: Rect, scale: f32, names: [Option<Color32>; 4]) {
         ],
         stroke,
     );
-    // the lines between the rows
-    for j in 1..ROWS.len() {
+    // the lines between the rows, RESET's too
+    for j in 1..=ROWS.len() {
         let y = r.min.y + ch * j as f32;
         p.line_segment(
             [Pos2::new(r.min.x + inset, y), Pos2::new(r.max.x - inset, y)],
@@ -604,6 +631,9 @@ fn paint_table(ui: &Ui, r: Rect, scale: f32, names: [Option<Color32>; 4]) {
             p.text(c, Align2::CENTER_CENTER, name, font(scale), color);
         }
     }
+    // RESET, centered across the whole menu
+    let c = Pos2::new(r.center().x, named + ch * 0.5);
+    p.text(c, Align2::CENTER_CENTER, RESET, font(scale), RED);
 }
 
 fn font(scale: f32) -> FontId {

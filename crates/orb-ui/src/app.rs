@@ -200,6 +200,8 @@ pub struct App {
     pub(crate) pattern_clip: Option<crate::pattern_clip::PatternClip>,
     /// Its text, for the system clipboard at the end of the frame.
     pub(crate) clip_text: Option<String>,
+    /// The engine tables the pitch mode's heard notes render with (`audition.rs`), made once.
+    pub(crate) audition_tables: Option<std::sync::Arc<orb_engine::tables::Tables>>,
     /// Whether the logo plays its startup animation (task-114): the panel once, from the first
     /// frame it is drawn, and the About window at each open. Off by default, so the headless
     /// tests and `--screenshot` see the final state; `enable_logo_anim` turns it on.
@@ -278,6 +280,7 @@ impl App {
             rng: crate::random::Rng::from_time(),
             pattern_clip: None,
             clip_text: None,
+            audition_tables: None,
             logo_anim: false,
             logo_start: None,
             about_start: None,
@@ -714,6 +717,8 @@ impl App {
         self.instrument_selection(ui, &view);
         self.generate_ui(ui, &view);
 
+        // a key pressed in pitch mode is heard while the song is stopped (audition.rs)
+        self.audition_step();
         // Send what was done, take what the engine did (the panel follows playback).
         self.note_edits();
         if let Some(link) = &mut self.link {
