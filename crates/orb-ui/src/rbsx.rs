@@ -40,8 +40,10 @@ pub struct GenState {
     pub scale_keys: ScaleKeys,
     /// Indexed by row (`Op`), synth, button.
     pub sel: [[[bool; 5]; 2]; 3],
-    /// Indexed by row (`Op`), synth: the row's name is green.
+    /// Indexed by row (`Op`), synth: the row's action is green.
     pub done: [[bool; 2]; 3],
+    /// Whether GENERATE has run on each synth (ALTER and SHIFT wait for it).
+    pub generated: [bool; 2],
     /// Each synth's LFOs, by knob (`lfo::PARAMS`).
     pub lfo: [[LfoState; 5]; 2],
 }
@@ -107,6 +109,10 @@ pub fn encode(state: &GenState) -> Vec<u8> {
             let done = state.done[op as usize][synth] as u8;
             lines.push(format!("baze{n}.{}.done={done}", op_name(op)));
         }
+        lines.push(format!(
+            "baze{n}.generated={}",
+            state.generated[synth] as u8
+        ));
         for (param, name) in lfo::PARAMS.iter().enumerate() {
             let l = state.lfo[synth][param];
             lines.push(format!("baze{n}.{name}.lfo={}", l.rate));
@@ -171,6 +177,9 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
             state.done[op as usize][synth] =
                 get(&format!("baze{n}.{}.done", op_name(op))) == Some("1");
         }
+        // an older file without it: GENERATE ran if its row was done
+        state.generated[synth] = get(&format!("baze{n}.generated")) == Some("1")
+            || state.done[Op::Random as usize][synth];
         for (param, name) in lfo::PARAMS.iter().enumerate() {
             let l = &mut state.lfo[synth][param];
             let key = |field: &str| format!("baze{n}.{name}.{field}");
@@ -327,6 +336,7 @@ impl App {
             scale_keys: self.scale_keys,
             sel: self.op_sel,
             done: self.op_done,
+            generated: self.generated,
             lfo,
         }
     }
@@ -337,8 +347,11 @@ impl App {
         self.scale_keys = state.scale_keys;
         self.op_sel = state.sel;
         self.op_done = state.done;
+        self.generated = state.generated;
         self.generate_list = None;
-        self.op_picking = None;
+        // another song: the UNDO steps were the other song's
+        self.gen_undo = Default::default();
+        self.gen_redo = Default::default();
         // the LFOs stop; their knobs and buttons as the song kept them
         self.lfo_reset_knobs();
         let to = |v: u8| crate::behavior::knob_from_engine(v as i32);
@@ -375,6 +388,7 @@ mod tests {
         st.sel[Op::Alter as usize][1] = [true, false, false, false, true];
         st.sel[Op::Move as usize][0] = [false, false, false, true, false];
         st.done[Op::Random as usize][0] = true;
+        st.generated[0] = true;
         st.done[Op::Move as usize][0] = true;
         st.lfo[1][0] = LfoState {
             rate: 90,
@@ -405,6 +419,13 @@ mod tests {
         assert_eq!(
             decode(&encode(&GenState::default())),
             Some(GenState::default())
+        );
+        // (this fork) an older file has no `generated`: a done GENERATE row means it ran
+        assert!(text.contains("baze1.generated=1\n"));
+        let old = text.replace("baze1.generated=1\n", "");
+        assert_eq!(
+            decode(old.as_bytes()).map(|s| s.generated),
+            Some([true, false])
         );
     }
 

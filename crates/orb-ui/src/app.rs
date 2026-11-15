@@ -187,8 +187,12 @@ pub struct App {
     /// then synth: the chosen buttons, the synth and row whose buttons are being chosen (its
     /// name blinks), whether the last run changed something, and the random numbers.
     pub(crate) op_sel: [[[bool; 5]; 2]; 3],
-    pub(crate) op_picking: Option<(usize, generate::Op)>,
     pub(crate) op_done: [[bool; 2]; 3],
+    /// Whether GENERATE has run on each synth (ALTER and SHIFT wait for it), and each synth's
+    /// UNDO and REDO steps: the pattern number and its steps (generate.rs).
+    pub(crate) generated: [bool; 2],
+    pub(crate) gen_undo: [Vec<(u8, [crate::model::Step303; 16])>; 2],
+    pub(crate) gen_redo: [Vec<(u8, [crate::model::Step303; 16])>; 2],
     /// The LFOs of each bass synth's five large knobs (`lfo.rs`), indexed by synth then knob
     /// (`lfo::PARAMS`): their mode buttons, their running state, and the egui time of the last
     /// step.
@@ -270,8 +274,10 @@ impl App {
             generate_list: None,
             scale_keys: ScaleKeys::default(),
             op_sel: [[[false; 5]; 2]; 3],
-            op_picking: None,
             op_done: [[false; 2]; 3],
+            generated: [false; 2],
+            gen_undo: [Vec::new(), Vec::new()],
+            gen_redo: [Vec::new(), Vec::new()],
             lfo_mode: [[crate::lfo::Mode::default(); 5]; 2],
             lfo_run: std::array::from_fn(|k| {
                 std::array::from_fn(|p| crate::lfo::Runner::new(11 + 10 * k as u64 + p as u64))

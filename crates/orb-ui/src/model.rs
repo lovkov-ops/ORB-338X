@@ -989,7 +989,12 @@ impl Panel {
     /// Writes the 16 steps of 303 `k`'s selected pattern and sends each field that changed, as
     /// a press of its button or key would (the GENERATE menu's RANDOM, generate.rs).
     pub fn set_pattern_303(&mut self, k: usize, steps: [Step303; 16]) {
-        let pattern = self.rows[k].pattern;
+        self.set_pattern_303_at(k, self.rows[k].pattern, steps);
+    }
+
+    /// [`Panel::set_pattern_303`] for 303 `k`'s pattern `pattern`, selected or not (the GENERATE
+    /// menu's UNDO and REDO, generate.rs).
+    pub fn set_pattern_303_at(&mut self, k: usize, pattern: u8, steps: [Step303; 16]) {
         let old = std::mem::replace(&mut self.synth[k].patterns[pattern as usize], steps);
         for (step, (o, n)) in old.iter().zip(steps.iter()).enumerate() {
             let fields = [

@@ -1,30 +1,30 @@
-//! The drop-down menu of the bass synths' GENERATE buttons: the parameters of the random note
-//! generator. A press of the button opens its synth's menu under it and a second press closes
-//! it; Escape and a click outside close it too.
+//! The drop-down menu of the bass synths' RNDM buttons (the GENERATE menu): the parameters of
+//! the random note generator. A press of the button opens its synth's menu under it and a
+//! second press closes it; Escape and a click outside close it too.
 //!
-//! The menu is a table thought of as a spreadsheet: columns A and B, rows 1 to 4 of one height,
-//! column B twice as wide as column A. It is black with white lines between the cells (no
-//! outer frame; the lines stop short of the menu's edges). Column A names the rows in the red
-//! of the step displays; a row's name turns green once its choice in column B is complete.
+//! The menu (this fork's second design) is a black table with rounded corners and white lines
+//! between the cells, five rows of one height. A wide left column holds the choices, a narrow
+//! right column what they are for. Every choice reads in one of three colors: gray while it
+//! cannot be used yet, white when it can, green (with a glow) once chosen or done, so the menu
+//! shows the next step by itself:
 //!
-//! Row 1 (SCALE/KEY): column B is split into the scale (the wider part) and the key note. A
-//! press on one opens its list under it, scrolled with the mouse wheel or its slider; a press on
-//! an item chooses it, shown in green. The key note is chosen after the scale, and BAZE 2 is
-//! offered only what fits BAZE 1 (`scale.rs`). The 303's keys of the chosen scale glow green.
+//! 1. SCALE | KEY: a press opens the field's list under it (the mouse wheel or the slider scroll
+//!    it); a press on an item chooses it. SCALE first, then KEY; BAZE 2 is offered only what fits
+//!    BAZE 1 (`scale.rs`). The 303's keys of the chosen scale glow green.
+//! 2. Five buttons, DOWN (down arrow), UP (up arrow), ACCENT (+), SLIDE (underline) and NOTE (a
+//!    note), usable once the scale and key are chosen; then GENERATE, usable once a button is
+//!    chosen: it writes the chosen fields of the synth's pattern anew in the scale (`random.rs`).
+//! 3. The same five buttons and ALTER, usable once GENERATE has run: it moves the chosen fields of
+//!    the steps to other steps along one random chain (`random::alter`).
+//! 4. Five buttons, -2, -1, ?, +1 and +2 (one at a time) and SHIFT, usable once GENERATE has run:
+//!    it moves the whole pattern that many steps around in a ring (`?`: a random 1 to 15 steps;
+//!    `random::rotate`).
+//! 5. RESET at the left, in red: the menu as it starts (the pattern stays); UNDO and REDO at the
+//!    right: the pattern before (after) the last GENERATE, ALTER or SHIFT, usable while there is
+//!    one.
 //!
-//! Row 2 (RANDOM): column B is five buttons, the step fields to randomize: DOWN (down arrow),
-//! UP (up arrow), ACCENT (+), SLIDE (underline) and NOTE (a note; it needs the scale and key).
-//! A press on RANDOM starts choosing them (RANDOM blinks, the last choice is shown, a chosen
-//! button glows green); the next press randomizes the chosen fields of the synth's pattern
-//! (`random.rs`) and stops.
-//!
-//! Row 3 (ALTER): the same five buttons, chosen the same way (each row keeps its own choice),
-//! but its run makes nothing new: it moves the chosen fields of the steps to other steps along
-//! one random chain (`random::alter`), the chosen fields of a step together.
-//!
-//! Row 4 (MOVE): five buttons, -2, -1, ?, +1 and +2, one of them chosen at a time, the same
-//! way; its run moves the whole pattern that many steps around in a ring (`?`: a random 1 to
-//! 15 steps; `random::rotate`).
+//! An action's name is green once it ran with the buttons chosen now; a change of its buttons
+//! makes it white again.
 
 use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontId, Key, Modifiers, PointerButton, Pos2, Rect, Sense,
@@ -36,16 +36,24 @@ use crate::palette::{INK, INK_DIM, SLATE_DARK};
 use crate::random::{self, Rng};
 use crate::scale::{self, KEYS, SCALES, ScaleKeys};
 
-/// The row names in column A (A1 to A4).
-pub const ROWS: [&str; 4] = ["SCALE/KEY", "GENERATE", "ALTER", "MOVE"];
-/// The last row (this fork): RESET across the whole menu, after the four named rows.
+/// The actions in the right column of rows 2 to 4, by `Op`.
+pub const ACTIONS: [&str; 3] = ["GENERATE", "ALTER", "SHIFT"];
+/// The rows: SCALE/KEY, the three actions' rows, and RESET/UNDO/REDO.
+pub const ROW_COUNT: usize = 5;
+/// The last row's buttons.
 pub const RESET: &str = "RESET";
-/// The widths of columns A and B in panel pixels: B is twice as wide as A.
-pub const COL_W: [f32; 2] = [48.0, 96.0];
+pub const UNDO: &str = "UNDO";
+pub const REDO: &str = "REDO";
+/// The widths of the left column (the scale, the five buttons) and the right one (the key
+/// note, the actions) in panel pixels, and of the last row's three buttons.
+pub const COL_W: [f32; 2] = [96.0, 48.0];
+pub const BOTTOM_W: f32 = 36.0;
+/// The menu's corner radius in panel pixels.
+const CORNER: f32 = 4.0;
+/// The undo steps kept per synth.
+const UNDO_DEPTH: usize = 64;
 /// The height of every row (and of a list's item) in panel pixels.
 pub const CELL_H: f32 = 14.0;
-/// Row 1's column B: the width of the scale field; the key field takes the rest.
-pub const SCALE_W: f32 = 64.0;
 /// How far short of the menu's edges the lines between the cells stop, in panel pixels.
 const LINE_INSET: f32 = 3.0;
 /// The space between the button's bottom edge and the menu, in panel pixels.
@@ -62,12 +70,9 @@ const FILL: Color32 = Color32::BLACK;
 /// A field that cannot be used yet.
 const OFF: Color32 = Color32::from_gray(0x55);
 const LIST_FILL: Color32 = Color32::from_gray(0x14);
-/// The period of a row name's blink while its fields are chosen, in seconds (half shown, half
-/// not).
-const BLINK: f64 = 0.6;
 
-/// The rows of five buttons: RANDOM makes new values, ALTER moves the values there are to other
-/// steps, MOVE moves the whole pattern (one button at a time).
+/// The rows of five buttons and their actions: GENERATE makes new values, ALTER moves the values
+/// there are to other steps, SHIFT (`Move`) moves the whole pattern (one button at a time).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Op {
     Random = 0,
@@ -78,9 +83,14 @@ pub enum Op {
 impl Op {
     pub const ALL: [Op; 3] = [Op::Random, Op::Alter, Op::Move];
 
-    /// The menu row (0 is A1).
+    /// The menu row (0 is SCALE/KEY).
     pub fn row(self) -> usize {
         1 + self as usize
+    }
+
+    /// The action's name in the right column.
+    pub fn name(self) -> &'static str {
+        ACTIONS[self as usize]
     }
 }
 
@@ -158,7 +168,7 @@ fn item_name(field: Field, i: usize) -> &'static str {
 }
 
 impl App {
-    /// A press of a GENERATE button: opens its synth's menu, or closes it when it is open.
+    /// A press of an RNDM button: opens its synth's menu, or closes it when it is open.
     pub fn toggle_generate(&mut self, synth: usize) {
         self.generate_open = if self.generate_open == Some(synth) {
             None
@@ -166,12 +176,10 @@ impl App {
             Some(synth)
         };
         self.generate_list = None;
-        self.op_picking = None;
     }
 
-    /// Whether row `row` (0 is A1) of a synth's menu has its choice in column B complete: its
-    /// name in column A then turns green. SCALE/KEY needs both the scale and the key note,
-    /// RANDOM, ALTER and MOVE a last run that changed something.
+    /// Whether row `row` (0 is SCALE/KEY) of a synth's menu is done: the scale and key note
+    /// chosen, or the row's action run with the buttons chosen now (its name green).
     pub fn row_done(&self, synth: usize, row: usize) -> bool {
         match row {
             0 => self.scale_keys.get(synth).mask().is_some(),
@@ -181,37 +189,52 @@ impl App {
         }
     }
 
-    // ---- the RANDOM, ALTER and MOVE rows --------------------------------------------------
+    // ---- the GENERATE, ALTER and SHIFT rows -----------------------------------------------
 
-    /// The synth and row whose fields are being chosen (the row's name blinks), if any.
-    pub fn op_picking(&self) -> Option<(usize, Op)> {
-        self.op_picking
-    }
-
-    /// A synth's chosen buttons of a row, indexed by `random::PARAMS` (MOVE: `random::MOVES`).
+    /// A synth's chosen buttons of a row, indexed by `random::PARAMS` (SHIFT: `random::MOVES`).
     pub fn op_selection(&self, synth: usize, op: Op) -> [bool; 5] {
         self.op_sel[op as usize][synth]
     }
 
-    /// RESET (this fork): the synth's menu back to how it starts: no scale or key note (BAZE 2's
-    /// goes too when it is BAZE 1's), no button of GENERATE, ALTER and MOVE chosen, no row done.
-    /// The pattern stays.
+    /// Whether GENERATE has run on the synth since its menu started (or was reset): ALTER and
+    /// SHIFT wait for it.
+    pub fn generated(&self, synth: usize) -> bool {
+        self.generated[synth]
+    }
+
+    /// RESET: the synth's menu back to how it starts: no scale or key note (BAZE 2's goes too
+    /// when it is BAZE 1's), no button chosen, no action done, ALTER and SHIFT waiting for
+    /// GENERATE again. The pattern and the UNDO steps stay.
     pub fn reset_generate(&mut self, synth: usize) {
         self.scale_keys.clear(synth);
         for op in Op::ALL {
             self.op_sel[op as usize][synth] = [false; 5];
             self.op_done[op as usize][synth] = false;
         }
-        if self.op_picking.is_some_and(|(s, _)| s == synth) {
-            self.op_picking = None;
+        self.generated[synth] = false;
+        if synth == 0 && self.scale_keys.get(1).mask().is_none() {
+            // BAZE 2 lost its scale with BAZE 1's: its GENERATE row waits too
+            self.op_done[Op::Random as usize][1] = false;
         }
         self.generate_list = None;
     }
 
-    /// The panel rectangle of the RESET row: the menu's last row, across both columns.
+    /// The panel rectangle of RESET: the last row's left button.
     pub fn reset_rect(&self, synth: usize) -> Option<(f32, f32, f32, f32)> {
+        let (x, y, ..) = self.generate_rect(synth)?;
+        Some((x, y + CELL_H * (ROW_COUNT - 1) as f32, BOTTOM_W, CELL_H))
+    }
+
+    /// The panel rectangle of UNDO (`redo` false) or REDO: the last row's right buttons.
+    pub fn undo_rect(&self, synth: usize, redo: bool) -> Option<(f32, f32, f32, f32)> {
         let (x, y, w, _) = self.generate_rect(synth)?;
-        Some((x, y + CELL_H * ROWS.len() as f32, w, CELL_H))
+        let n = if redo { 1.0 } else { 2.0 };
+        Some((
+            x + w - n * BOTTOM_W,
+            y + CELL_H * (ROW_COUNT - 1) as f32,
+            BOTTOM_W,
+            CELL_H,
+        ))
     }
 
     /// Restarts the random numbers from `seed` (tests).
@@ -219,66 +242,103 @@ impl App {
         self.rng = Rng::new(seed);
     }
 
-    /// Whether a row's field can be chosen: RANDOM's NOTE needs the synth's scale and key note
-    /// (it makes notes of the scale); ALTER and MOVE only move what is there, so all can.
-    pub fn op_param_usable(&self, synth: usize, op: Op, param: usize) -> bool {
-        op != Op::Random || param != random::NOTE || self.scale_keys.get(synth).mask().is_some()
+    /// Whether a row's buttons can be chosen: GENERATE's once the synth's scale and key note
+    /// are (it makes notes of the scale), ALTER's and SHIFT's once GENERATE has run.
+    pub fn op_usable(&self, synth: usize, op: Op) -> bool {
+        match op {
+            Op::Random => self.scale_keys.get(synth).mask().is_some(),
+            _ => self.generated[synth],
+        }
     }
 
-    /// A press on RANDOM, ALTER or MOVE: starts choosing the row's buttons (its name blinks;
-    /// its last choice is shown), or, while choosing, runs the row on the synth's pattern and
-    /// stops.
+    /// Whether a row's action can be pressed: its buttons usable and one of them chosen.
+    pub fn action_usable(&self, synth: usize, op: Op) -> bool {
+        self.op_usable(synth, op) && self.op_sel[op as usize][synth].iter().any(|&o| o)
+    }
+
+    /// A press on GENERATE, ALTER or SHIFT: runs the row on the synth's pattern with its chosen
+    /// buttons (an UNDO step), and the action's name turns green. Nothing while it is gray.
     pub fn press_op(&mut self, synth: usize, op: Op) {
         self.generate_list = None;
-        if self.op_picking != Some((synth, op)) {
-            self.op_picking = Some((synth, op));
+        if !self.action_usable(synth, op) {
             return;
         }
-        self.op_picking = None;
-        let mut on = self.op_sel[op as usize][synth];
-        for (p, o) in on.iter_mut().enumerate() {
-            *o &= self.op_param_usable(synth, op, p);
-        }
-        let any = on.iter().any(|&o| o);
-        self.op_done[op as usize][synth] = any;
-        if any {
-            let mut steps = self.panel.pattern_303(synth);
-            match op {
-                Op::Random => {
-                    let mask = self.scale_keys.get(synth).mask();
-                    random::randomize(&mut steps, on, mask, &mut self.rng);
-                }
-                Op::Alter => random::alter(&mut steps, on, &mut self.rng),
-                Op::Move => {
-                    let choice = on.iter().position(|&o| o).unwrap_or(random::MOVE_RANDOM);
-                    random::rotate(&mut steps, random::move_offset(choice, &mut self.rng));
-                }
+        let on = self.op_sel[op as usize][synth];
+        let before = self.panel.pattern_303(synth);
+        let mut steps = before;
+        match op {
+            Op::Random => {
+                let mask = self.scale_keys.get(synth).mask();
+                random::randomize(&mut steps, on, mask, &mut self.rng);
+                self.generated[synth] = true;
             }
+            Op::Alter => random::alter(&mut steps, on, &mut self.rng),
+            Op::Move => {
+                let choice = on.iter().position(|&o| o).unwrap_or(random::MOVE_RANDOM);
+                random::rotate(&mut steps, random::move_offset(choice, &mut self.rng));
+            }
+        }
+        self.op_done[op as usize][synth] = true;
+        if steps != before {
+            let pattern = self.panel.rows[synth].pattern;
+            let undo = &mut self.gen_undo[synth];
+            undo.push((pattern, before));
+            if undo.len() > UNDO_DEPTH {
+                undo.remove(0);
+            }
+            self.gen_redo[synth].clear();
             self.panel.set_pattern_303(synth, steps);
         }
     }
 
-    /// A press on one of a row's five buttons: while choosing, turns it on or off. MOVE's are
-    /// one at a time: turning one on turns the others off.
+    /// A press on one of a row's five buttons, while the row is usable: turns it on or off
+    /// (SHIFT's one at a time); the row's action is then not done with the new choice.
     pub fn press_op_param(&mut self, synth: usize, op: Op, param: usize) {
         self.generate_list = None;
-        if self.op_picking == Some((synth, op)) && self.op_param_usable(synth, op, param) {
-            let sel = &mut self.op_sel[op as usize][synth];
-            let on = !sel[param];
-            if op == Op::Move {
-                *sel = [false; 5];
-            }
-            sel[param] = on;
+        if !self.op_usable(synth, op) {
+            return;
+        }
+        let sel = &mut self.op_sel[op as usize][synth];
+        let on = !sel[param];
+        if op == Op::Move {
+            *sel = [false; 5];
+        }
+        sel[param] = on;
+        self.op_done[op as usize][synth] = false;
+    }
+
+    /// Whether UNDO (`redo` false) or REDO has a step for the synth.
+    pub fn can_undo(&self, synth: usize, redo: bool) -> bool {
+        if redo {
+            !self.gen_redo[synth].is_empty()
+        } else {
+            !self.gen_undo[synth].is_empty()
         }
     }
 
-    /// The panel rectangle of a row's name (column A).
-    pub fn op_label_rect(&self, synth: usize, op: Op) -> Option<(f32, f32, f32, f32)> {
-        let (x, y, ..) = self.generate_rect(synth)?;
-        Some((x, y + CELL_H * op.row() as f32, COL_W[0], CELL_H))
+    /// UNDO (`redo` false): the pattern before the synth's last GENERATE, ALTER or SHIFT, put
+    /// back into the pattern it changed; REDO: the change again. Nothing without a step.
+    pub fn undo_generate(&mut self, synth: usize, redo: bool) {
+        self.generate_list = None;
+        let (from, to) = if redo {
+            (&mut self.gen_redo[synth], &mut self.gen_undo[synth])
+        } else {
+            (&mut self.gen_undo[synth], &mut self.gen_redo[synth])
+        };
+        let Some((pattern, steps)) = from.pop() else {
+            return;
+        };
+        to.push((pattern, self.panel.synth[synth].patterns[pattern as usize]));
+        self.panel.set_pattern_303_at(synth, pattern, steps);
     }
 
-    /// The panel rectangle of a row's button `param` (column B split in five).
+    /// The panel rectangle of a row's action (the right column).
+    pub fn op_label_rect(&self, synth: usize, op: Op) -> Option<(f32, f32, f32, f32)> {
+        let (x, y, ..) = self.generate_rect(synth)?;
+        Some((x + COL_W[0], y + CELL_H * op.row() as f32, COL_W[1], CELL_H))
+    }
+
+    /// The panel rectangle of a row's button `param` (the left column split in five).
     pub fn op_button_rect(
         &self,
         synth: usize,
@@ -286,9 +346,9 @@ impl App {
         param: usize,
     ) -> Option<(f32, f32, f32, f32)> {
         let (x, y, ..) = self.generate_rect(synth)?;
-        let w = COL_W[1] / random::PARAMS.len() as f32;
+        let w = COL_W[0] / random::PARAMS.len() as f32;
         let y = y + CELL_H * op.row() as f32;
-        Some((x + COL_W[0] + w * param as f32, y, w, CELL_H))
+        Some((x + w * param as f32, y, w, CELL_H))
     }
 
     /// The synth whose menu is open, if any.
@@ -317,18 +377,16 @@ impl App {
     pub fn generate_rect(&self, synth: usize) -> Option<(f32, f32, f32, f32)> {
         let (bx, by, bw, bh) = self.generate_button(synth)?;
         let w: f32 = COL_W.iter().sum();
-        // the named rows and RESET
-        let h = CELL_H * (ROWS.len() + 1) as f32;
+        let h = CELL_H * ROW_COUNT as f32;
         Some((bx + bw - w, by + bh + GAP, w, h))
     }
 
-    /// The panel rectangle of row 1's scale or key field.
+    /// The panel rectangle of row 1's scale field (the left column) or key field (the right).
     pub fn field_rect(&self, synth: usize, field: Field) -> Option<(f32, f32, f32, f32)> {
         let (x, y, ..) = self.generate_rect(synth)?;
-        let b = x + COL_W[0];
         Some(match field {
-            Field::Scale => (b, y, SCALE_W, CELL_H),
-            Field::Key => (b + SCALE_W, y, COL_W[1] - SCALE_W, CELL_H),
+            Field::Scale => (x, y, COL_W[0], CELL_H),
+            Field::Key => (x + COL_W[0], y, COL_W[1], CELL_H),
         })
     }
 
@@ -414,7 +472,6 @@ impl App {
                 self.generate_list = None;
             } else {
                 self.generate_open = None;
-                self.op_picking = None;
             }
             return;
         }
@@ -424,12 +481,14 @@ impl App {
         let scale_field = screen(self.field_rect(k, Field::Scale)).unwrap_or(Rect::NOTHING);
         let key_field = screen(self.field_rect(k, Field::Key)).unwrap_or(Rect::NOTHING);
         let reset = screen(self.reset_rect(k)).unwrap_or(Rect::NOTHING);
+        let undo = screen(self.undo_rect(k, false)).unwrap_or(Rect::NOTHING);
+        let redo = screen(self.undo_rect(k, true)).unwrap_or(Rect::NOTHING);
         let list_rect = self
             .generate_list
             .and_then(|l| screen(self.list_rect(l.synth, l.field)));
         let item_h = CELL_H * view.scale;
         let slider_w = SLIDER_W * view.scale;
-        // RANDOM's, ALTER's and MOVE's names and buttons, indexed by `Op`
+        // GENERATE's, ALTER's and SHIFT's actions and buttons, indexed by `Op`
         let op_labels: [Rect; 3] =
             Op::ALL.map(|op| screen(self.op_label_rect(k, op)).unwrap_or(Rect::NOTHING));
         let op_buttons: [[Rect; 5]; 3] = Op::ALL.map(|op| {
@@ -463,6 +522,8 @@ impl App {
                 _ if scale_field.contains(p) => self.press_field(k, Field::Scale),
                 _ if key_field.contains(p) => self.press_field(k, Field::Key),
                 _ if reset.contains(p) => self.reset_generate(k),
+                _ if undo.contains(p) => self.undo_generate(k, false),
+                _ if redo.contains(p) => self.undo_generate(k, true),
                 _ if label.is_some() => self.press_op(k, label.unwrap_or(Op::Random)),
                 _ if param.is_some() => {
                     let (op, i) = param.unwrap_or((Op::Random, 0));
@@ -472,7 +533,6 @@ impl App {
                     self.generate_list = None;
                     if !menu.contains(p) && !button.contains(p) {
                         self.generate_open = None;
-                        self.op_picking = None;
                         return;
                     }
                 }
@@ -497,40 +557,30 @@ impl App {
         }
 
         let sk = self.scale_keys;
-        // the row names: green once done, else red; a row's name blinks while its fields are
-        // chosen
-        let picking = self
-            .op_picking
-            .filter(|&(s, _)| s == k)
-            .map(|(_, op)| op.row());
-        if picking.is_some() {
-            ctx.request_repaint_after(std::time::Duration::from_millis(50));
-        }
-        let blink_on = (ctx.input(|i| i.time) / BLINK).fract() < 0.5;
-        let names: [Option<Color32>; 4] = std::array::from_fn(|row| {
-            let blinking = picking == Some(row);
-            if blinking && !blink_on {
-                None
-            } else if self.row_done(k, row) && !blinking {
-                Some(GREEN)
+        // gray: not usable yet; white: usable; green: chosen or done
+        let ink = |usable: bool| if usable { INK } else { OFF };
+        let actions: [(Rect, &str, Color32, bool); 3] = Op::ALL.map(|op| {
+            let done = self.op_done[op as usize][k] && self.op_usable(k, op);
+            let color = if done {
+                GREEN
             } else {
-                Some(RED)
-            }
+                ink(self.action_usable(k, op))
+            };
+            (op_labels[op as usize], op.name(), color, done)
         });
         let buttons: [[(Rect, bool, Color32); 5]; 3] = Op::ALL.map(|op| {
-            let choosing = picking == Some(op.row());
+            let usable = self.op_usable(k, op);
             std::array::from_fn(|i| {
-                let usable = self.op_param_usable(k, op, i);
                 let on = self.op_sel[op as usize][k][i] && usable;
-                let ink = match (on, usable, choosing) {
-                    (true, ..) => GREEN,
-                    (false, false, _) => OFF,
-                    (false, true, true) => INK,
-                    (false, true, false) => INK_DIM,
-                };
-                (op_buttons[op as usize][i], on, ink)
+                let color = if on { GREEN } else { ink(usable) };
+                (op_buttons[op as usize][i], on, color)
             })
         });
+        let bottom = [
+            (reset, RESET, RED, false),
+            (undo, UNDO, ink(self.can_undo(k, false)), false),
+            (redo, REDO, ink(self.can_undo(k, true)), false),
+        ];
         egui::Area::new(egui::Id::unique(("orb_generate_menu", k)))
             .order(egui::Order::Foreground)
             .fixed_pos(menu.min)
@@ -539,10 +589,13 @@ impl App {
             .fade_in(false)
             .show(&ctx, |ui| {
                 let (r, _) = ui.allocate_exact_size(menu.size(), Sense::click());
-                paint_table(ui, r, view.scale, names);
+                paint_table(ui, r, view.scale);
                 paint_fields(ui, &sk, k, scale_field, key_field, view.scale);
                 for op in Op::ALL {
                     paint_op_buttons(ui, op, &buttons[op as usize], view.scale);
+                }
+                for cell in actions.iter().chain(bottom.iter()) {
+                    paint_text_cell(ui, *cell, view.scale);
                 }
             });
         if let (Some(l), Some(lr)) = (self.generate_list, list_rect) {
@@ -592,75 +645,86 @@ fn slider_track(lr: Rect, n: usize, slider_w: f32) -> (Rect, f32) {
     (track, thumb_h)
 }
 
-/// The table: the black fill, the white lines between the cells (stopping short of the
-/// edges), the row names in their colors (None: not shown, RANDOM's blink).
-fn paint_table(ui: &Ui, r: Rect, scale: f32, names: [Option<Color32>; 4]) {
+/// The table: the black fill with rounded corners, and the white lines between the cells
+/// (stopping short of the edges): the columns' line down to the last row, the lines between
+/// the rows, and in the last row the lines right of RESET and between UNDO and REDO.
+fn paint_table(ui: &Ui, r: Rect, scale: f32) {
     let p = ui.painter();
-    p.rect_filled(r, 0.0, FILL);
+    p.rect_filled(r, CornerRadius::same((CORNER * scale) as u8), FILL);
     let stroke = Stroke::new((0.6 * scale).max(1.0), LINE);
     let inset = LINE_INSET * scale;
-    let col_a = COL_W[0] * scale;
     let ch = CELL_H * scale;
-    // the line between columns A and B, down to the RESET row
-    let x = r.min.x + col_a;
-    let named = r.min.y + ch * ROWS.len() as f32;
-    p.line_segment(
-        [Pos2::new(x, r.min.y + inset), Pos2::new(x, named - inset)],
-        stroke,
-    );
-    // row 1: the line between the scale and the key note
-    let x = x + SCALE_W * scale;
-    p.line_segment(
-        [
-            Pos2::new(x, r.min.y + inset),
-            Pos2::new(x, r.min.y + ch - inset),
-        ],
-        stroke,
-    );
-    // the lines between the rows, RESET's too
-    for j in 1..=ROWS.len() {
+    let last = r.min.y + ch * (ROW_COUNT - 1) as f32;
+    let vline = |x: f32, y0: f32, y1: f32| {
+        p.line_segment([Pos2::new(x, y0 + inset), Pos2::new(x, y1 - inset)], stroke);
+    };
+    vline(r.min.x + COL_W[0] * scale, r.min.y, last);
+    for j in 1..ROW_COUNT {
         let y = r.min.y + ch * j as f32;
         p.line_segment(
             [Pos2::new(r.min.x + inset, y), Pos2::new(r.max.x - inset, y)],
             stroke,
         );
     }
-    for (j, name) in ROWS.into_iter().enumerate() {
-        let c = Pos2::new(r.min.x + col_a * 0.5, r.min.y + ch * (j as f32 + 0.5));
-        if let Some(color) = names[j] {
-            p.text(c, Align2::CENTER_CENTER, name, font(scale), color);
-        }
+    let bw = BOTTOM_W * scale;
+    vline(r.min.x + bw, last, r.max.y);
+    vline(r.max.x - 2.0 * bw, last, r.max.y);
+    vline(r.max.x - bw, last, r.max.y);
+}
+
+/// The green glow under a chosen or done cell.
+fn paint_cell_glow(ui: &Ui, r: Rect, scale: f32) {
+    let glow = r.shrink(1.5 * scale);
+    for (grow, alpha) in [(1.5, 40), (0.0, 90)] {
+        ui.painter().rect_filled(
+            glow.expand(grow * scale),
+            CornerRadius::same((2.0 * scale) as u8),
+            Color32::from_rgba_unmultiplied(GREEN.r(), GREEN.g(), GREEN.b(), alpha),
+        );
     }
-    // RESET, centered across the whole menu
-    let c = Pos2::new(r.center().x, named + ch * 0.5);
-    p.text(c, Align2::CENTER_CENTER, RESET, font(scale), RED);
+}
+
+/// A cell with a word: an action, RESET, UNDO or REDO, in its color, glowing when `glow`.
+fn paint_text_cell(ui: &Ui, (r, text, color, glow): (Rect, &str, Color32, bool), scale: f32) {
+    if glow {
+        paint_cell_glow(ui, r, scale);
+    }
+    ui.painter()
+        .text(r.center(), Align2::CENTER_CENTER, text, font(scale), color);
 }
 
 fn font(scale: f32) -> FontId {
     FontId::proportional(CELL_H * 0.5 * scale)
 }
 
-/// Row 1's scale and key note: the choice in green, else the field's name, dimmed while it
-/// cannot be used.
+/// Row 1's scale and key note: the choice in green with a glow, else the field's name, white
+/// when it can be chosen and gray while it cannot (the key before the scale, BAZE 2 before
+/// BAZE 1).
 fn paint_fields(ui: &Ui, sk: &ScaleKeys, synth: usize, sf: Rect, kf: Rect, scale: f32) {
-    let p = ui.painter();
     let c = sk.get(synth);
-    let shown = |chosen: Option<&'static str>, name: &'static str, usable: bool| match chosen {
-        Some(t) => (t, GREEN),
-        None => (name, if usable { INK_DIM } else { OFF }),
+    let field = |r: Rect, chosen: Option<&'static str>, name: &'static str, usable: bool| {
+        let (t, color) = match chosen {
+            Some(t) => {
+                paint_cell_glow(ui, r, scale);
+                (t, GREEN)
+            }
+            None => (name, if usable { INK } else { OFF }),
+        };
+        ui.painter()
+            .text(r.center(), Align2::CENTER_CENTER, t, font(scale), color);
     };
-    let (t, color) = shown(
+    field(
+        sf,
         c.scale.map(|s| SCALES[s].0),
         "SCALE",
         !sk.scale_options(synth).is_empty(),
     );
-    p.text(sf.center(), Align2::CENTER_CENTER, t, font(scale), color);
-    let (t, color) = shown(
+    field(
+        kf,
         c.key.map(|k| KEYS[k]),
         "KEY",
         !sk.key_options(synth).is_empty(),
     );
-    p.text(kf.center(), Align2::CENTER_CENTER, t, font(scale), color);
 }
 
 /// An open list: its items (the chosen one green, the one under the pointer highlighted) and,
@@ -714,7 +778,7 @@ fn paint_list(ui: &Ui, sk: &ScaleKeys, l: &List, r: Rect, hover: Option<Pos2>, s
     );
 }
 
-/// A row's five buttons (RANDOM, ALTER, MOVE): (rect, on, ink of the symbol). A chosen button
+/// A row's five buttons (GENERATE, ALTER, SHIFT): (rect, on, ink of the symbol). A chosen button
 /// glows green; thin lines part the buttons, stopping short of the row's edges like the table's.
 fn paint_op_buttons(ui: &Ui, op: Op, buttons: &[(Rect, bool, Color32); 5], scale: f32) {
     let p = ui.painter();
@@ -731,14 +795,7 @@ fn paint_op_buttons(ui: &Ui, op: Op, buttons: &[(Rect, bool, Color32); 5], scale
     }
     for (param, &(r, on, ink)) in buttons.iter().enumerate() {
         if on {
-            let glow = r.shrink(1.5 * scale);
-            for (grow, alpha) in [(1.5, 40), (0.0, 90)] {
-                p.rect_filled(
-                    glow.expand(grow * scale),
-                    CornerRadius::same((2.0 * scale) as u8),
-                    Color32::from_rgba_unmultiplied(GREEN.r(), GREEN.g(), GREEN.b(), alpha),
-                );
-            }
+            paint_cell_glow(ui, r, scale);
         }
         if op == Op::Move {
             // MOVE's steps as text, bold: drawn twice, a hair apart

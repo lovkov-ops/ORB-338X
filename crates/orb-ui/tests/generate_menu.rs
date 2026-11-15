@@ -4,7 +4,7 @@
 use eframe::egui::{self, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
 use eframe::egui::{MouseWheelSource, MouseWheelUnit, TouchPhase};
 use orb_ui::app::App;
-use orb_ui::generate::{self, CELL_H, COL_W, Field, LIST_ROWS, Op, ROWS};
+use orb_ui::generate::{self, ACTIONS, BOTTOM_W, CELL_H, COL_W, Field, LIST_ROWS, Op, ROW_COUNT};
 use orb_ui::layout::{self, PANEL_H, PANEL_W};
 use orb_ui::model::Panel;
 use orb_ui::scale::{KEYS, SCALES};
@@ -143,17 +143,14 @@ fn escape_and_a_click_outside_close_the_menu_and_a_click_inside_does_not() {
 }
 
 #[test]
-fn the_menu_is_under_its_button_inside_the_panel_with_column_b_twice_as_wide() {
-    assert_eq!(ROWS, ["SCALE/KEY", "GENERATE", "ALTER", "MOVE"]);
-    assert_eq!(COL_W[1], 2.0 * COL_W[0]);
+fn the_menu_is_under_its_button_inside_the_panel_with_the_left_column_twice_as_wide() {
+    // (this fork) five rows: SCALE | KEY, GENERATE, ALTER, SHIFT, RESET .. UNDO REDO
+    assert_eq!(ACTIONS, ["GENERATE", "ALTER", "SHIFT"]);
+    assert_eq!(COL_W[0], 2.0 * COL_W[1]);
     let h = Harness::new();
     for synth in 0..2 {
         let (x, y, w, h_) = h.app.generate_rect(synth).unwrap();
-        // the four named rows and RESET (this fork)
-        assert_eq!(
-            (w, h_),
-            (COL_W[0] + COL_W[1], CELL_H * (ROWS.len() + 1) as f32)
-        );
+        assert_eq!((w, h_), (COL_W[0] + COL_W[1], CELL_H * ROW_COUNT as f32));
         let b = button(synth);
         assert!(y > b.y, "the menu is under the button");
         assert!(x >= 0.0 && y >= 0.0 && x + w <= PANEL_W && y + h_ <= PANEL_H);
@@ -202,7 +199,7 @@ fn baze_1_chooses_a_scale_then_a_key_and_its_keys_glow() {
     // the row is complete: SCALE/KEY is green on BAZE 1, not on BAZE 2; the other rows stay red
     assert!(h.app.row_done(0, 0));
     assert!(!h.app.row_done(1, 0));
-    assert!((1..ROWS.len()).all(|row| !h.app.row_done(0, row)));
+    assert!((1..4).all(|row| !h.app.row_done(0, row)));
     // A major (A B C# D E F# G#): its keys glow, the others and the LEDs do not; BAZE 2's do
     // not
     let sk = h.app.scale_keys();
@@ -258,16 +255,7 @@ fn baze_2_waits_for_baze_1_and_lists_only_what_fits() {
     assert_eq!(h.app.generate_open(), None);
 }
 
-/// The middle of RANDOM's name, or of the RANDOM row's button `param`.
-fn random_label(h: &Harness, synth: usize) -> Pos2 {
-    op_label(h, synth, Op::Random)
-}
-
-fn random_button(h: &Harness, synth: usize, param: usize) -> Pos2 {
-    op_button(h, synth, Op::Random, param)
-}
-
-/// The middle of a row's name, or of the row's button `param`.
+/// The middle of a row's action (the right column), or of the row's button `param`.
 fn op_label(h: &Harness, synth: usize, op: Op) -> Pos2 {
     let (x, y, w, hh) = h.app.op_label_rect(synth, op).unwrap();
     Pos2::new(x + w / 2.0, y + hh / 2.0)
@@ -278,39 +266,69 @@ fn op_button(h: &Harness, synth: usize, op: Op, param: usize) -> Pos2 {
     Pos2::new(x + w / 2.0, y + hh / 2.0)
 }
 
+fn center((x, y, w, h): (f32, f32, f32, f32)) -> Pos2 {
+    Pos2::new(x + w / 2.0, y + h / 2.0)
+}
+
+impl Harness {
+    /// Chooses the scale `name` and the first key note the list offers.
+    fn choose_scale_key(&mut self, synth: usize, name: &str) {
+        self.choose_scale(synth, name);
+        self.click_field(synth, Field::Key);
+        self.click_list_row(0);
+        assert!(self.app.row_done(synth, 0));
+    }
+
+    /// Clicks a row's buttons, then its action.
+    fn run(&mut self, synth: usize, op: Op, params: &[usize]) {
+        for &param in params {
+            let p = op_button(self, synth, op, param);
+            self.click_at(p);
+        }
+        let l = op_label(self, synth, op);
+        self.click_at(l);
+    }
+}
+
 #[test]
-fn random_chooses_its_fields_while_blinking_then_randomizes_the_pattern() {
-    use orb_ui::random::{ACCENT, NOTE, SLIDE};
+fn the_menu_leads_from_scale_and_key_to_generate() {
+    // (this fork) gray (not usable), white (usable), green (chosen or done)
+    use orb_ui::random::{ACCENT, SLIDE};
     let mut h = Harness::new();
     h.app.set_random_seed(5);
     h.click_at(button(0));
     let before = h.app.panel.pattern_303(0);
-    // the buttons do nothing until RANDOM is pressed
-    let p = random_button(&h, 0, ACCENT);
+    // nothing of GENERATE's row is usable before the scale and key
+    assert!(!h.app.op_usable(0, Op::Random));
+    let p = op_button(&h, 0, Op::Random, ACCENT);
     h.click_at(p);
     assert_eq!(h.app.op_selection(0, Op::Random), [false; 5]);
-    let l = random_label(&h, 0);
+    let l = op_label(&h, 0, Op::Random);
     h.click_at(l);
-    assert_eq!(h.app.op_picking(), Some((0, Op::Random)));
-    // NOTE waits for the scale and key
-    let p = random_button(&h, 0, NOTE);
-    h.click_at(p);
-    assert!(!h.app.op_selection(0, Op::Random)[NOTE]);
-    let p = random_button(&h, 0, ACCENT);
-    h.click_at(p);
-    let p = random_button(&h, 0, SLIDE);
-    h.click_at(p);
-    // a second click turns a field off again
-    h.click_at(p);
-    h.click_at(p);
+    assert_eq!(h.app.panel.pattern_303(0), before);
+    h.choose_scale_key(0, "IONIAN");
+    assert!(h.app.op_usable(0, Op::Random));
+    // GENERATE waits for a button
+    assert!(!h.app.action_usable(0, Op::Random));
+    h.click_at(l);
+    assert_eq!(h.app.panel.pattern_303(0), before);
+    // a button turns on and off; then GENERATE is usable
+    for param in [ACCENT, SLIDE, SLIDE, SLIDE] {
+        let p = op_button(&h, 0, Op::Random, param);
+        h.click_at(p);
+    }
     assert_eq!(
         h.app.op_selection(0, Op::Random),
         [false, false, true, true, false]
     );
+    assert!(h.app.action_usable(0, Op::Random));
+    // ALTER and SHIFT wait for GENERATE
+    assert!(!h.app.op_usable(0, Op::Alter) && !h.app.op_usable(0, Op::Move));
     assert!(!h.app.row_done(0, 1));
     h.click_at(l);
-    assert_eq!(h.app.op_picking(), None);
-    assert!(h.app.row_done(0, 1), "RANDOM is green after a run");
+    assert!(h.app.row_done(0, 1), "GENERATE is green after a run");
+    assert!(h.app.generated(0));
+    assert!(h.app.op_usable(0, Op::Alter) && h.app.op_usable(0, Op::Move));
     let after = h.app.panel.pattern_303(0);
     assert_ne!(after, before);
     // only the chosen fields changed (a cleared pattern: rests on low C)
@@ -329,39 +347,35 @@ fn random_chooses_its_fields_while_blinking_then_randomizes_the_pattern() {
             ..
         }
     )));
-    // the choice is kept for the next time; Escape stops choosing without a run
-    h.click_at(l);
+    // a change of the buttons makes GENERATE white again; the choice stays
+    let p = op_button(&h, 0, Op::Random, SLIDE);
+    h.click_at(p);
+    assert!(!h.app.row_done(0, 1));
     assert_eq!(
         h.app.op_selection(0, Op::Random),
-        [false, false, true, true, false]
+        [false, false, true, false, false]
     );
-    let kept = h.app.panel.pattern_303(0);
+    // Escape closes the menu
     h.key(Key::Escape);
-    assert_eq!((h.app.op_picking(), h.app.generate_open()), (None, None));
-    assert_eq!(h.app.panel.pattern_303(0), kept);
-    // BAZE 2's pattern was left alone
+    assert_eq!(h.app.generate_open(), None);
+    // BAZE 2's pattern and menu were left alone
     assert_eq!(
         h.app.panel.pattern_303(1),
         orb_ui::model::Panel::new().pattern_303(1)
     );
+    assert!(!h.app.generated(1));
 }
 
 #[test]
-fn random_notes_follow_the_scale_and_key() {
+fn generated_notes_follow_the_scale_and_key() {
     use orb_ui::random::NOTE;
     let mut h = Harness::new();
     h.app.set_random_seed(9);
     h.click_at(button(0));
     // C major pentatonic: C D E G A
-    h.choose_scale(0, "MAJ PENTA");
-    h.click_field(0, Field::Key);
-    h.click_list_row(0);
+    h.choose_scale_key(0, "MAJ PENTA");
     let mask = h.app.scale_keys().get(0).mask().unwrap();
-    let l = random_label(&h, 0);
-    h.click_at(l);
-    let p = random_button(&h, 0, NOTE);
-    h.click_at(p);
-    h.click_at(l);
+    h.run(0, Op::Random, &[NOTE]);
     let steps = h.app.panel.pattern_303(0);
     assert!(steps.iter().any(|s| !s.rest), "some steps became notes");
     for s in steps {
@@ -374,39 +388,18 @@ fn random_notes_follow_the_scale_and_key() {
 }
 
 #[test]
-fn alter_keeps_its_own_choice_and_moves_what_random_made() {
+fn alter_keeps_its_own_choice_and_moves_what_generate_made() {
     use orb_ui::random::{ACCENT, NOTE};
     let mut h = Harness::new();
     h.app.set_random_seed(13);
     h.click_at(button(0));
-    // C major, then RANDOM makes notes and accents
-    h.choose_scale(0, "IONIAN");
-    h.click_field(0, Field::Key);
-    h.click_list_row(0);
-    let l = random_label(&h, 0);
-    h.click_at(l);
-    for param in [ACCENT, NOTE] {
-        let p = random_button(&h, 0, param);
-        h.click_at(p);
-    }
-    h.click_at(l);
+    h.choose_scale_key(0, "IONIAN");
+    h.run(0, Op::Random, &[ACCENT, NOTE]);
     let made = h.app.panel.pattern_303(0);
-    // ALTER starts with nothing chosen: RANDOM's choice is its own
-    let a = op_label(&h, 0, Op::Alter);
-    h.click_at(a);
-    assert_eq!(h.app.op_picking(), Some((0, Op::Alter)));
+    // ALTER starts with nothing chosen: GENERATE's choice is its own
     assert_eq!(h.app.op_selection(0, Op::Alter), [false; 5]);
-    // pressing a RANDOM button while ALTER is chosen does nothing
-    let p = random_button(&h, 0, ACCENT);
-    h.click_at(p);
-    assert!(h.app.op_selection(0, Op::Random)[ACCENT]);
-    assert_eq!(h.app.op_selection(0, Op::Alter), [false; 5]);
-    for param in [ACCENT, NOTE] {
-        let p = op_button(&h, 0, Op::Alter, param);
-        h.click_at(p);
-    }
-    assert!(!h.app.row_done(0, 2));
-    h.click_at(a);
+    assert!(!h.app.action_usable(0, Op::Alter));
+    h.run(0, Op::Alter, &[ACCENT, NOTE]);
     assert!(h.app.row_done(0, 2), "ALTER is green after a run");
     let moved = h.app.panel.pattern_303(0);
     assert_ne!(moved, made);
@@ -432,90 +425,110 @@ fn alter_keeps_its_own_choice_and_moves_what_random_made() {
 }
 
 #[test]
-fn move_takes_one_button_at_a_time_and_moves_the_whole_pattern_around() {
+fn shift_takes_one_button_at_a_time_and_moves_the_whole_pattern_around() {
     use orb_ui::random::{ACCENT, NOTE, SLIDE};
     let mut h = Harness::new();
     h.app.set_random_seed(23);
     h.click_at(button(0));
-    // a pattern to move: C major notes, accents and slides from RANDOM
-    h.choose_scale(0, "IONIAN");
-    h.click_field(0, Field::Key);
-    h.click_list_row(0);
-    let l = random_label(&h, 0);
-    h.click_at(l);
-    for param in [ACCENT, SLIDE, NOTE] {
-        let p = random_button(&h, 0, param);
-        h.click_at(p);
-    }
-    h.click_at(l);
+    h.choose_scale_key(0, "IONIAN");
+    h.run(0, Op::Random, &[ACCENT, SLIDE, NOTE]);
     let made = h.app.panel.pattern_303(0);
-    let m = op_label(&h, 0, Op::Move);
-    h.click_at(m);
-    assert_eq!(h.app.op_picking(), Some((0, Op::Move)));
     // -2, then -1: only the last stays on
-    for param in [0, 1] {
-        let p = op_button(&h, 0, Op::Move, param);
-        h.click_at(p);
-    }
+    h.run(0, Op::Move, &[0, 1]);
     assert_eq!(
         h.app.op_selection(0, Op::Move),
         [false, true, false, false, false]
     );
-    h.click_at(m);
-    assert!(h.app.row_done(0, 3), "MOVE is green after a run");
+    assert!(h.app.row_done(0, 3), "SHIFT is green after a run");
     let moved = h.app.panel.pattern_303(0);
     // -1: every step one to the left, the first one around to the end
     for (i, st) in moved.iter().enumerate() {
         assert_eq!(*st, made[(i + 1) % 16], "step {i}");
     }
-    // +1 brings it back; a second press on +1 turns it off again
-    h.click_at(m);
+    // +1 brings it back
+    h.run(0, Op::Move, &[3]);
+    assert_eq!(h.app.panel.pattern_303(0), made);
+    // a second press on +1 turns it off: SHIFT is gray and does nothing
     let p = op_button(&h, 0, Op::Move, 3);
     h.click_at(p);
-    h.click_at(m);
-    assert_eq!(h.app.panel.pattern_303(0), made);
-    h.click_at(m);
-    h.click_at(p);
     assert_eq!(h.app.op_selection(0, Op::Move), [false; 5]);
+    assert!(!h.app.action_usable(0, Op::Move));
+    let m = op_label(&h, 0, Op::Move);
     h.click_at(m);
     assert!(!h.app.row_done(0, 3), "nothing chosen: nothing moved");
     assert_eq!(h.app.panel.pattern_303(0), made);
 }
 
 #[test]
+fn undo_and_redo_step_through_the_menus_changes() {
+    use orb_ui::random::{ACCENT, NOTE};
+    let mut h = Harness::new();
+    h.app.set_random_seed(31);
+    h.click_at(button(0));
+    let start = h.app.panel.pattern_303(0);
+    let undo = center(h.app.undo_rect(0, false).unwrap());
+    let redo = center(h.app.undo_rect(0, true).unwrap());
+    assert!(!h.app.can_undo(0, false) && !h.app.can_undo(0, true));
+    h.choose_scale_key(0, "IONIAN");
+    h.run(0, Op::Random, &[ACCENT, NOTE]);
+    let made = h.app.panel.pattern_303(0);
+    h.run(0, Op::Move, &[4]);
+    let shifted = h.app.panel.pattern_303(0);
+    assert!(h.app.can_undo(0, false) && !h.app.can_undo(0, true));
+    h.click_at(undo);
+    assert_eq!(h.app.panel.pattern_303(0), made);
+    h.click_at(undo);
+    assert_eq!(h.app.panel.pattern_303(0), start);
+    assert!(!h.app.can_undo(0, false));
+    // nothing more to undo: UNDO is gray and does nothing
+    h.click_at(undo);
+    assert_eq!(h.app.panel.pattern_303(0), start);
+    h.click_at(redo);
+    h.click_at(redo);
+    assert_eq!(h.app.panel.pattern_303(0), shifted);
+    assert!(!h.app.can_undo(0, true));
+    // a new change after an UNDO drops the REDO steps
+    h.click_at(undo);
+    assert!(h.app.can_undo(0, true));
+    h.run(0, Op::Alter, &[NOTE]);
+    assert!(!h.app.can_undo(0, true));
+    // UNDO puts the steps back into the pattern they were taken from, selected or not
+    let altered = h.app.panel.pattern_303(0);
+    h.app.panel.press("pattern1.pattern2", 0.0);
+    h.click_at(undo);
+    assert_eq!(h.app.panel.synth[0].patterns[0], made);
+    assert_eq!(h.app.panel.pattern_303(0), start, "pattern 2 is untouched");
+    assert_ne!(altered, made);
+}
+
+#[test]
 fn reset_puts_the_menu_back_as_it_starts_and_keeps_the_pattern() {
-    // (this fork) the menu's last row, RESET, across the whole menu
+    // (this fork) RESET, in red, at the last row's left
     let mut h = Harness::new();
     h.click_at(button(0));
-    h.choose_scale(0, SCALES[0].0);
-    h.click_field(0, Field::Key);
-    h.click_list_row(0);
-    assert!(h.app.row_done(0, 0));
-    h.app.press_op(0, Op::Random);
-    h.app.press_op_param(0, Op::Random, 0);
-    h.app.press_op(0, Op::Random);
+    h.choose_scale_key(0, SCALES[0].0);
+    h.run(0, Op::Random, &[0]);
     assert!(h.app.row_done(0, Op::Random.row()));
-    h.app.press_op(0, Op::Move);
-    h.app.press_op_param(0, Op::Move, 1);
-    assert_eq!(h.app.op_picking(), Some((0, Op::Move)));
+    h.run(0, Op::Move, &[1]);
     let pattern = h.app.panel.pattern_303(0);
 
-    let (x, y, w, hh) = h.app.reset_rect(0).unwrap();
-    let (mx, my, mw, mh) = h.app.generate_rect(0).unwrap();
-    // the last row, as wide as the menu
-    assert_eq!((x, w), (mx, mw));
-    assert_eq!(y + hh, my + mh);
-    h.click_at(Pos2::new(x + w / 2.0, y + hh / 2.0));
+    let r = h.app.reset_rect(0).unwrap();
+    let (mx, my, _, mh) = h.app.generate_rect(0).unwrap();
+    assert_eq!((r.0, r.2), (mx, BOTTOM_W));
+    assert_eq!(r.1 + r.3, my + mh);
+    h.click_at(center(r));
     assert_eq!(h.app.scale_keys().get(0).scale, None);
     assert_eq!(h.app.scale_keys().get(0).key, None);
-    for row in 0..ROWS.len() {
+    for row in 0..4 {
         assert!(!h.app.row_done(0, row), "row {row}");
     }
     for op in Op::ALL {
         assert_eq!(h.app.op_selection(0, op), [false; 5]);
+        assert!(!h.app.op_usable(0, op), "{op:?} waits again");
     }
-    assert_eq!(h.app.op_picking(), None);
+    assert!(!h.app.generated(0));
     assert_eq!(h.app.panel.pattern_303(0), pattern);
-    // the menu stays open
+    // the UNDO steps stay, and the menu stays open
+    assert!(h.app.can_undo(0, false));
     assert_eq!(h.app.generate_open(), Some(0));
 }
