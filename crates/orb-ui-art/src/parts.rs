@@ -1232,7 +1232,7 @@ const TUNE_LABEL_Y_303: f32 = 5.5;
 pub const LEFT_X_303: f32 = 29.0;
 
 /// The waveform switch under TUNE, centered on its column (this fork): as wide and as high as
-/// the LFO mode buttons under the other knobs, and in their row; no label.
+/// the LFO mode buttons under the other knobs, and in their row; labeled above as they are.
 pub const WAVE_W_303: f32 = LFO_MODE_W;
 pub const WAVE_H_303: f32 = LFO_MODE_H;
 pub const WAVE_X_303: f32 = LEFT_X_303 - WAVE_W_303 / 2.0;
@@ -1250,8 +1250,15 @@ fn tb303_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tb303", 366.0, 115.0, |s| {
         face(s, 366.0, 115.0, pal::PAPER);
         let ink = pal::BLACK;
-        // the waveform switch (over the pitch/clear block) has no label (this fork): the saw
-        // and the square say what they are
+        // the waveform switch under TUNE, labeled above it like the LFO row's knobs
+        label(
+            s,
+            LEFT_X_303,
+            LFO_LABEL_Y_303,
+            LFO_LABEL_CAP_303,
+            ink,
+            "WAVEFORM",
+        );
         // TUNE: the small knob over the waveform, labeled above it
         label(s, LEFT_X_303, TUNE_LABEL_Y_303, 3.6, ink, "TUNE");
         for (k, name) in ["CUTOFF", "RESO", "ENV MOD", "DECAY", "ACCENT"]
