@@ -6,8 +6,9 @@
 //! the whole range above and below the knob's value, clipped to 0..=127). They sit under the
 //! knob, left and right of two buttons that choose how: the note ties the rate to the song's
 //! tempo (off: free, in hertz), and the wave button flips between the sine (a smooth up and
-//! down) and the random sine, sample & hold (every half cycle a new random height on the other
-//! side, glided to smoothly: an uneven sine, as fast as the sine).
+//! down) and the random sine, sample & hold: every half cycle a new random height anywhere in
+//! the range, at least `MIN_JUMP` away from the last, glided to smoothly. It moves as often as
+//! the sine but goes up or down at random, by random amounts.
 //!
 //! Free, the rate knob goes from `FREE_MIN_HZ` to `FREE_MAX_HZ` on a log scale. Tied to the
 //! tempo it picks one cycle's length from `SYNC_BEATS`, and while the song plays the cycle is
@@ -99,11 +100,18 @@ pub struct Mode {
     pub shape: Shape,
 }
 
-/// The random sine's peak of half cycle `half`: above the middle on the even halves, below on
-/// the odd ones, at a random height from half the range to all of it.
-fn peak(rng: &mut Rng, half: i64) -> f64 {
-    let h = 0.5 + 0.5 * rng.unit();
-    if half.rem_euclid(2) == 0 { h } else { -h }
+/// How far the random sine's next height is at least from the last (of the range -1..=1):
+/// enough that every half cycle moves audibly.
+pub const MIN_JUMP: f64 = 0.6;
+
+/// The random sine's next height after `from`: anywhere in -1..=1, at least `MIN_JUMP` away.
+fn peak(rng: &mut Rng, from: f64) -> f64 {
+    loop {
+        let h = rng.unit() * 2.0 - 1.0;
+        if (h - from).abs() >= MIN_JUMP {
+            return h;
+        }
+    }
 }
 
 /// The rate in cycles a second for the rate knob at `rate` (0..=1) when free.
@@ -145,8 +153,8 @@ pub struct Runner {
 impl Runner {
     pub fn new(seed: u64) -> Self {
         let mut rng = Rng::new(seed);
-        let first = peak(&mut rng, -1);
-        let second = peak(&mut rng, 0);
+        let first = rng.unit() * 2.0 - 1.0;
+        let second = peak(&mut rng, first);
         Self {
             cycles: 0.0,
             held: (first, second),
@@ -177,15 +185,16 @@ impl Runner {
         match shape {
             Shape::Sine => (std::f64::consts::TAU * phase).sin(),
             Shape::SampleHold => {
-                // two glides a cycle, as the sine goes up and down once each: every half cycle
-                // a new peak on the other side, of a random height
+                // two glides a cycle, as often as the sine turns: every half cycle a new random
+                // height, up or down
                 let half = (self.cycles * 2.0).floor() as i64;
                 if half != self.held_cycle {
-                    // one half on: glide on from where it was; a jump draws two new peaks
+                    // one half on: glide on from where it was; a jump draws two new heights
                     self.held = if half == self.held_cycle + 1 {
-                        (self.held.1, peak(&mut self.rng, half))
+                        (self.held.1, peak(&mut self.rng, self.held.1))
                     } else {
-                        (peak(&mut self.rng, half - 1), peak(&mut self.rng, half))
+                        let a = self.rng.unit() * 2.0 - 1.0;
+                        (a, peak(&mut self.rng, a))
                     };
                     self.held_cycle = half;
                 }
@@ -440,18 +449,56 @@ mod tests {
         (dist, turns)
     }
 
-    /// (this fork) The random sine moves about as fast as the sine: it turns twice a cycle and
-    /// travels most of the sine's way (it was one random glide a cycle, several times slower).
+    /// (this fork) The random sine is no sine: it moves as often (a new height every half
+    /// cycle), but up or down at random and by random amounts, over the whole range.
     #[test]
-    fn the_random_sine_is_about_as_fast_as_the_sine() {
+    fn the_random_sine_moves_often_but_at_random() {
         let (sine, sine_turns) = travel(Shape::Sine);
         let (random, random_turns) = travel(Shape::SampleHold);
         assert!((39..=41).contains(&sine_turns), "{sine_turns}");
-        assert!((39..=41).contains(&random_turns), "{random_turns}");
+        // it turns at random: often, but not at every half cycle as the sine does
+        assert!((15..39).contains(&random_turns), "{random_turns}");
+        // it travels a good part of the sine's way: as lively
         assert!(
-            random > 0.6 * sine && random < 1.1 * sine,
+            random > 0.4 * sine && random < 1.1 * sine,
             "{random} vs {sine}"
         );
+        // its heights spread over the range, the small ones too; two in a row can go the same
+        // way
+        let mut r = Runner::new(11);
+        let mode = Mode {
+            sync: false,
+            shape: Shape::SampleHold,
+        };
+        let mut peaks = vec![];
+        for _ in 0..200 {
+            r.advance(10.0, 0.0, mode, 0, None); // half a cycle at 0.05 Hz
+            r.value(Shape::SampleHold); // the heights are drawn as the wave is read
+            peaks.push(r.held.0);
+        }
+        assert!(peaks.iter().any(|&h| h > 0.8) && peaks.iter().any(|&h| h < -0.8));
+        assert!(peaks.iter().any(|&h| h.abs() < 0.3), "small heights too");
+        let ups: Vec<bool> = peaks.windows(2).map(|w| w[1] > w[0]).collect();
+        assert!(
+            ups.windows(2).any(|u| u[0] == u[1]),
+            "not always up and down in turn"
+        );
+        for w in peaks.windows(2) {
+            assert!((w[1] - w[0]).abs() >= MIN_JUMP - 1e-9);
+        }
+        // and its curve is not the sine's
+        let (mut a, mut b) = (Runner::new(5), Runner::new(5));
+        let (mut dot, mut na, mut nb) = (0.0, 0.0, 0.0);
+        for _ in 0..4000 {
+            a.advance(0.05, 0.0, Mode::default(), 0, None);
+            b.advance(0.05, 0.0, mode, 0, None);
+            let (x, y) = (a.value(Shape::Sine), b.value(Shape::SampleHold));
+            dot += x * y;
+            na += x * x;
+            nb += y * y;
+        }
+        let corr = dot / (na.sqrt() * nb.sqrt());
+        assert!(corr.abs() < 0.5, "like the sine: {corr}");
     }
 
     #[test]
