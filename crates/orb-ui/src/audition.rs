@@ -229,22 +229,24 @@ mod tests {
         }
     }
 
-    /// (this fork) With the fork's drum gain on (the app turns it on at its start), the drum
-    /// machines are 10% louder than the original; off, they are the original's.
+    /// (this fork) With the fork's drum gains on (the app turns them on at its start), the
+    /// drum machines are louder than the original by `DRUM_GAINS`; off, they are the original's.
     #[test]
-    fn the_drum_machines_are_ten_percent_louder_with_the_forks_gain() {
+    fn the_drum_machines_take_the_forks_gains() {
         let tables = Arc::new(Tables::new());
         let song = song();
         let kit = Some(rbm::standard::builtin_samples());
-        let render = |on: bool| {
-            orb_engine::frame::set_fork_drum_gain(on);
-            let a = render_drum(tables.clone(), kit.clone(), &song, false, 0, 1).unwrap();
-            orb_engine::frame::set_fork_drum_gain(false);
-            a
-        };
-        let (orig, loud) = (render(false), render(true));
-        let ratio = peak(&loud) as f64 / peak(&orig) as f64;
-        assert!((ratio - 1.1).abs() < 0.02, "{ratio}");
+        for (is808, gain) in [(true, 1.79), (false, 1.44)] {
+            let render = |on: bool| {
+                orb_engine::frame::set_fork_drum_gain(on);
+                let a = render_drum(tables.clone(), kit.clone(), &song, is808, 0, 2).unwrap();
+                orb_engine::frame::set_fork_drum_gain(false);
+                a
+            };
+            let (orig, loud) = (render(false), render(true));
+            let ratio = peak(&loud) as f64 / peak(&orig) as f64;
+            assert!((ratio - gain).abs() < 0.03, "808 {is808}: {ratio}");
+        }
     }
 
     #[test]

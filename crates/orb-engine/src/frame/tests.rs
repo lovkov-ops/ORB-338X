@@ -1300,3 +1300,58 @@ fn the_saved_blocks_are_the_live_ones_in_pattern_mode_and_the_copies_in_song_mod
     // a placeholder has no block
     assert!(d.channels[2].saved_block(true).is_empty());
 }
+
+/// This fork: with one set of settings for both modes (`set_fork_shared_modes`), what the panel
+/// set in pattern mode plays on in song mode, and what song mode had stays on in pattern mode;
+/// without it (the original), song mode plays the song's start values and pattern mode gets its
+/// own back.
+#[test]
+fn shared_modes_keep_the_settings_across_the_switch() {
+    use song::Device as D;
+    for shared in [false, true] {
+        let mut e = Engine::new(tables(), Devices::implemented(None));
+        e.frame.shared_modes = shared;
+        let level = |e: &Engine| e.frame.devices.mixer.live.channels[2].level;
+        let dist = |e: &Engine| e.frame.devices.mixer.live.channels[3].dist;
+        let tune = |e: &mut Engine| e.frame.devices.device_mut(D::Tb303_1).live()[3];
+        let (level0, tune0) = (level(&e), tune(&mut e));
+        // pattern mode: the 808's level down, the 909's distortion on, a 303 knob turned
+        e.mixer_channel(2, 1, 40);
+        e.mixer_channel(3, 4, 1);
+        e.device_param(D::Tb303_1, 3, 99);
+        e.set_song_mode(1);
+        if shared {
+            assert_eq!(
+                (level(&e), dist(&e), tune(&mut e)),
+                (40, 1, 99),
+                "song mode keeps them"
+            );
+        } else {
+            assert_eq!(
+                (level(&e), tune(&mut e)),
+                (level0, tune0),
+                "the song's start values"
+            );
+        }
+        // song mode: the 808's level changed again
+        e.mixer_channel(2, 1, 70);
+        e.set_song_mode(0);
+        if shared {
+            assert_eq!(
+                (level(&e), dist(&e), tune(&mut e)),
+                (70, 1, 99),
+                "pattern mode keeps them"
+            );
+            // and song mode again starts from them
+            e.set_song_mode(1);
+            e.locate(0);
+            assert_eq!((level(&e), dist(&e), tune(&mut e)), (70, 1, 99));
+        } else {
+            assert_eq!(
+                (level(&e), dist(&e), tune(&mut e)),
+                (40, 1, 99),
+                "pattern mode's own"
+            );
+        }
+    }
+}

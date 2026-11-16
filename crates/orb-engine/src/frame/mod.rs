@@ -799,9 +799,12 @@ pub struct Frame {
     /// object (`song+0x30C`, a heap address). Set by [`Engine::render`]; the delay leaves it on
     /// the stack ([`SendEffect::stack_word`]).
     pub out_end: Option<i32>,
-    /// This fork's gain on the drum machines' channels: `DRUM_GAIN` when
+    /// This fork's gains on the drum machines' channels (808, 909): `DRUM_GAINS` when
     /// [`set_fork_drum_gain`] was on at the frame's making, else 1 (the original's sound).
-    pub drum_gain: f64,
+    pub drum_gain: [f64; 2],
+    /// This fork's one set of settings for pattern and song mode ([`set_fork_shared_modes`]
+    /// at the frame's making; off: the original's two sets).
+    pub shared_modes: bool,
 }
 
 /// `unk_100F012C`: the right channel's float output of a render call (0x10013A3A), at the
@@ -847,10 +850,11 @@ impl Frame {
             stack_word: None,
             out_end: None,
             drum_gain: if FORK_DRUM_GAIN.load(Ordering::Relaxed) {
-                DRUM_GAIN
+                DRUM_GAINS
             } else {
-                1.0
+                [1.0; 2]
             },
+            shared_modes: FORK_SHARED_MODES.load(Ordering::Relaxed),
         }
     }
 
@@ -970,11 +974,15 @@ impl Frame {
                     self.stack_word = ins.stack_word(self.stack_word);
                 }
             }
-            // this fork (not the original): the drum machines' channels (808, 909) 10% louder,
-            // after their inserts, as a channel gain would be (only with the fork's gain on)
-            if (c == 2 || c == 3) && self.drum_gain != 1.0 {
-                for x in bus.iter_mut() {
-                    *x = st(*x as f64 * self.drum_gain);
+            // this fork (not the original): the drum machines' channels (808, 909) as loud as
+            // the 303s, after their inserts, as a channel gain would be (only with the fork's
+            // gains on)
+            if c == 2 || c == 3 {
+                let g = self.drum_gain[c - 2];
+                if g != 1.0 {
+                    for x in bus.iter_mut() {
+                        *x = st(*x as f64 * g);
+                    }
                 }
             }
             // 0x100135FA: the channel's peak meter
@@ -1034,9 +1042,12 @@ impl Frame {
     }
 }
 
-/// This fork's gain on the drum machines' channels (808 and 909): 10% louder than the original
-/// (the only place the engine leaves the original's numbers on purpose).
-pub const DRUM_GAIN: f64 = 1.1;
+/// This fork's gains on the drum machines' channels, 808 then 909: a new song's drums as loud
+/// as its 303s at their default values. Measured as heard (K-weighted, ITU-R BS.1770) over a
+/// bar at 140 BPM, a note on every 303 step against a BD/SD/hi-hat groove: the 303 at -33.0
+/// dB, the 808 at -38.1 dB (+5.0 dB: 1.79) and the 909 at -36.2 dB (+3.2 dB: 1.44). The only
+/// place the engine leaves the original's numbers on purpose.
+pub const DRUM_GAINS: [f64; 2] = [1.79, 1.44];
 
 static FORK_DRUM_GAIN: AtomicBool = AtomicBool::new(false);
 
@@ -1045,6 +1056,50 @@ static FORK_DRUM_GAIN: AtomicBool = AtomicBool::new(false);
 /// turn it on at their start.
 pub fn set_fork_drum_gain(on: bool) {
     FORK_DRUM_GAIN.store(on, Ordering::Relaxed);
+}
+
+static FORK_SHARED_MODES: AtomicBool = AtomicBool::new(false);
+
+/// Turns this fork's one set of settings for pattern and song mode on or off for the engines
+/// made from now on (off by default: the original's behavior, the reference tests). The
+/// original keeps two sets: entering song mode saves the panel's settings aside and plays the
+/// song's (its tracks' values at tick 0, the start values, unless recorded later), and leaving
+/// it puts the saved ones back. With this on, entering song mode makes the panel's settings the
+/// song's start values (recorded changes after the start still play), and leaving it keeps
+/// what song mode had.
+pub fn set_fork_shared_modes(on: bool) {
+    FORK_SHARED_MODES.store(on, Ordering::Relaxed);
+}
+
+/// The live value of device `d`'s controller `ctrl` (the controller number its track uses), if
+/// the device has one.
+fn live_value(devices: &mut Devices, d: song::Device, ctrl: u8) -> Option<u8> {
+    match d {
+        song::Device::Mixer => {
+            let m = &devices.mixer.live;
+            match ctrl {
+                1 => Some(m.comp_id),
+                2 => Some(m.pcf_id),
+                5..=28 => {
+                    let p = &m.channels[((ctrl - 5) / 6) as usize];
+                    match (ctrl - 5) % 6 {
+                        1 => Some(p.level),
+                        2 => Some(p.pan),
+                        3 => Some(p.send),
+                        4 => Some(p.dist),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        }
+        song::Device::Tr909 => devices
+            .device_mut(d)
+            .live()
+            .get(crate::tr909::internal_index(ctrl as usize))
+            .copied(),
+        _ => devices.device_mut(d).live().get(ctrl as usize).copied(),
+    }
 }
 
 /// The float-to-int16 conversion of `sub_100139E0` (0x10013C4E): `x = f * 32768` in f64,
@@ -1396,6 +1451,34 @@ impl Engine {
     /// Song msg 35 `{0,m}` (`sub_1001FBE0`): song mode (1) or pattern mode (0).
     pub fn set_song_mode(&mut self, mode: u8) {
         let f = &mut self.frame;
+        if f.shared_modes && f.seq.globals.song_mode != mode {
+            if mode != 0 {
+                // this fork: the panel's settings become the song's start values (its tracks'
+                // events at tick 0), which song mode chases from
+                for d in song::Device::ALL {
+                    let i = d.id() as usize;
+                    let starts: Vec<u8> = f
+                        .seq
+                        .events(i)
+                        .iter()
+                        .filter(|e| e.tick == 0)
+                        .map(|e| e.ctrl)
+                        .collect();
+                    for ctrl in starts {
+                        if let Some(v) = live_value(&mut f.devices, d, ctrl) {
+                            f.seq.track_mut(i).insert(0, ctrl, v);
+                        }
+                    }
+                }
+                // the tracks changed: the player hands the app the new copies (its save and
+                // export take them)
+                f.seq.revision += 1;
+            } else {
+                // this fork: leaving song mode keeps its settings: the pattern-mode copies take
+                // the live values first, so the restore puts back what plays now
+                f.devices.for_each(|d| d.set_song_mode(true));
+            }
+        }
         f.seq.set_song_mode(mode, &mut f.devices);
     }
 

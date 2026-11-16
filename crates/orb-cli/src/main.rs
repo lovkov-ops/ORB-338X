@@ -69,7 +69,7 @@ enum Cmd {
         /// instead of failing; the original offers the same as "Standard".
         #[arg(long)]
         standard_kit: bool,
-        /// The original's sound, bit for bit: without OpenRB-338x's 10% louder drum machines.
+        /// The original's sound, bit for bit: without OpenRB-338x's louder drum machines.
         #[arg(long)]
         original: bool,
     },
@@ -269,7 +269,7 @@ enum ModCmd {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    // this fork: the drum machines 10% louder (orb_engine::frame::DRUM_GAIN) where orb makes
+    // this fork: the drum machines louder (orb_engine::frame::DRUM_GAINS) where orb makes
     // sound to hear or keep (render, play); `compare` keeps the original's sound, which its
     // references are
     let gain = match &cli.command {
