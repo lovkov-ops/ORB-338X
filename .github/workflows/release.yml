@@ -60,7 +60,9 @@ jobs:
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
           - { target: aarch64-pc-windows-msvc, os: windows-11-arm }
           - { target: x86_64-apple-darwin, os: macos-15-intel }
-          - { target: aarch64-apple-darwin, os: macos-15 }
+          # this fork: the Apple silicon build on an Intel runner (cargo cross-builds it; no
+          # step runs the binary): GitHub's arm64 macOS runners were too busy to start a job
+          - { target: aarch64-apple-darwin, os: macos-15-intel }
     env:
       SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
       ORB_BUILD_BRANCH: ${{ needs.prepare.outputs.build_branch }}
@@ -117,7 +119,8 @@ jobs:
       matrix:
         include:
           - { target: x86_64-apple-darwin, os: macos-15-intel }
-          - { target: aarch64-apple-darwin, os: macos-15 }
+          # this fork: on an Intel runner too (see the package job)
+          - { target: aarch64-apple-darwin, os: macos-15-intel }
     env:
       SOURCE_DATE_EPOCH: ${{ needs.prepare.outputs.source_date_epoch }}
       ORB_BUILD_BRANCH: ${{ needs.prepare.outputs.build_branch }}
