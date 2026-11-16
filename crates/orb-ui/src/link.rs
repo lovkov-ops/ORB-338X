@@ -311,10 +311,40 @@ fn new_song_knobs(
     knobs
 }
 
-/// The meter state 0..=10 of a meter byte 0..=127: linear, rounded up so that any signal shows
-/// [G: the scale was not read, `sub_424220`].
+/// The meter state 0..=10 of a meter byte 0..=127 (the peak, linear: 127 is full scale). This
+/// fork reads it in decibels, as the master meter's scale is printed (CLIP, -6, -12, -24 and
+/// -36 dB at 94%, 76%, 56%, 32% and 8% of its height), so a signal well below full scale still
+/// lights most of a meter; the linear reading this replaced lit a -12 dB signal three tenths
+/// up. Any signal lights at least the first LED; 127 (full scale or more) lights them all.
 pub fn meter_state(byte: u8) -> u8 {
-    ((byte as u32 * 10).div_ceil(127)).min(10) as u8
+    if byte == 0 {
+        return 0;
+    }
+    if byte >= 127 {
+        return 10;
+    }
+    const SCALE: [(f64, f64); 5] = [
+        (-36.0, 0.08),
+        (-24.0, 0.32),
+        (-12.0, 0.56),
+        (-6.0, 0.76),
+        (0.0, 0.94),
+    ];
+    let db = 20.0 * (byte as f64 / 127.0).log10();
+    let frac = if db <= SCALE[0].0 {
+        // below -36 dB, down to nothing at -48 dB
+        SCALE[0].1 * ((db + 48.0) / 12.0).max(0.0)
+    } else {
+        SCALE
+            .windows(2)
+            .find(|w| db <= w[1].0)
+            .map(|w| {
+                let ((d0, f0), (d1, f1)) = (w[0], w[1]);
+                f0 + (f1 - f0) * (db - d0) / (d1 - d0)
+            })
+            .unwrap_or(SCALE[4].1)
+    };
+    ((frac * 10.0).ceil() as u8).clamp(1, 10)
 }
 
 /// The panel's player link.
@@ -1083,5 +1113,31 @@ impl Link {
         }
         self.player.collect_garbage();
         self.follow(panel);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::meter_state;
+
+    /// (this fork) The meters read in decibels, as the master's scale is printed: a -12 dB
+    /// peak lights about half (it lit three tenths), -6 dB about three quarters, any signal at
+    /// least one LED, full scale all of them; more signal never lights fewer.
+    #[test]
+    fn meters_read_in_decibels() {
+        let byte = |db: f64| (127.0 * 10f64.powf(db / 20.0)) as u8;
+        assert_eq!(meter_state(0), 0);
+        assert_eq!(meter_state(1), 1);
+        assert_eq!(meter_state(127), 10);
+        assert_eq!(meter_state(byte(-12.0)), 6);
+        assert_eq!(meter_state(byte(-6.0)), 8);
+        assert_eq!(meter_state(byte(-24.0)), 4);
+        assert!(meter_state(byte(-36.0)) <= 1);
+        let mut last = 0;
+        for b in 0..=127u8 {
+            let s = meter_state(b);
+            assert!(s >= last, "{b}: {s} < {last}");
+            last = s;
+        }
     }
 }

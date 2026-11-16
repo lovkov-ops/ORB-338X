@@ -324,7 +324,7 @@ fn key_3d(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, r: f32, base: &str, face:
 /// The mixer's header height (this fork: room for SOLO and MUTE under MIX).
 pub const MIX_HEADER_H: f32 = 26.0;
 /// The SOLO and MUTE buttons under MIX: their size.
-pub const MIX_BTN_W: f32 = 18.0;
+pub const MIX_BTN_W: f32 = 15.0;
 pub const MIX_BTN_H: f32 = 10.0;
 
 /// SOLO and MUTE (this fork): a small dark key with its name; on, the name red with a glow.
@@ -1471,10 +1471,10 @@ fn tr909_bg(out: &mut Vec<Part>) {
 fn mixer_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_mixer", 70.0, 115.0, |s| {
         face(s, 70.0, 115.0, pal::SLATE);
-        // this fork: a taller header (2..28) with MIX at its top, SOLO and MUTE under it
-        // between the activity LED (3..17) and the meter (58..66)
+        // this fork: a taller header (2..28) with MIX at its top, centered on the strip, SOLO
+        // and MUTE under it between the activity LED (3..17) and the meter (56..64)
         header(s, 2.0, 2.0, 66.0, MIX_HEADER_H, MIXER_HEADER);
-        label(s, 38.0, 6.6, 4.4, pal::WHITE, "MIX");
+        label(s, 35.0, 6.6, 4.4, pal::WHITE, "MIX");
         // pan and delay send side by side; the fader and the routing keys below
         label(s, 19.0, 55.5, 3.0, pal::INK_DIM, "PAN");
         label(s, 51.0, 55.5, 3.0, pal::INK_DIM, "DELAY");

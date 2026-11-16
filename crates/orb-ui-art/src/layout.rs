@@ -8,9 +8,9 @@ use std::collections::HashMap;
 
 use crate::parts::{
     CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303, KNOBS, KNOBS_909,
-    LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MOD_VIEW_808, PITCH_LED_Y_303,
-    PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303, column_909,
-    knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
+    LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MIX_BTN_W, MOD_VIEW_808,
+    PITCH_LED_Y_303, PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303,
+    column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -509,24 +509,32 @@ fn mixer(b: &mut Builder, c: usize) {
         456.0,
         50.0 + 115.0 * c as f32,
     );
-    // The header (2..28, this fork): MIX at its top; under it the activity LED at the left
-    // (no button now: green while the channel sounds), SOLO and MUTE, and the meter.
+    // The strip is symmetric about its middle (x 35, this fork): the left column at x 19, the
+    // right one at x 51. The header (2..28): MIX at its top; under it, centered on one line
+    // (y 18), the activity LED at the left (no button now: green while the channel sounds),
+    // SOLO and MUTE in the middle and the meter at the right, mirrored about x 35.
     b.part("activity", "chanled", "power_14x14_off", 3.0, 11.0);
-    b.part("solo", "toggle", "mixbtn_solo_off", 19.0, 13.0);
-    b.part("mutebtn", "toggle", "mixbtn_mutebtn_off", 38.5, 13.0);
+    b.part(
+        "solo",
+        "toggle",
+        "mixbtn_solo_off",
+        35.0 - 1.0 - MIX_BTN_W,
+        13.0,
+    );
+    b.part("mutebtn", "toggle", "mixbtn_mutebtn_off", 35.0 + 1.0, 13.0);
     b.part(
         "meter",
         "meter",
         &format!("meter_8x14_{}", [6, 5, 8, 3][c]),
-        58.0,
+        56.0,
         11.0,
     );
     // Pan and the delay send side by side under the header (labels at 55.5), then the fader
-    // at the left and the three routing keys stacked at the right.
+    // under PAN and the three routing keys stacked under DELAY, centered on the fader.
     b.pan("pan", KNOB_22, 8.0, 31.0, 0.5);
     b.knob("delay", KNOB_22, 40.0, 31.0, [0.0, 0.25, 0.1, 0.0][c]);
     b.fader("level", 11.5, 59.5, [0.7, 0.7, 0.8, 0.75][c]);
-    b.part("dist", "toggle", "mixsw_dist_off", 38.0, 63.0);
+    b.part("dist", "toggle", "mixsw_dist_off", 37.0, 64.0);
     b.part(
         "pcf",
         "radio",
@@ -535,10 +543,10 @@ fn mixer(b: &mut Builder, c: usize) {
         } else {
             "mixsw_pcf_off"
         },
-        38.0,
-        79.0,
+        37.0,
+        80.0,
     );
-    b.part("comp", "radio", "mixsw_comp_off", 38.0, 95.0);
+    b.part("comp", "radio", "mixsw_comp_off", 37.0, 96.0);
 }
 
 fn master(b: &mut Builder) {
