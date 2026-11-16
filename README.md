@@ -50,6 +50,8 @@ extra features for the two bass synths. Everything the original does, it does to
 - **The drum machines as loud as the 303s** in a new song at its default values (808 +5 dB,
   909 +3.2 dB, as heard), in the app, its export and `orb render` (`orb render --original`
   keeps the original's sound bit for bit). A click on a drum's name over the steps plays it.
+- **SOLO and MUTE** on every mixer channel (several at a time; a double click on a lit one
+  turns all of its kind off), kept in `.rbsx` songs; the channel's LED shows when it sounds.
 - **One set of settings for pattern and song mode:** knobs, faders and DIST/PCF/COMP stay as
   they are when the mode changes (the original keeps a set for each); changes recorded in
   song mode still play.

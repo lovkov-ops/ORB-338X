@@ -509,21 +509,24 @@ fn mixer(b: &mut Builder, c: usize) {
         456.0,
         50.0 + 115.0 * c as f32,
     );
-    // The header (2..20): the on/off button and the meter 2 px from its edges.
-    b.part("mute", "toggle", "power_14x14_on", 4.0, 4.0);
+    // The header (2..28, this fork): MIX at its top; under it the activity LED at the left
+    // (no button now: green while the channel sounds), SOLO and MUTE, and the meter.
+    b.part("activity", "chanled", "power_14x14_off", 3.0, 11.0);
+    b.part("solo", "toggle", "mixbtn_solo_off", 19.0, 13.0);
+    b.part("mutebtn", "toggle", "mixbtn_mutebtn_off", 38.5, 13.0);
     b.part(
         "meter",
         "meter",
         &format!("meter_8x14_{}", [6, 5, 8, 3][c]),
         58.0,
-        4.0,
+        11.0,
     );
-    // Pan and the delay send side by side under the header (labels at 52.5), then the fader
+    // Pan and the delay send side by side under the header (labels at 55.5), then the fader
     // at the left and the three routing keys stacked at the right.
-    b.pan("pan", KNOB_22, 8.0, 26.0, 0.5);
-    b.knob("delay", KNOB_22, 40.0, 26.0, [0.0, 0.25, 0.1, 0.0][c]);
-    b.fader("level", 11.5, 58.0, [0.7, 0.7, 0.8, 0.75][c]);
-    b.part("dist", "toggle", "mixsw_dist_off", 38.0, 62.0);
+    b.pan("pan", KNOB_22, 8.0, 31.0, 0.5);
+    b.knob("delay", KNOB_22, 40.0, 31.0, [0.0, 0.25, 0.1, 0.0][c]);
+    b.fader("level", 11.5, 59.5, [0.7, 0.7, 0.8, 0.75][c]);
+    b.part("dist", "toggle", "mixsw_dist_off", 38.0, 63.0);
     b.part(
         "pcf",
         "radio",
@@ -533,9 +536,9 @@ fn mixer(b: &mut Builder, c: usize) {
             "mixsw_pcf_off"
         },
         38.0,
-        78.0,
+        79.0,
     );
-    b.part("comp", "radio", "mixsw_comp_off", 38.0, 94.0);
+    b.part("comp", "radio", "mixsw_comp_off", 38.0, 95.0);
 }
 
 fn master(b: &mut Builder) {

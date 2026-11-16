@@ -287,6 +287,11 @@ pub struct Panel {
     pub vintage: bool,
     /// What the engine must hear, drained by the caller.
     pub events: Vec<Event>,
+    /// The mixer channels' SOLO and MUTE buttons (this fork). A channel plays when it is not
+    /// muted and, while any channel is soloed, is soloed itself; that is the engine's channel
+    /// enable, `mixerN.mute` (1: plays), which the panel sends ([`Panel::apply_channels`]).
+    pub solo: [bool; 4],
+    pub mute: [bool; 4],
     /// A 303 key pressed in pitch mode (this fork, `audition.rs`): the synth, the pattern and
     /// the step it wrote, for the app to play the note; taken by the app.
     pub audition: Option<(usize, u8, usize)>,
@@ -335,6 +340,8 @@ impl Panel {
             gr_leds: [0; 9],
             vintage: false,
             events: Vec::new(),
+            solo: [false; 4],
+            mute: [false; 4],
             audition: None,
             held: None,
             knobs: HashMap::new(),
@@ -377,7 +384,45 @@ impl Panel {
         }
         p.numbers.insert("delay.steps".into(), 3);
         p.numbers.insert("pcf.pattern".into(), 0);
+        // the channels' enables (this fork: no control of their own, SOLO and MUTE set them)
+        for c in 1..=4 {
+            p.toggles.insert(format!("mixer{c}.mute"), true);
+        }
         p
+    }
+
+    /// Sends each mixer channel's enable as SOLO and MUTE make it: on unless muted, or while
+    /// any channel is soloed unless soloed itself (this fork).
+    pub fn apply_channels(&mut self) {
+        let any_solo = self.solo.iter().any(|&s| s);
+        for c in 0..4 {
+            let on = !self.mute[c] && (!any_solo || self.solo[c]);
+            let id = format!("mixer{}.mute", c + 1);
+            if self.toggles.get(&id).copied() != Some(on) {
+                self.toggles.insert(id.clone(), on);
+                self.set_event(&id, on as i32);
+            }
+        }
+    }
+
+    /// A double click on a lit SOLO (`mute` false) or MUTE: every channel's goes off.
+    pub fn clear_channels(&mut self, mute: bool) {
+        if mute {
+            self.mute = [false; 4];
+        } else {
+            self.solo = [false; 4];
+        }
+        self.apply_channels();
+    }
+
+    /// Whether a mixer channel plays (its enable), and whether it sounds now: plays and its
+    /// meter shows a signal (the activity LED, this fork).
+    pub fn channel_active(&self, c: usize) -> bool {
+        self.toggle_on(&format!("mixer{}.mute", c + 1))
+            && self
+                .meters
+                .get(&format!("mixer{}.meter", c + 1))
+                .is_some_and(|&m| m > 0)
     }
 
     /// A lively state for screenshots: song mode, playing, some steps, levels and meters.
@@ -627,6 +672,12 @@ impl Panel {
             (_, "on") if sec.starts_with("pattern") => {
                 self.rows[index_of(sec, "pattern").unwrap_or(0).min(3)].enabled
             }
+            (_, "solo") if sec.starts_with("mixer") => {
+                self.solo[index_of(sec, "mixer").unwrap_or(0).min(3)]
+            }
+            (_, "mutebtn") if sec.starts_with("mixer") => {
+                self.mute[index_of(sec, "mixer").unwrap_or(0).min(3)]
+            }
             (_, "pcf") if sec.starts_with("mixer") => {
                 self.pcf_id as usize == index_of(sec, "mixer").unwrap_or(0) + 1
             }
@@ -675,6 +726,15 @@ impl Panel {
                             c as u8 + 2
                         };
                         self.set_event("mixer.comp_id", self.comp_id as i32);
+                    }
+                    // SOLO and MUTE (this fork)
+                    "solo" => {
+                        self.solo[c] = !self.solo[c];
+                        self.apply_channels();
+                    }
+                    "mutebtn" => {
+                        self.mute[c] = !self.mute[c];
+                        self.apply_channels();
                     }
                     _ => self.flip(id),
                 }
@@ -1104,6 +1164,8 @@ impl Panel {
             }
             "trigger" | "wind" | "repeat" => push(),
             "led" => on_off(self.led_on(c, now)),
+            // the mixer channel's activity LED (this fork): green while it sounds
+            "chanled" => on_off(self.channel_active(index_of(sec, "mixer").unwrap_or(0).min(3))),
             "grid" => {
                 if let Some(n) = name.strip_prefix("pattern") {
                     let r = index_of(sec, "pattern").unwrap_or(0).min(3);
@@ -1264,6 +1326,45 @@ mod tests {
         p.playing_step303[0] = Some(15);
         assert_eq!(states(&p), "oooooooooooooooP");
         assert!(p.playing_step303[1].is_none());
+    }
+
+    /// (this fork) SOLO and MUTE set the channels' enables: soloed ones play alone, muted ones
+    /// never; clearing turns every one of a kind off.
+    #[test]
+    fn solo_and_mute_set_the_channel_enables() {
+        let mut p = Panel::new();
+        let plays = |p: &Panel| -> [bool; 4] {
+            std::array::from_fn(|c| p.toggle_on(&format!("mixer{}.mute", c + 1)))
+        };
+        assert_eq!(plays(&p), [true; 4]);
+        p.press("mixer2.solo", 0.0);
+        assert_eq!(plays(&p), [false, true, false, false]);
+        assert!(p.toggle_on("mixer2.solo"));
+        p.press("mixer4.solo", 0.0);
+        assert_eq!(
+            plays(&p),
+            [false, true, false, true],
+            "two soloed: both play"
+        );
+        assert!(p.events.contains(&Event::Set {
+            id: "mixer1.mute".into(),
+            value: 0
+        }));
+        // MUTE wins over SOLO
+        p.press("mixer4.mutebtn", 0.0);
+        assert_eq!(plays(&p), [false, true, false, false]);
+        p.clear_channels(false);
+        assert_eq!(p.solo, [false; 4]);
+        assert_eq!(plays(&p), [true, true, true, false], "the mute stays");
+        p.press("mixer1.mutebtn", 0.0);
+        assert_eq!(plays(&p), [false, true, true, false]);
+        p.clear_channels(true);
+        assert_eq!(plays(&p), [true; 4]);
+        // the activity LED: a playing channel with a signal
+        p.meters.insert("mixer3.meter".into(), 4);
+        assert!(p.channel_active(2) && !p.channel_active(0));
+        p.press("mixer3.mutebtn", 0.0);
+        assert!(!p.channel_active(2), "muted: dark");
     }
 
     #[test]

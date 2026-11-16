@@ -44,6 +44,10 @@ pub struct GenState {
     pub done: [[bool; 2]; 3],
     /// Whether GENERATE has run on each synth (ALTER and SHIFT wait for it).
     pub generated: [bool; 2],
+    /// The mixer channels' SOLO and MUTE buttons (this fork; the RBS part keeps only whether a
+    /// channel plays).
+    pub mix_solo: [bool; 4],
+    pub mix_mute: [bool; 4],
     /// Each synth's LFOs, by knob (`lfo::PARAMS`).
     pub lfo: [[LfoState; 5]; 2],
 }
@@ -125,6 +129,11 @@ pub fn encode(state: &GenState) -> Vec<u8> {
             lines.push(format!("baze{n}.{name}.shape={shape}"));
         }
     }
+    for c in 0..4 {
+        let n = c + 1;
+        lines.push(format!("mixer{n}.solo={}", state.mix_solo[c] as u8));
+        lines.push(format!("mixer{n}.mute={}", state.mix_mute[c] as u8));
+    }
     let mut body = lines.join("\n").into_bytes();
     body.push(b'\n');
     // IFF chunks are an even number of bytes
@@ -196,6 +205,11 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
                 _ => lfo::Shape::Sine,
             };
         }
+    }
+    for c in 0..4 {
+        let n = c + 1;
+        state.mix_solo[c] = get(&format!("mixer{n}.solo")) == Some("1");
+        state.mix_mute[c] = get(&format!("mixer{n}.mute")) == Some("1");
     }
     Some(state)
 }
@@ -337,6 +351,8 @@ impl App {
             sel: self.op_sel,
             done: self.op_done,
             generated: self.generated,
+            mix_solo: self.panel.solo,
+            mix_mute: self.panel.mute,
             lfo,
         }
     }
@@ -348,6 +364,22 @@ impl App {
         self.op_sel = state.sel;
         self.op_done = state.done;
         self.generated = state.generated;
+        // SOLO and MUTE as the song kept them; a song without them (an .rbs, an older .rbsx):
+        // MUTE on where the channel does not play
+        if state
+            .mix_solo
+            .iter()
+            .chain(state.mix_mute.iter())
+            .any(|&b| b)
+        {
+            self.panel.solo = state.mix_solo;
+            self.panel.mute = state.mix_mute;
+        } else {
+            self.panel.solo = [false; 4];
+            self.panel.mute =
+                std::array::from_fn(|c| !self.panel.toggle_on(&format!("mixer{}.mute", c + 1)));
+        }
+        self.panel.apply_channels();
         self.generate_list = None;
         // another song: the UNDO steps were the other song's
         self.gen_undo = Default::default();
@@ -389,6 +421,8 @@ mod tests {
         st.sel[Op::Move as usize][0] = [false, false, false, true, false];
         st.done[Op::Random as usize][0] = true;
         st.generated[0] = true;
+        st.mix_solo[1] = true;
+        st.mix_mute[3] = true;
         st.done[Op::Move as usize][0] = true;
         st.lfo[1][0] = LfoState {
             rate: 90,
@@ -422,6 +456,8 @@ mod tests {
         );
         // (this fork) an older file has no `generated`: a done GENERATE row means it ran
         assert!(text.contains("baze1.generated=1\n"));
+        assert!(text.contains("mixer2.solo=1\nmixer2.mute=0\n"));
+        assert!(text.contains("mixer4.solo=0\nmixer4.mute=1\n"));
         let old = text.replace("baze1.generated=1\n", "");
         assert_eq!(
             decode(old.as_bytes()).map(|s| s.generated),

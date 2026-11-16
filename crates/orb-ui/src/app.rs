@@ -204,6 +204,9 @@ pub struct App {
     pub(crate) pattern_clip: Option<crate::pattern_clip::PatternClip>,
     /// Its text, for the system clipboard at the end of the frame.
     pub(crate) clip_text: Option<String>,
+    /// The last press of a SOLO or MUTE button: its id, the time and whether it was lit (a
+    /// second press soon after on a lit one is a double click: all of its kind go off).
+    mix_press: Option<(String, f64, bool)>,
     /// The engine tables the pitch mode's heard notes render with (`audition.rs`), made once.
     pub(crate) audition_tables: Option<std::sync::Arc<orb_engine::tables::Tables>>,
     /// Whether the logo plays its startup animation (task-114): the panel once, from the first
@@ -286,6 +289,7 @@ impl App {
             rng: crate::random::Rng::from_time(),
             pattern_clip: None,
             clip_text: None,
+            mix_press: None,
             audition_tables: None,
             logo_anim: false,
             logo_start: None,
@@ -949,7 +953,11 @@ impl App {
                             if let Some(k) = generate::synth_of(&c.id) {
                                 self.toggle_generate(k);
                             }
-                            self.panel.press(&c.id, now);
+                            if matches!(c.name(), "solo" | "mutebtn") {
+                                self.mix_button(c, now);
+                            } else {
+                                self.panel.press(&c.id, now);
+                            }
                         }
                     }
                     // A click anywhere on a two-position switch flips the position it shows; the
@@ -981,6 +989,22 @@ impl App {
                 };
                 paint_part(ui, &name, rect);
             }
+        }
+    }
+
+    /// A press of a mixer channel's SOLO or MUTE (this fork): turns it on or off; the second
+    /// press of a double click on a lit one turns every one of its kind off.
+    fn mix_button(&mut self, c: &Ctl, now: f64) {
+        let lit = self.panel.toggle_on(&c.id);
+        let double = self
+            .mix_press
+            .take()
+            .is_some_and(|(id, t, was_lit)| id == c.id && now - t < 0.4 && was_lit);
+        if double {
+            self.panel.clear_channels(c.name() == "mutebtn");
+        } else {
+            self.panel.press(&c.id, now);
+            self.mix_press = Some((c.id.clone(), now, lit));
         }
     }
 
