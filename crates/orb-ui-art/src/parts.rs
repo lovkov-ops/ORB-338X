@@ -714,34 +714,6 @@ fn small_buttons(out: &mut Vec<Part>) {
         }));
     }
     for state in ["rest", "pressed"] {
-        // The 303's edit step arrows (Step up, Back down), in the paper's colors.
-        for (name, up) in [("inc", true), ("dec", false)] {
-            out.push(Part::new(
-                format!("arrow303_{name}_{state}"),
-                11.0,
-                9.0,
-                |s| {
-                    s.rect(
-                        0.5,
-                        0.5,
-                        10.0,
-                        8.0,
-                        1.8,
-                        if state == "pressed" {
-                            "#b4b1a7"
-                        } else {
-                            pal::PAPER_DARK
-                        },
-                    );
-                    let d = if up {
-                        "M2.8 6 L5.5 2.6 L8.2 6 Z"
-                    } else {
-                        "M2.8 3 L5.5 6.4 L8.2 3 Z"
-                    };
-                    s.path(d, pal::BLACK);
-                },
-            ));
-        }
         let (wh, bh) = (WHITE_KEY_H_303, BLACK_KEY_H_303);
         out.push(Part::new(format!("key_white_{state}"), 9.0, wh, |s| {
             key_3d(s, 0.5, 0.0, 8.0, wh, 1.5, "#c4c7cb", pal::WHITE);

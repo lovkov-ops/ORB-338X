@@ -8,6 +8,11 @@ edition = "2024"
 license = "GPL-3.0-only"
 publish = false
 
+# This fork: no debug info in the debug (test) builds. It was most of target/debug's ~11 GB;
+# a failing test still names its file and line. The release and the packages are unchanged.
+[profile.dev]
+debug = false
+
 # The SHA-256 of the 128 MB RB20FUL.DAT (rbm::dat) takes seconds unoptimized: the tests of
 # `orb mod recrypt` hash a stand-in file several times.
 [profile.dev.package.sha2]
