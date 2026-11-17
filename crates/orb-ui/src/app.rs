@@ -1215,7 +1215,8 @@ impl App {
                 // this fork's step keys: 6..360, 88..108
                 (layout::TR808_ORIGIN, 6.0, 88.0, 354.0, 20.0)
             } else {
-                (layout::TR909_ORIGIN, 26.0, 94.0, 336.0, 16.0)
+                // this fork's step keys: 26..362, 89..111
+                (layout::TR909_ORIGIN, 26.0, 89.0, 336.0, 22.0)
             };
             let rect = view.rect(origin.0 + x0, origin.1 + y0, w, h);
             let name = if is808 { "strip808" } else { "strip909" };
@@ -1288,8 +1289,8 @@ impl App {
         let areas: [Area; 4] = [
             (true, o8, [6.0, 75.0, 354.0, 10.0], "legend808"),
             (true, o8, [94.5, 45.5, 147.5, 10.0], "upper808"),
-            (false, o9, [4.0, 4.0, 358.0, 14.0], "legend909"),
-            (false, o9, [26.0, 74.0, 336.0, 15.0], "names909"),
+            (false, o9, [4.0, 4.0, 358.0, 10.0], "legend909"),
+            (false, o9, [26.0, 75.0, 336.0, 10.0], "names909"),
         ];
         for (is808, o, [x, y, w, h], name) in areas {
             let rect = view.rect(o.0 + x, o.1 + y, w, h);
@@ -1337,13 +1338,26 @@ impl App {
             &format!("pill808_{name}_on"),
             view.rect(fx, o8.1 + y, 22.0, 9.0),
         );
+        // The 909's (this fork): the name pill orange; the accent's header pill.
         let i = self.panel.inst909;
-        let (name, x, y, w, h) = match i {
-            0 => ("sel_22x14", 4.0, 4.0, 22.0, 14.0),
-            1..=5 => ("sel_42x14", 26.0 + 42.0 * (i - 1) as f32, 4.0, 42.0, 14.0),
-            _ => ("sel_21x14", 236.0 + 21.0 * (i - 6) as f32, 4.0, 21.0, 14.0),
+        let names = [
+            "AC", "BD", "SD", "LT", "MT", "HT", "RS", "CP", "CH", "OH", "CC", "RC",
+        ];
+        let (x0, w) = match i {
+            0 => (4.0, 22.0),
+            1..=5 => (26.0 + 42.0 * (i - 1) as f32, 42.0),
+            _ => (236.0 + 21.0 * (i - 6) as f32, 21.0),
         };
-        paint_part(ui, name, view.rect(o9.0 + x, o9.1 + y, w, h));
+        let (name, y) = if i == 0 {
+            ("head909_AC_on".to_string(), 4.0)
+        } else {
+            (format!("name909_{}_on", names[i]), 75.0)
+        };
+        paint_part(
+            ui,
+            &name,
+            view.rect(o9.0 + x0 + 0.5, o9.1 + y, w - 1.0, 10.0),
+        );
     }
 
     /// With `--screenshot`: after a few frames (the SVGs are loaded and rasterized) save the

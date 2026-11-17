@@ -100,7 +100,7 @@ pub const KNOBS: [KnobDesign; 5] = [
         ptr_w: 1.0,
         body: pal::BLACK,
         pointer: pal::WHITE,
-        arc: pal::RED,
+        arc: pal::ORANGE,
         track: "#00000022",
     },
     // The mixer's and the effects' knobs.
@@ -630,16 +630,15 @@ fn transport_buttons(out: &mut Vec<Part>) {
                 label(s, 15.0, 5.3, 3.2, ink, "SHUFFLE");
             },
         ));
-        // The 909's flam button: the shape of a step button's light.
-        out.push(Part::new(format!("toggle_flam_{state}"), 14.0, 8.0, |s| {
-            s.rect(
-                0.0,
-                0.0,
-                14.0,
-                8.0,
-                1.5,
-                if on { pal::RED } else { "#b9b5aa" },
-            );
+        // The 909's flam button (this fork): a light key like a step key, its light red when on.
+        out.push(Part::new(format!("toggle_flam_{state}"), 15.0, 16.0, |s| {
+            key909(s, 15.0, 16.0, "#f6f4ec");
+            led909(s, 7.5, 8.0, if on { pal::RED } else { LED_OFF_909 });
+        }));
+        // the 909's FLIP (this fork): the same key, lower
+        out.push(Part::new(format!("flip909_{state}"), 15.0, 13.0, |s| {
+            key909(s, 15.0, 13.0, "#f6f4ec");
+            led909(s, 7.5, 6.5, if on { pal::RED } else { LED_OFF_909 });
         }));
     }
 }
@@ -821,9 +820,11 @@ fn steps(out: &mut Vec<Part>) {
             ));
         }
     }
-    for (grp, fill) in [("a", "#f6f3ea"), ("b", "#ebe7dc")] {
+    // the 909's step keys (this fork): light keys in a gray frame, in groups of four, the light
+    // on top in the color of the value
+    for (grp, fill) in [("a", "#f6f4ec"), ("b", "#e9e0c9")] {
         for (value, led) in [
-            (0, "#00000030"),
+            (0, LED_OFF_909),
             (1, pal::ORANGE),
             (2, pal::RED),
             (3, pal::GREEN),
@@ -831,10 +832,12 @@ fn steps(out: &mut Vec<Part>) {
             out.push(Part::new(
                 format!("step909_{grp}_{value}"),
                 21.0,
-                16.0,
+                STEP909_H,
                 |s| {
-                    s.rect(0.5, 0.0, 20.0, 16.0, 2.0, fill);
-                    s.rect(3.5, 1.5, 14.0, 8.0, 1.5, led);
+                    s.g_at(0.5, 0.0);
+                    key909(s, 20.0, STEP909_H, fill);
+                    s.end_g();
+                    led909(s, 10.5, 5.0, led);
                 },
             ));
         }
@@ -1439,7 +1442,7 @@ fn tr808_bg(out: &mut Vec<Part>) {
             move |s| pill(s, 0.0, 0.0, pal::RED, pal::WHITE, name),
         ));
     }
-    // FLIP (the 808's and the 909's): a light key with a light, red when on
+    // the 808's FLIP: a light key with a light, red when on
     for (state, on) in [("off", false), ("on", true)] {
         out.push(Part::new(format!("flip_{state}"), 13.0, 13.0, |s| {
             key_3d(s, 0.0, 0.0, 13.0, 13.0, 2.0, "#c4c7cb", pal::WHITE);
@@ -1497,10 +1500,15 @@ pub const KNOBS_909: [(usize, usize, bool, &str, &str); 28] = [
 ];
 /// The 909's rows: the knobs' tops (upper, lower), the name row's top and the steps' top.
 pub const KNOB_Y_909: [f32; 2] = [29.0, 56.0];
-pub const NAMES_Y_909: f32 = 74.0;
-pub const STEPS_Y_909: f32 = 94.0;
-/// The FLAM knob's top: at the bottom of the AC column, 3 px above the flam button.
-const FLAM_Y_909: f32 = 80.5;
+pub const NAMES_Y_909: f32 = 75.0;
+pub const STEPS_Y_909: f32 = 89.0;
+/// The header pills' top and height, the name pills' height and the step keys' height.
+const HEAD909_Y: f32 = 4.0;
+const HEAD909_H: f32 = 10.0;
+const NAME909_H: f32 = 10.0;
+pub const STEP909_H: f32 = 22.0;
+/// The FLAM knob's top: under the FLAM label, over the flam key (95..111).
+const FLAM_Y_909: f32 = 80.0;
 
 /// The top of a 909 knob (see `KNOBS_909`).
 pub fn knob_y_909(group: usize, lower: bool) -> f32 {
@@ -1521,26 +1529,80 @@ pub fn column_909(group: usize, col: usize) -> f32 {
     }
 }
 
+/// The 909's unlit step light.
+const LED_OFF_909: &str = "#c2bfb5";
+
+/// A 909 key (`w` by `h`): a gray frame around a light face.
+fn key909(s: &mut Svg, w: f32, h: f32, fill: &str) {
+    s.rect(0.0, 0.0, w, h, 2.5, "#8e8b83");
+    s.rect(1.0, 1.0, w - 2.0, h - 2.0, 2.0, fill);
+    s.rect(1.6, 1.4, w - 3.2, 3.0, 1.5, "#ffffff59");
+}
+
+/// A 909 key's light: a small pill centered at (`cx`, `cy`).
+fn led909(s: &mut Svg, cx: f32, cy: f32, color: &str) {
+    if color != LED_OFF_909 {
+        s.rect(cx - 4.6, cy - 2.6, 9.2, 5.2, 2.6, &format!("{color}40"));
+    }
+    s.rect(cx - 3.5, cy - 1.5, 7.0, 3.0, 1.5, color);
+    s.rect_stroke(cx - 3.5, cy - 1.5, 7.0, 3.0, 1.5, "#00000040", 0.5);
+}
+
+/// The 909's header pill of group `i` (dark, its name orange) and its name pill (light).
+/// Its top is at `y`.
+fn head909(s: &mut Svg, x: f32, y: f32, w: f32, fill: &str, ink: &str, name: &str) {
+    s.rect(x, y, w, HEAD909_H, 2.0, fill);
+    label(s, x + w / 2.0, y + HEAD909_H / 2.0, 3.6, ink, name);
+}
+
+fn name909(s: &mut Svg, x: f32, y: f32, w: f32, fill: &str, edge: &str, name: &str) {
+    s.rect(x, y, w, NAME909_H, 2.0, fill);
+    s.rect_stroke(x + 0.3, y + 0.3, w - 0.6, NAME909_H - 0.6, 1.8, edge, 0.6);
+    label(s, x + w / 2.0, y + NAME909_H / 2.0, 3.4, PILL_INK, name);
+}
+
+/// The x and the width of the pill of the 909's group `i` (0 AC .. 11 RC).
+pub fn pill909(i: usize) -> (f32, f32) {
+    (EDGES_909[i] + 0.5, EDGES_909[i + 1] - EDGES_909[i] - 1.0)
+}
+
+const HEAD909_DARK: &str = "#4a4a48";
+
 fn tr909_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tr909", 366.0, 115.0, |s| {
         face(s, 366.0, 115.0, pal::CREAM);
         let ink = pal::BLACK;
         for (i, name) in NAMES_909.into_iter().enumerate() {
-            let (x0, x1) = (EDGES_909[i], EDGES_909[i + 1]);
-            s.rect(x0 + 0.5, 4.0, x1 - x0 - 1.0, 14.0, 2.0, "#e0a06a");
-            label(s, (x0 + x1) / 2.0, 11.0, 3.8, ink, name);
+            let (x, w) = pill909(i);
+            head909(s, x, HEAD909_Y, w, HEAD909_DARK, pal::ORANGE, name);
             if i > 0 {
-                let y = NAMES_Y_909;
-                s.rect(x0 + 0.5, y, x1 - x0 - 1.0, 15.0, 2.0, "#cfcabd");
-                label(s, (x0 + x1) / 2.0, y + 7.5, 3.6, ink, name);
-                s.line(x0, 21.0, x0, 70.0, "#c4c0b5", 0.8);
+                name909(s, x, NAMES_Y_909, w, "#e6e4dd", "#b3afa5", name);
+                let x0 = EDGES_909[i];
+                s.line(x0, 17.5, x0, 70.0, "#b9b5ab", 0.8);
             }
         }
         for (group, col, lower, _, t) in KNOBS_909 {
             let y = knob_y_909(group, lower) - 3.7;
             label(s, column_909(group, col), y, 2.8, ink, t);
         }
+        label(s, column_909(0, 2), KNOB_Y_909[1] - 3.7, 2.8, ink, "FLIP");
     }));
+    // the chosen instrument (this fork): its name pill orange; the accent's header pill
+    for (i, name) in NAMES_909.into_iter().enumerate() {
+        let (_, w) = pill909(i);
+        if i == 0 {
+            out.push(Part::new("head909_AC_on", w, HEAD909_H, move |s| {
+                head909(s, 0.0, 0.0, w, pal::ORANGE, PILL_INK, name)
+            }));
+        } else {
+            out.push(Part::new(
+                format!("name909_{name}_on"),
+                w,
+                NAME909_H,
+                move |s| name909(s, 0.0, 0.0, w, pal::ORANGE, "#a85d14", name),
+            ));
+        }
+    }
 }
 
 fn mixer_bg(out: &mut Vec<Part>) {

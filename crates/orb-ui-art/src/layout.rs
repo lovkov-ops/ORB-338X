@@ -8,10 +8,10 @@ use std::collections::HashMap;
 
 use crate::parts::{
     BLACK_NOTES_303, CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303,
-    KNOBS, KNOBS_909, LEFT_X_303, LEGEND808_Y, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y,
-    PILL808_H, PILL808_W, PITCH_LED_Y_303, PITCH_Y_303, STEP808_Y, STEPS_Y_909, TUNE_Y_303,
-    UPPER808_Y, WAVE_X_303, WAVE_Y_303, WHITE_303, col808, column_909, knob_x_303, knob_y_909,
-    lfo_knobs_303, rndm_303, step_led_303, step808_x,
+    KNOB_Y_909, KNOBS, KNOBS_909, LEFT_X_303, LEGEND808_Y, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X,
+    LOGO_Y, NAMES_Y_909, PILL808_H, PILL808_W, PITCH_LED_Y_303, PITCH_Y_303, STEP808_Y,
+    STEPS_Y_909, TUNE_Y_303, UPPER808_Y, WAVE_X_303, WAVE_Y_303, WHITE_303, col808, column_909,
+    knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303, step808_x,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -495,15 +495,17 @@ fn tr909(b: &mut Builder) {
         let (x, y) = (column_909(group, col) - half, knob_y_909(group, lower));
         b.knob(id, KNOB_909, x, y, 0.3 + 0.025 * (i % 16) as f32);
     }
-    // level with the steps' lights, centered in the AC column
+    // FLIP under the LEVEL knob (with the lower knobs), the flam key level with the step
+    // keys' bottoms, both centered in the AC column (4..26)
+    b.part("flip", "toggle", "flip909_off", 7.5, KNOB_Y_909[1] - 0.5);
     b.part(
         "flam_button",
         "toggle",
         "toggle_flam_off",
-        8.0,
-        STEPS_Y_909 + 1.5,
+        7.5,
+        STEPS_Y_909 + 6.0,
     );
-    b.part("select_bd", "area", "sel_42x14", 26.0, 4.0);
+    b.part("select_bd", "area", "sel_42x14", 26.0, NAMES_Y_909);
     for i in 0..16 {
         let value = [1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 3, 0, 2, 0, 0, 0][i];
         let grp = if (i / 4) % 2 == 0 { "a" } else { "b" };

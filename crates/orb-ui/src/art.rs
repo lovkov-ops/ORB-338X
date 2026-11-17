@@ -96,7 +96,7 @@ pub const KNOBS: [KnobDesign; 5] = [
         cy: 6.0,
         ring_r: 5.4,
         ring_w: 0.9,
-        arc: [0xe2, 0x41, 0x3b],
+        arc: [0xf0, 0x8a, 0x24],
     },
     KnobDesign {
         name: "knob_22",

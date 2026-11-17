@@ -195,10 +195,11 @@ pub fn tr808_hit(x: f32, y: f32) -> Option<usize> {
     None
 }
 
-/// The TR-909 instrument under a point of its section: the legend row (y 4..18, AC at
-/// x 4..26) and the name row (y 74..89).
+/// The TR-909 instrument under a point of its section: the header row (y 4..14, AC at
+/// x 4..26) and the name row (y 75..85).
 pub fn tr909_hit(x: f32, y: f32) -> Option<usize> {
-    if !((4.0..18.0).contains(&y) || (74.0..89.0).contains(&y)) {
+    // this fork: the header pills (4..14) and the name pills (75..85)
+    if !((4.0..14.0).contains(&y) || (75.0..85.0).contains(&y)) {
         return None;
     }
     let dx = x as i32;
@@ -375,7 +376,8 @@ mod tests {
         assert_eq!(tr909_hit(26.0, 10.0), Some(1));
         assert_eq!(tr909_hit(235.0, 10.0), Some(5));
         assert_eq!(tr909_hit(236.0, 75.0), Some(6));
-        assert_eq!(tr909_hit(361.0, 88.0), Some(11));
+        assert_eq!(tr909_hit(361.0, 84.0), Some(11));
+        assert_eq!(tr909_hit(100.0, 88.0), None);
         assert_eq!(tr909_hit(362.0, 10.0), None);
         assert_eq!(tr909_hit(10.0, 50.0), None);
         assert_eq!(tr909_hit(100.0, 50.0), None);
