@@ -8,9 +8,10 @@ use std::collections::HashMap;
 
 use crate::parts::{
     BLACK_NOTES_303, CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303,
-    KNOBS, KNOBS_909, LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MOD_VIEW_808,
-    PITCH_LED_Y_303, PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303,
-    column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
+    KNOBS, KNOBS_909, LEFT_X_303, LEGEND808_Y, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y,
+    PILL808_H, PILL808_W, PITCH_LED_Y_303, PITCH_Y_303, STEP808_Y, STEPS_Y_909, TUNE_Y_303,
+    UPPER808_Y, WAVE_X_303, WAVE_Y_303, WHITE_303, col808, column_909, knob_x_303, knob_y_909,
+    lfo_knobs_303, rndm_303, step_led_303, step808_x,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -439,21 +440,37 @@ const KNOBS_808: [(f32, f32, usize, &str); 22] = [
 
 fn tr808(b: &mut Builder) {
     b.section("tr808", "bg_tr808", 90.0, 280.0);
+    // this fork: the knobs centered in their instrument's column (KNOBS_808 keeps the
+    // original's x, 22 px a column from 14: the column is (x - 14) / 22)
     for (i, &(x, y, design, id)) in KNOBS_808.iter().enumerate() {
-        b.knob(id, design, x, y, 0.35 + 0.03 * (i % 12) as f32);
+        let col = ((x - 14.0) / 22.0).round() as usize;
+        b.knob(
+            id,
+            design,
+            col808(col) - 6.5,
+            y,
+            0.35 + 0.03 * (i % 12) as f32,
+        );
     }
-    for (i, x) in [81.0, 103.0, 125.0, 146.0, 169.0].into_iter().enumerate() {
+    // the conga, clave and maraca switches under their name pills (LT..CP's columns)
+    for i in 0..5 {
         b.part(
             &format!("slot{}_switch", i + 3),
             "vswitch",
             "switch_808_1",
-            x,
-            55.0,
+            col808(i + 3) - 5.5,
+            UPPER808_Y + PILL808_H + 1.5,
         );
     }
-    let (x, y, _, _) = MOD_VIEW_808;
-    b.part("mod_view", "modview", "mod_view", x, y);
-    b.part("select_bd", "area", "sel_22x14", 32.0, 71.0);
+    // FLIP in the AC column, in the second knobs' row (this fork; phase 2 turns the panel)
+    b.part("flip", "toggle", "flip_off", col808(0) - 6.5, 31.0);
+    b.part(
+        "select_bd",
+        "area",
+        "sel_22x14",
+        col808(1) - PILL808_W / 2.0,
+        LEGEND808_Y,
+    );
     let colors = ["red", "orange", "yellow", "white"];
     for i in 0..16 {
         let on = i % 4 == 0;
@@ -465,9 +482,8 @@ fn tr808(b: &mut Builder) {
                 colors[i / 4],
                 if on { "on" } else { "off" }
             ),
-            // centered under the legend row (10..274)
-            14.0 + 16.0 * i as f32,
-            91.0,
+            step808_x(i),
+            STEP808_Y,
         );
     }
 }

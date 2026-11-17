@@ -794,22 +794,29 @@ fn steps(out: &mut Vec<Part>) {
         ("yellow", pal::YELLOW),
         ("white", pal::WHITE),
     ];
+    // the 808's step keys (this fork): a colored key with a light in it, lit red (white on the
+    // red keys) when on
     for (name, color) in colors {
         for (state, on) in [("off", false), ("on", true)] {
             out.push(Part::new(
                 format!("step808_{name}_{state}"),
-                16.0,
-                17.0,
+                STEP808_W,
+                STEP808_H,
                 |s| {
-                    s.rect(0.5, 0.0, 15.0, 17.0, 2.0, color);
-                    let led = if !on {
-                        "#00000040"
-                    } else if name == "red" {
-                        pal::WHITE
-                    } else {
-                        pal::RED
+                    let (w, h) = (STEP808_W, STEP808_H);
+                    s.rect(0.0, 0.5, w, h - 0.5, 2.5, &shade(color, 0.62));
+                    s.rect(0.0, 0.0, w, h - 1.5, 2.5, color);
+                    s.rect(0.8, 0.8, w - 1.6, 4.0, 2.0, "#ffffff22");
+                    let led = match (on, name) {
+                        (false, _) => &shade(color, 0.55)[..],
+                        (true, "red") => pal::WHITE,
+                        (true, _) => pal::RED,
                     };
-                    s.rect(2.5, 1.5, 11.0, 5.0, 1.5, led);
+                    if on {
+                        s.circle(w / 2.0, 5.5, 3.6, "#ff5a4d40");
+                    }
+                    s.circle(w / 2.0, 5.5, 2.4, led);
+                    s.circle_stroke(w / 2.0, 5.5, 2.4, "#00000059", 0.6);
                 },
             ));
         }
@@ -1350,52 +1357,97 @@ fn tb303_bg(out: &mut Vec<Part>) {
     }));
 }
 
-const LEVEL_808: [f32; 12] = [
-    14.0, 36.0, 58.0, 80.0, 102.0, 124.0, 146.0, 168.0, 190.0, 212.0, 234.0, 256.0,
-];
 const NAMES_808: [&str; 12] = [
     "AC", "BD", "SD", "LT", "MT", "HT", "RS", "CP", "CB", "CY", "OH", "CH",
 ];
 /// The mod's window (x, y, w, h) in the 808's space right of the legend.
 pub const MOD_VIEW_808: (f32, f32, f32, f32) = (278.0, 5.0, 84.0, 105.0);
 
+/// The 808's look (this fork): twelve equal columns across the section, one per instrument
+/// (AC to CH), divided by lines; each column's knobs centered in it; the instruments' names on
+/// cream pills (the chosen one red), the conga/clave/maraca names on pills over their
+/// switches; sixteen step keys under them with a light in each.
+pub const COL808_X0: f32 = 6.0;
+pub const COL808_W: f32 = 29.5;
+pub const PILL808_W: f32 = 22.0;
+pub const PILL808_H: f32 = 9.0;
+pub const LEGEND808_Y: f32 = 75.5;
+pub const UPPER808_Y: f32 = 46.0;
+pub const STEP808_Y: f32 = 88.0;
+pub const STEP808_W: f32 = 20.0;
+pub const STEP808_H: f32 = 20.0;
+pub const STEP808_PITCH: f32 = 22.125;
+const PILL_CREAM: &str = "#f5ecbf";
+const PILL_INK: &str = "#2a2723";
+
+/// The center x of the 808's column `col` (0 AC .. 11 CH).
+pub fn col808(col: usize) -> f32 {
+    COL808_X0 + COL808_W * (col as f32 + 0.5)
+}
+
+/// The left x of the 808's step key `i` (0..=15), the sixteen across the columns' width.
+pub fn step808_x(i: usize) -> f32 {
+    COL808_X0 + STEP808_PITCH * i as f32 + (STEP808_PITCH - STEP808_W) / 2.0
+}
+
+fn pill(s: &mut Svg, x: f32, y: f32, fill: &str, ink: &str, text_: &str) {
+    s.rect(x, y, PILL808_W, PILL808_H, 2.0, fill);
+    label(s, x + PILL808_W / 2.0, y + PILL808_H / 2.0, 3.2, ink, text_);
+}
+
 fn tr808_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tr808", 366.0, 115.0, |s| {
         face(s, 366.0, 115.0, pal::CHARCOAL);
         let ink = pal::INK;
-        for x in LEVEL_808 {
-            label(s, x + 6.5, 5.0, 2.8, ink, "LEVEL");
+        // the columns' dividers, down to the step keys
+        for c in 1..12 {
+            let x = COL808_X0 + COL808_W * c as f32;
+            s.line(x, 3.0, x, STEP808_Y - 2.5, "#00000059", 0.8);
         }
-        for (x, t) in [
-            (36.0, "TONE"),
-            (58.0, "TONE"),
-            (80.0, "TUNE"),
-            (102.0, "TUNE"),
-            (124.0, "TUNE"),
-            (212.0, "TONE"),
-        ] {
-            label(s, x + 6.5, 27.7, 2.8, ink, t);
+        for c in 0..12 {
+            label(s, col808(c), 5.0, 2.8, ink, "LEVEL");
         }
-        for (x, t) in [
-            (36.0, "DECAY"),
-            (58.0, "SNAPPY"),
-            (212.0, "DECAY"),
-            (234.0, "DECAY"),
+        label(s, col808(0), 27.7, 2.8, ink, "FLIP");
+        for (c, t) in [
+            (1, "TONE"),
+            (2, "TONE"),
+            (3, "TUNE"),
+            (4, "TUNE"),
+            (5, "TUNE"),
+            (9, "TONE"),
         ] {
-            label(s, x + 6.5, 50.7, 2.8, ink, t);
+            label(s, col808(c), 27.7, 2.8, ink, t);
+        }
+        for (c, t) in [(1, "DECAY"), (2, "SNAPPY"), (9, "DECAY"), (10, "DECAY")] {
+            label(s, col808(c), 50.7, 2.8, ink, t);
         }
         for (k, t) in ["LC", "MC", "HC", "CL", "MA"].into_iter().enumerate() {
-            label(s, 86.5 + 22.0 * k as f32, 49.0, 3.0, pal::INK_DIM, t);
+            let x = col808(k + 3) - PILL808_W / 2.0;
+            pill(s, x, UPPER808_Y, PILL_CREAM, PILL_INK, t);
         }
-        // The legend row: 12 cells of 22 px.
-        for (i, name) in NAMES_808.into_iter().enumerate() {
-            let x = 10.0 + 22.0 * i as f32;
-            s.rect(x + 0.5, 71.0, 21.0, 14.0, 2.0, "#1c1d1f");
-            label(s, x + 11.0, 78.0, 3.8, ink, name);
+        for (c, name) in NAMES_808.into_iter().enumerate() {
+            let x = col808(c) - PILL808_W / 2.0;
+            pill(s, x, LEGEND808_Y, PILL_CREAM, PILL_INK, name);
         }
     }));
-    // The mod's window right of the legend: a dark well for the mod's splash.jpg and its
-    // name, which the app paints into it (MOD_VIEW_808).
+    // a chosen instrument's pill: red with its name in white
+    for name in NAMES_808.into_iter().chain(["LC", "MC", "HC", "CL", "MA"]) {
+        out.push(Part::new(
+            format!("pill808_{name}_on"),
+            PILL808_W,
+            PILL808_H,
+            move |s| pill(s, 0.0, 0.0, pal::RED, pal::WHITE, name),
+        ));
+    }
+    // FLIP (the 808's and the 909's): a light key with a light, red when on
+    for (state, on) in [("off", false), ("on", true)] {
+        out.push(Part::new(format!("flip_{state}"), 13.0, 13.0, |s| {
+            key_3d(s, 0.0, 0.0, 13.0, 13.0, 2.0, "#c4c7cb", pal::WHITE);
+            s.circle(6.5, 6.5, 2.4, if on { pal::RED } else { "#7a7e84" });
+            s.circle_stroke(6.5, 6.5, 2.4, "#00000040", 0.5);
+        }));
+    }
+    // The mod's window (no longer on the panel, this fork; the part stays for the app's code).
     let (_, _, w, h) = MOD_VIEW_808;
     out.push(Part::new("mod_view", w, h, move |s| {
         s.rect(0.0, 0.0, w, h, 2.0, "#101216");

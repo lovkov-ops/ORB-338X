@@ -438,8 +438,8 @@ fn the_flam_knob_the_mod_view_and_the_flam_button() {
     h.drag("tr909.flam", 10.0);
     let v = orb_ui::behavior::knob_send(h.app.panel.knob("tr909.flam"));
     assert_eq!(h.take_log(), vec![dev(Device::Tr909, 74, &[29, v as u8])]);
-    // The mod's window and the Flam button are UI state: nothing is sent.
-    h.click("tr808.mod_view");
+    // The Flam button and (this fork) FLIP are UI state: nothing is sent.
+    h.click("tr808.flip");
     h.click("tr909.flam_button");
     assert_eq!(h.take_log(), vec![]);
 }
@@ -804,7 +804,8 @@ fn the_303_step_editor_edits_the_pattern_as_the_original() {
 fn the_808_step_buttons_edit_the_selected_instrument_live() {
     let mut h = Harness::new();
     let o = layout::TR808_ORIGIN;
-    let strip = |step: usize| Pos2::new(o.0 + 16.0 + 16.0 * step as f32 + 8.0, o.1 + 91.0 + 8.0);
+    // (this fork) the step keys: 22.125 px apart from x 6, y 88..108
+    let strip = |step: usize| Pos2::new(o.0 + 6.0 + 22.125 * step as f32 + 11.0, o.1 + 98.0);
     // BD is selected at start: instrument 1. Drag over steps 1..4 from an empty step lights all.
     h.move_to(strip(0));
     h.down(Modifiers::NONE);
@@ -817,7 +818,8 @@ fn the_808_step_buttons_edit_the_selected_instrument_live() {
             .collect::<Vec<_>>()
     );
     // select the snare from the legend row (x 10 + 22 i) and set step 5
-    h.click_at(Pos2::new(o.0 + 10.0 + 22.0 * 2.0 + 11.0, o.1 + 78.0));
+    // (this fork) SD's name pill
+    h.click_at(Pos2::new(o.0 + 6.0 + 29.5 * 2.5, o.1 + 80.0));
     h.click_at(strip(4));
     assert_eq!(h.take_log(), vec![dev(Device::Tr808, 62, &[0, 4, 2, 1])]);
     // a click on a lit step erases it

@@ -179,11 +179,18 @@ pub fn tr909_step_value(c: u8, accent_row: bool, flam_on: bool, m: Mods) -> u8 {
 /// (x 10..274, y 71..85: 12 cells of 22 px) or the upper labels (x 78..184, y 43..55: the
 /// slots 3..7).
 pub fn tr808_hit(x: f32, y: f32) -> Option<usize> {
-    if (71.0..85.0).contains(&y) && (10.0..274.0).contains(&x) {
-        return Some(((x - 10.0) / 22.0) as usize);
+    // this fork: the name pills, one per column (orb-ui-art's COL808_*: twelve 29.5 px columns
+    // from x 6), the legend's at y 75.5..84.5, LC..MA's over LT..CP at y 46..55
+    let col = ((x - 6.0) / 29.5).floor();
+    if !(0.0..12.0).contains(&col) {
+        return None;
     }
-    if (43.0..55.0).contains(&y) && (78.0..184.0).contains(&x) {
-        return Some(((x - 78.0) / 22.0) as usize + 3);
+    let col = col as usize;
+    if (75.0..85.0).contains(&y) {
+        return Some(col);
+    }
+    if (45.5..55.5).contains(&y) && (3..=7).contains(&col) {
+        return Some(col);
     }
     None
 }
@@ -207,7 +214,8 @@ pub fn tr909_hit(x: f32, y: f32) -> Option<usize> {
 
 /// The TR-808 step under `x` (section pixels): 16 cells of 16 px from x 14.
 pub fn tr808_step(x: f32) -> Option<usize> {
-    let i = ((x - 14.0) / 16.0).floor();
+    // this fork: sixteen keys of 22.125 px from x 6
+    let i = ((x - 6.0) / 22.125).floor();
     (0.0..16.0).contains(&i).then_some(i as usize)
 }
 
@@ -350,11 +358,18 @@ mod tests {
 
     #[test]
     fn instrument_selection() {
-        assert_eq!(tr808_hit(10.0, 75.0), Some(0));
-        assert_eq!(tr808_hit(273.0, 75.0), Some(11));
-        assert_eq!(tr808_hit(274.0, 75.0), None);
-        assert_eq!(tr808_hit(78.0, 50.0), Some(3));
-        assert_eq!(tr808_hit(183.0, 50.0), Some(7));
+        // (this fork) twelve columns of 29.5 px from x 6: the legend pills at y 75..85, LC..MA
+        // at y 45.5..55.5 over LT..CP
+        assert_eq!(tr808_hit(7.0, 80.0), Some(0));
+        assert_eq!(tr808_hit(359.0, 80.0), Some(11));
+        assert_eq!(tr808_hit(361.0, 80.0), None);
+        assert_eq!(tr808_hit(6.0 + 29.5 * 3.0 + 1.0, 50.0), Some(3));
+        assert_eq!(tr808_hit(6.0 + 29.5 * 8.0 - 1.0, 50.0), Some(7));
+        assert_eq!(
+            tr808_hit(6.0 + 29.5 * 1.0 + 1.0, 50.0),
+            None,
+            "no pill over BD"
+        );
         assert_eq!(tr808_hit(50.0, 100.0), None);
         assert_eq!(tr909_hit(10.0, 10.0), Some(0));
         assert_eq!(tr909_hit(26.0, 10.0), Some(1));
@@ -364,10 +379,11 @@ mod tests {
         assert_eq!(tr909_hit(362.0, 10.0), None);
         assert_eq!(tr909_hit(10.0, 50.0), None);
         assert_eq!(tr909_hit(100.0, 50.0), None);
-        assert_eq!(tr808_step(13.0), None);
-        assert_eq!(tr808_step(14.0), Some(0));
-        assert_eq!(tr808_step(269.0), Some(15));
-        assert_eq!(tr808_step(270.0), None);
+        // (this fork) sixteen keys of 22.125 px from x 6
+        assert_eq!(tr808_step(5.0), None);
+        assert_eq!(tr808_step(6.0), Some(0));
+        assert_eq!(tr808_step(359.0), Some(15));
+        assert_eq!(tr808_step(360.0), None);
         assert_eq!(tr909_step(26.0), Some(0));
         assert_eq!(tr909_step(361.0), Some(15));
         assert_eq!(tr909_step(362.0), None);

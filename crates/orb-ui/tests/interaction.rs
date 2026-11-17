@@ -289,19 +289,19 @@ fn pattern_buttons_select_and_give_the_row_the_focus() {
 fn tr808_steps_paint_across_a_drag_and_erase_from_a_lit_step() {
     let mut h = Harness::new();
     assert_eq!(h.app.panel.inst808, 1);
-    // Steps 1-4 at x = 106 + 16 i, y = 371 + 8.
-    h.move_to(Pos2::new(106.0 + 8.0, 379.0));
+    // (this fork) steps 1-4 at x = 96 + 22.125 i, y = 368 + 10.
+    h.move_to(Pos2::new(96.0 + 11.0, 378.0));
     h.down(Modifiers::NONE);
-    h.move_to(Pos2::new(106.0 + 16.0 * 3.0 + 8.0, 379.0));
+    h.move_to(Pos2::new(96.0 + 22.125 * 3.0 + 11.0, 378.0));
     h.up();
     assert_eq!(
         &h.app.panel.steps808[1][..5],
         &[true, true, true, true, false]
     );
     // Starting on a lit step erases every step crossed.
-    h.move_to(Pos2::new(106.0 + 16.0 * 3.0 + 8.0, 379.0));
+    h.move_to(Pos2::new(96.0 + 22.125 * 3.0 + 11.0, 378.0));
     h.down(Modifiers::NONE);
-    h.move_to(Pos2::new(106.0 + 16.0 + 8.0, 379.0));
+    h.move_to(Pos2::new(96.0 + 22.125 + 11.0, 378.0));
     h.up();
     assert_eq!(
         &h.app.panel.steps808[1][..5],
@@ -338,11 +338,11 @@ fn tr909_step_click_cycles_and_modifiers_pick_the_value() {
 #[test]
 fn instrument_legends_select_and_drag_keeps_selecting() {
     let mut h = Harness::new();
-    // The 808 legend: 12 cells of 22 px from x 100, y 351..365.
-    h.move_to(Pos2::new(100.0 + 22.0 * 9.0 + 5.0, 358.0));
+    // (this fork) the 808's name pills: 12 columns of 29.5 px from x 96, y 355..365.
+    h.move_to(Pos2::new(96.0 + 29.5 * 9.0 + 5.0, 360.0));
     h.down(Modifiers::NONE);
     assert_eq!(h.app.panel.inst808, 9);
-    h.move_to(Pos2::new(100.0 + 22.0 * 11.0 + 5.0, 358.0));
+    h.move_to(Pos2::new(96.0 + 29.5 * 11.0 + 5.0, 360.0));
     assert_eq!(h.app.panel.inst808, 11);
     h.up();
     // The 909 legend, AC included; the area under AC's level knob no longer selects.

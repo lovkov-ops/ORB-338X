@@ -738,6 +738,11 @@ impl Panel {
             "tr909" if name == "flam_button" => {
                 self.flam_button = !self.flam_button;
             }
+            // FLIP (this fork): the drum machine's other face; the panel's state, no message
+            "tr808" | "tr909" if name == "flip" => {
+                let on = !self.toggles.get(id).copied().unwrap_or(false);
+                self.toggles.insert(id.into(), on);
+            }
             s if s.starts_with("mixer") => {
                 let c = index_of(s, "mixer").unwrap_or(0).min(3);
                 match name {

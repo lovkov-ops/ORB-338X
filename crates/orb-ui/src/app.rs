@@ -1212,7 +1212,8 @@ impl App {
     fn drum_strips(&mut self, ui: &mut Ui, view: &View) {
         for is808 in [true, false] {
             let (origin, x0, y0, w, h) = if is808 {
-                (layout::TR808_ORIGIN, 14.0, 91.0, 256.0, 17.0)
+                // this fork's step keys: 6..360, 88..108
+                (layout::TR808_ORIGIN, 6.0, 88.0, 354.0, 20.0)
             } else {
                 (layout::TR909_ORIGIN, 26.0, 94.0, 336.0, 16.0)
             };
@@ -1285,8 +1286,8 @@ impl App {
         /// (is the 808, section origin, [x y w h] in the section, name)
         type Area = (bool, (f32, f32), [f32; 4], &'static str);
         let areas: [Area; 4] = [
-            (true, o8, [10.0, 71.0, 264.0, 14.0], "legend808"),
-            (true, o8, [78.0, 43.0, 106.0, 12.0], "upper808"),
+            (true, o8, [6.0, 75.0, 354.0, 10.0], "legend808"),
+            (true, o8, [94.5, 45.5, 147.5, 10.0], "upper808"),
             (false, o9, [4.0, 4.0, 358.0, 14.0], "legend909"),
             (false, o9, [26.0, 74.0, 336.0, 15.0], "names909"),
         ];
@@ -1317,16 +1318,25 @@ impl App {
                 }
             }
         }
-        // The selection frames.
+        // The chosen instrument (this fork): its name pill red, the upper one (LC..MA) for the
+        // alternate voice.
         let i = self.panel.inst808;
         let upper = (3..=7).contains(&i)
             && self.panel.switch_position(&format!("tr808.slot{i}_switch")) == 0;
-        let (fx, fy) = if upper {
-            (o8.0 + 78.0 + 22.0 * (i - 3) as f32, o8.1 + 42.0)
+        let names = [
+            "AC", "BD", "SD", "LT", "MT", "HT", "RS", "CP", "CB", "CY", "OH", "CH",
+        ];
+        let (name, y) = if upper {
+            (["LC", "MC", "HC", "CL", "MA"][i - 3], 46.0)
         } else {
-            (o8.0 + 10.0 + 22.0 * i as f32, o8.1 + 71.0)
+            (names[i], 75.5)
         };
-        paint_part(ui, "sel_22x14", view.rect(fx, fy, 22.0, 14.0));
+        let fx = o8.0 + 6.0 + 29.5 * (i as f32 + 0.5) - 11.0;
+        paint_part(
+            ui,
+            &format!("pill808_{name}_on"),
+            view.rect(fx, o8.1 + y, 22.0, 9.0),
+        );
         let i = self.panel.inst909;
         let (name, x, y, w, h) = match i {
             0 => ("sel_22x14", 4.0, 4.0, 22.0, 14.0),
