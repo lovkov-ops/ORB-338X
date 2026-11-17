@@ -96,11 +96,12 @@ fn a_frame_of_the_panel() {
     let native = report("native 1x", Vec2::new(PANEL_W, PANEL_H + MENU_H), 1.0);
     let big = report("1800x1100 at 2x", Vec2::new(1800.0, 1100.0), 2.0);
     // the demo panel drew 559 shapes, 524 and 534 meshes, 14112 and 16412 vertices
-    // (2026-10-30): a change that makes a frame much bigger fails here
-    for (c, max_vertices) in [(&native, 17_000), (&big, 20_000)] {
+    // (2026-10-30): a change that makes a frame much bigger fails here (this fork, 2026-11-17:
+    // 683 shapes, 646 and 657 meshes, 16282 and 19052 vertices with the step LEDs' numbers)
+    for (c, max_vertices) in [(&native, 18_000), (&big, 21_000)] {
         assert!(c.shapes > 0 && c.meshes > 0 && c.vertices > 0);
-        assert!(c.shapes <= 680, "{} shapes", c.shapes);
-        assert!(c.meshes <= 650, "{} meshes", c.meshes);
+        assert!(c.shapes <= 720, "{} shapes", c.shapes);
+        assert!(c.meshes <= 690, "{} meshes", c.meshes);
         assert!(c.vertices <= max_vertices, "{} vertices", c.vertices);
     }
 }

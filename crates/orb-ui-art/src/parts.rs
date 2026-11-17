@@ -1304,8 +1304,8 @@ fn tb303_bg(out: &mut Vec<Part>) {
             );
         }
         let (_, ky, _, kh) = BAND_303[1];
-        for i in 0..WHITE_303.len() - 1 {
-            let x = WHITE_303[i] + 15.0;
+        for &w in &WHITE_303[..WHITE_303.len() - 1] {
+            let x = w + 15.0;
             s.line(x, ky + 1.2, x, ky + kh - 1.2, "#9a9da3", 0.6);
         }
         for (i, _) in BLACK_NOTES_303 {
