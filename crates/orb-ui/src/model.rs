@@ -518,6 +518,11 @@ impl Panel {
     /// The value the engine holds for the control `id` (the one the panel would send, 0..=127;
     /// a toggle 0 or 1): what a saved song stores. `None` for an id that is not a controller.
     pub fn value(&self, id: &str) -> Option<u8> {
+        if let Some(&p) = self.knobs.get(id)
+            && behavior::is_tune(id)
+        {
+            return Some(behavior::tune_value(behavior::tune_semis(p)) as u8);
+        }
         if let Some(&p) = self.knobs.get(id) {
             return Some(behavior::knob_send(p) as u8);
         }
@@ -551,6 +556,15 @@ impl Panel {
     /// Sets a knob position and sends the value when it changed.
     pub fn set_knob(&mut self, id: &str, p: i32) {
         let p = p.clamp(0, KNOB_MAX);
+        // the 303's TUNE (this fork): on a whole semitone, sent as one
+        if behavior::is_tune(id) {
+            let s = behavior::tune_semis(p);
+            let old = self.knobs.insert(id.into(), behavior::tune_pos(s));
+            if old.map(behavior::tune_semis) != Some(s) {
+                self.set_event(id, behavior::tune_value(s));
+            }
+            return;
+        }
         let old = self.knobs.insert(id.into(), p).unwrap_or(-1);
         let changed = old < 0 || behavior::knob_send(old) != behavior::knob_send(p);
         if changed {
@@ -627,7 +641,10 @@ impl Panel {
         {
             self.rows[r].enabled = v != 0;
         } else if let Some(p) = self.knobs.get_mut(id) {
-            if behavior::knob_send(*p) != v {
+            if behavior::is_tune(id) {
+                // the TUNE knob on the semitone the engine plays (this fork)
+                *p = behavior::tune_pos(behavior::tune_from_value(v));
+            } else if behavior::knob_send(*p) != v {
                 *p = behavior::knob_from_engine(v);
             }
         } else if let Some(p) = self.faders.get_mut(id) {
@@ -1366,6 +1383,37 @@ mod tests {
         assert!(p.channel_active(2) && !p.channel_active(0));
         p.press("mixer3.mutebtn", 0.0);
         assert!(!p.channel_active(2), "muted: dark");
+    }
+
+    /// (this fork) TUNE moves by whole semitones, -12..=12, and every one is sent as a value
+    /// the engine plays as that semitone.
+    #[test]
+    fn tune_moves_by_whole_semitones() {
+        for s in -12..=12 {
+            assert_eq!(behavior::tune_semis(behavior::tune_pos(s)), s);
+            assert_eq!(behavior::tune_from_value(behavior::tune_value(s)), s, "{s}");
+        }
+        assert_eq!(behavior::tune_semis(500), 0, "the middle is the default");
+        let mut p = Panel::new();
+        p.events.clear();
+        // a drag a little past the middle stays on it and sends nothing
+        p.set_knob("tb303_1.tune", 515);
+        assert!(p.events.is_empty());
+        assert_eq!(p.knob("tb303_1.tune"), 500);
+        // two fields to the right: D
+        p.set_knob("tb303_1.tune", behavior::tune_pos(2) + 10);
+        assert_eq!(p.knob("tb303_1.tune"), behavior::tune_pos(2));
+        assert_eq!(
+            p.events,
+            vec![Event::Set {
+                id: "tb303_1.tune".into(),
+                value: behavior::tune_value(2)
+            }]
+        );
+        assert_eq!(p.value("tb303_1.tune"), Some(behavior::tune_value(2) as u8));
+        // the engine's value of an older song lands on its semitone
+        p.adopt("tb303_1.tune", 30);
+        assert_eq!(behavior::tune_semis(p.knob("tb303_1.tune")), -6);
     }
 
     #[test]

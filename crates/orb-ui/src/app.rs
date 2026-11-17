@@ -1153,7 +1153,17 @@ impl App {
         let k = art::knob_design(&c.part);
         let p = self.panel.knob(&c.id);
         paint_part(ui, &format!("{}_body", k.name), rect);
-        if k.ring_r > 0.0 {
+        if k.ring_r > 0.0 && behavior::is_tune(&c.id) {
+            // the 303's TUNE (this fork): 24 fields, 12 each side of the middle, lit from the
+            // middle out to the semitone
+            let s = behavior::tune_semis(p);
+            let field = 270.0 / 24.0;
+            for i in 0..s.unsigned_abs() as i32 {
+                let (a, b) = (i as f32 * field + 1.2, (i + 1) as f32 * field - 1.2);
+                let (a, b) = if s < 0 { (-a, -b) } else { (a, b) };
+                paint_arc(ui, view, c, k, a, b);
+            }
+        } else if k.ring_r > 0.0 {
             let bipolar = c.name() == "pan";
             let a0 = if bipolar { 0.0 } else { -135.0 };
             // while the LFO moves the value, the arc shows where it is now (lfo.rs)

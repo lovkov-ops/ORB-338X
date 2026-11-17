@@ -31,6 +31,44 @@ pub fn knob_drag(p0: i32, y0: f32, y: f32, span: f32, fine: bool) -> i32 {
     (p0 + d).clamp(0, KNOB_MAX)
 }
 
+/// The 303's TUNE (this fork): whole semitones only, -12..=12, the knob's 25 positions, the
+/// middle (0) its default. The engine reads the tune in semitones from a table indexed by
+/// `value >> 2` (`TUNE_TABLE` of orb-engine's tb303.rs: -12 at 0..7, -11..-1 at 8..55, 0 at
+/// 52..75, 1..11 at 76..123, 12 at 120..127); each semitone is sent as a value inside its
+/// span.
+pub fn is_tune(id: &str) -> bool {
+    matches!(id, "tb303_1.tune" | "tb303_2.tune")
+}
+
+/// The semitone of a TUNE position (the nearest of the 25).
+pub fn tune_semis(p: i32) -> i32 {
+    ((p.clamp(0, KNOB_MAX) as f32 / KNOB_MAX as f32) * 24.0).round() as i32 - 12
+}
+
+/// The position of a TUNE semitone.
+pub fn tune_pos(semis: i32) -> i32 {
+    ((semis.clamp(-12, 12) + 12) as f32 * KNOB_MAX as f32 / 24.0).round() as i32
+}
+
+/// The value sent for a TUNE semitone.
+pub fn tune_value(semis: i32) -> i32 {
+    match semis.clamp(-12, 12) {
+        -12 => 2,
+        s @ -11..=-1 => (s + 13) * 4 + 2,
+        0 => 64,
+        s => (18 + s) * 4 + 2,
+    }
+}
+
+/// The semitone the engine plays for a TUNE value.
+pub fn tune_from_value(v: i32) -> i32 {
+    const TABLE: [i32; 32] = [
+        -12, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6,
+        7, 8, 9, 10, 11, 12, 12,
+    ];
+    TABLE[(v.clamp(0, 127) >> 2) as usize]
+}
+
 /// The value 0..=127 sent for the position (`sub_467F1A`).
 pub fn knob_send(p: i32) -> i32 {
     (127 * p + 500) / 1000
