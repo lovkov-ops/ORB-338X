@@ -49,7 +49,7 @@ pub const KNOBS: [KnobDesign; 5] = [
         ptr_w: 1.62,
         body: pal::STEEL,
         pointer: pal::BLACK,
-        arc: pal::ORANGE,
+        arc: pal::RED,
         track: "#00000026",
     },
     KnobDesign {
@@ -405,11 +405,11 @@ fn lfo_modes(out: &mut Vec<Part>) {
                 ));
                 s.line(nx + 0.9, yc + 2.1, nx + 0.9, yc - 3.6, c, 0.7);
                 s.path_stroke(&flag, c, 0.7);
-                // the wave: the sine red, the random sine green, each with its glow
+                // the wave: the sine yellow, the random sine green, each with its glow
                 let (d, color, glow) = if hold {
                     (&random, pal::GREEN, WAVE_GLOW)
                 } else {
-                    (&sine, pal::RED, "#e2413b59")
+                    (&sine, pal::YELLOW, "#f2c53159")
                 };
                 s.path_stroke(d, glow, 2.8);
                 s.path_stroke(d, color, 1.2);
@@ -727,12 +727,12 @@ fn small_buttons(out: &mut Vec<Part>) {
                 s.rect(0.5, 0.0, 8.0, wh, 1.5, "#80808066");
             }
         }));
+        // this fork: the black key is a light button in its black slot (the slot is the
+        // background's), as the white one
         out.push(Part::new(format!("key_black_{state}"), 8.0, bh, |s| {
-            s.rect(0.0, 0.0, 8.0, bh, 1.5, "#0e0f10");
-            // the lighter top of the key: 2.5 px short of its bottom, as before
-            s.rect(1.0, 0.0, 6.0, bh - 2.5, 1.0, "#26282b");
+            key_3d(s, 0.0, 0.0, 8.0, bh, 1.5, "#c4c7cb", pal::WHITE);
             if state == "pressed" {
-                s.rect(0.0, 0.0, 8.0, bh, 1.5, "#ffffff30");
+                s.rect(0.0, 0.0, 8.0, bh, 1.5, "#80808066");
             }
         }));
         out.push(Part::new(format!("btn_flag_{state}"), 9.0, wh, |s| {
@@ -1138,6 +1138,14 @@ pub const BAND_303: [(f32, f32, f32, f32); 3] = [
     (52.0, 56.0, 184.0, 56.0),
     (242.0, 56.0, 112.0, 56.0),
 ];
+/// This fork's keyboard look: the light paper of the keys and of the lower halves of the
+/// pitch/clear and the flags blocks, where those split from their black upper halves, and the
+/// black keys (the white key left of each, the note).
+pub const KEYS_PAPER_303: &str = "#e6e7ea";
+pub const PITCH_SPLIT_303: f32 = 87.5;
+pub const FLAGS_SPLIT_303: f32 = 81.5;
+pub const BLACK_NOTES_303: [(usize, u8); 5] = [(0, 1), (1, 3), (3, 6), (4, 8), (5, 10)];
+
 /// The rows of the key band (tops): the black keys' LEDs, the black keys, the white keys' (and
 /// flags') LEDs, the white keys and the flags.
 pub const KEY_ROWS_303: [f32; 4] = [58.0, 68.0, 83.0, 93.0];
@@ -1191,7 +1199,7 @@ fn lfo_reach_303() -> (f32, f32) {
     let half = KNOBS[3].w / 2.0; // the 909's small knob (KNOBS[3])
     let cap = LFO_LABEL_CAP_303;
     let reach = |t: &str| LFO_DX_303 + half.max(font::text_width(cap, t) / 2.0);
-    (reach("RATE"), reach("AMOUNT"))
+    (reach("RATE"), reach("AMT"))
 }
 
 /// The left edge of large knob `k` (0 CUTOFF to 4 ACCENT). The six large knobs, TUNE first,
@@ -1272,13 +1280,53 @@ fn tb303_bg(out: &mut Vec<Part>) {
         let cap = LFO_LABEL_CAP_303;
         for k in 0..5 {
             let ((rx, _), (ax, _)) = lfo_knobs_303(k);
+            // RATE, then SYN over the note (tempo sync) and WF over the wave, then AMT
+            let mid = (rx + ax) / 2.0;
             label(s, rx, LFO_LABEL_Y_303, cap, ink, "RATE");
-            label(s, (rx + ax) / 2.0, LFO_LABEL_Y_303, cap, ink, "SYNC");
-            label(s, ax, LFO_LABEL_Y_303, cap, ink, "AMOUNT");
+            label(s, mid - LFO_MODE_W / 4.0, LFO_LABEL_Y_303, cap, ink, "SYN");
+            label(s, mid + LFO_MODE_W / 4.0, LFO_LABEL_Y_303, cap, ink, "WF");
+            label(s, ax, LFO_LABEL_Y_303, cap, ink, "AMT");
         }
         // The key band: pitch mode and clear, the keys on gray, the flags.
+        // The key band (this fork, a keyboard): the pitch/clear and the flags blocks black above
+        // and light below; the keys on light keyboard paper with lines between the white keys,
+        // the black keys in black slots, every key named under it.
         for (i, (x, y, w, h)) in BAND_303.into_iter().enumerate() {
-            s.rect(x, y, w, h, 4.0, if i == 1 { "#7d8087" } else { pal::BLACK });
+            s.rect(x, y, w, h, 4.0, pal::BLACK);
+            let split = [PITCH_SPLIT_303, y, FLAGS_SPLIT_303][i];
+            s.rect(
+                x + 1.2,
+                split,
+                w - 2.4,
+                y + h - 1.2 - split,
+                3.0,
+                KEYS_PAPER_303,
+            );
+        }
+        let (_, ky, _, kh) = BAND_303[1];
+        for i in 0..WHITE_303.len() - 1 {
+            let x = WHITE_303[i] + 15.0;
+            s.line(x, ky + 1.2, x, ky + kh - 1.2, "#9a9da3", 0.6);
+        }
+        for (i, _) in BLACK_NOTES_303 {
+            let x = WHITE_303[i] + 11.0;
+            s.rect(x - 2.0, ky + 1.2, 12.0, 26.0, 2.0, pal::BLACK);
+        }
+        let ink = pal::BLACK;
+        let note_y = ky + kh - 3.6;
+        for (x, name) in WHITE_303
+            .into_iter()
+            .zip(["C", "D", "E", "F", "G", "A", "B", "C"])
+        {
+            label(s, x + 4.5, note_y, 2.4, ink, name);
+        }
+        for ((i, _), name) in BLACK_NOTES_303.into_iter().zip(["C", "D", "F", "G", "A"]) {
+            // the sharp: the letter and a small # up right of it, centered together
+            let x = WHITE_303[i] + 15.0;
+            let (lw, sw) = (font::text_width(2.4, name), font::text_width(1.6, "#"));
+            let x0 = x - (lw + 0.4 + sw) / 2.0;
+            text(s, x0, note_y, 2.4, Anchor::Start, ink, name);
+            text(s, x0 + lw + 0.4, note_y - 0.9, 1.6, Anchor::Start, ink, "#");
         }
         // "EDIT STEP" at the flags block's top, over the step LEDs
         let (bx, _, bw, _) = BAND_303[2];
@@ -1290,14 +1338,14 @@ fn tb303_bg(out: &mut Vec<Part>) {
             pal::INK,
             "EDIT STEP",
         );
-        let ink = pal::INK;
-        label(s, LEFT_X_303, PITCH_LABEL_Y_303, 3.2, ink, "PITCH");
-        label(s, LEFT_X_303, CLEAR_LABEL_Y_303, 3.2, ink, "CLEAR");
+        label(s, LEFT_X_303, PITCH_LABEL_Y_303, 3.2, pal::INK, "PITCH");
+        // on the light lower halves: black
+        label(s, LEFT_X_303, CLEAR_LABEL_Y_303, 3.2, pal::BLACK, "CLEAR");
         for (x, name) in FLAGS_303
             .into_iter()
             .zip(["DOWN", "UP", "ACCENT", "SLIDE", "NOTE"])
         {
-            label(s, x + 4.5, 109.0, 3.2, ink, name);
+            label(s, x + 4.5, 109.0, 3.2, pal::BLACK, name);
         }
     }));
 }

@@ -922,6 +922,20 @@ impl App {
                 }
                 let name = self.panel.part_name(c, false, now);
                 paint_part(ui, &name, rect);
+                // the step's number on its LED (this fork), dark on the lit colors
+                let n = c.name().strip_prefix("stepled").unwrap_or("");
+                let ink = if name.ends_with("off") {
+                    egui::Color32::from_rgb(0x9a, 0x5c, 0x56)
+                } else {
+                    egui::Color32::from_rgba_unmultiplied(0x2a, 0x08, 0x06, 0xe0)
+                };
+                ui.painter().text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    n,
+                    egui::FontId::proportional(4.6 * view.scale),
+                    ink,
+                );
             }
             "fader" => self.fader(ui, view, c, rect),
             "display" => {

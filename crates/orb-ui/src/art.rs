@@ -65,7 +65,8 @@ pub const KNOBS: [KnobDesign; 5] = [
         cy: 13.5,
         ring_r: 12.24,
         ring_w: 1.44,
-        arc: [0xf0, 0x8a, 0x24],
+        // this fork: red, as the panel's red
+        arc: [0xe2, 0x41, 0x3b],
     },
     KnobDesign {
         name: "knob_808_red",

@@ -7,10 +7,10 @@
 use std::collections::HashMap;
 
 use crate::parts::{
-    CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303, KNOBS, KNOBS_909,
-    LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MOD_VIEW_808, PITCH_LED_Y_303,
-    PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303, column_909,
-    knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
+    BLACK_NOTES_303, CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303,
+    KNOBS, KNOBS_909, LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MOD_VIEW_808,
+    PITCH_LED_Y_303, PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303,
+    column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -358,7 +358,7 @@ fn tb303(b: &mut Builder, r: usize) {
     // The keys, in the rows of `KEY_ROWS_303`: each LED above its key.
     let [black_led_y, black_y, white_led_y, white_y] = KEY_ROWS_303;
     let white_notes = [0, 2, 4, 5, 7, 9, 11, 12];
-    let black_notes = [(0, 1), (1, 3), (3, 6), (4, 8), (5, 10)];
+    let black_notes = BLACK_NOTES_303;
     let note_lit = 0; // C
     for (x, note) in WHITE_303.into_iter().zip(white_notes) {
         b.part(
