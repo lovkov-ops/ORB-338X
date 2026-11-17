@@ -388,6 +388,8 @@ fn every_knob_fader_and_switch_sends_its_device_message_and_the_engine_takes_it(
             k => panic!("{id}: kind {k}"),
         }
         let value = match c.kind.as_str() {
+            // (this fork) the 303's TUNE sends its semitone's value
+            "knob" if orb_ui::behavior::is_tune(&id) => h.app.panel.value(&id).unwrap() as i32,
             "knob" => orb_ui::behavior::knob_send(h.app.panel.knob(&id)),
             "fader" => orb_ui::behavior::fader_send(h.app.panel.fader(&id)),
             "toggle" => h.app.panel.toggle_on(&id) as i32,

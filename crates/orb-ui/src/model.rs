@@ -292,6 +292,9 @@ pub struct Panel {
     /// enable, `mixerN.mute` (1: plays), which the panel sends ([`Panel::apply_channels`]).
     pub solo: [bool; 4],
     pub mute: [bool; 4],
+    /// The 303s' TUNE values as the engine had them (this fork): kept while the knob stays on
+    /// their semitone, so a song saves the value it had, not its semitone's own.
+    tune_raw: HashMap<String, i32>,
     /// A 303 key pressed in pitch mode (this fork, `audition.rs`): the synth, the pattern and
     /// the step it wrote, for the app to play the note; taken by the app.
     pub audition: Option<(usize, u8, usize)>,
@@ -342,6 +345,7 @@ impl Panel {
             events: Vec::new(),
             solo: [false; 4],
             mute: [false; 4],
+            tune_raw: HashMap::new(),
             audition: None,
             held: None,
             knobs: HashMap::new(),
@@ -521,7 +525,12 @@ impl Panel {
         if let Some(&p) = self.knobs.get(id)
             && behavior::is_tune(id)
         {
-            return Some(behavior::tune_value(behavior::tune_semis(p)) as u8);
+            let s = behavior::tune_semis(p);
+            let v = match self.tune_raw.get(id) {
+                Some(&raw) if behavior::tune_from_value(raw) == s => raw,
+                _ => behavior::tune_value(s),
+            };
+            return Some(v as u8);
         }
         if let Some(&p) = self.knobs.get(id) {
             return Some(behavior::knob_send(p) as u8);
@@ -561,6 +570,8 @@ impl Panel {
             let s = behavior::tune_semis(p);
             let old = self.knobs.insert(id.into(), behavior::tune_pos(s));
             if old.map(behavior::tune_semis) != Some(s) {
+                self.tune_raw
+                    .insert(id.to_string(), behavior::tune_value(s));
                 self.set_event(id, behavior::tune_value(s));
             }
             return;
@@ -642,8 +653,9 @@ impl Panel {
             self.rows[r].enabled = v != 0;
         } else if let Some(p) = self.knobs.get_mut(id) {
             if behavior::is_tune(id) {
-                // the TUNE knob on the semitone the engine plays (this fork)
+                // the TUNE knob on the semitone the engine plays (this fork); the value kept
                 *p = behavior::tune_pos(behavior::tune_from_value(v));
+                self.tune_raw.insert(id.to_string(), v);
             } else if behavior::knob_send(*p) != v {
                 *p = behavior::knob_from_engine(v);
             }
