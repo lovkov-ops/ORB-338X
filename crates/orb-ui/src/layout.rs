@@ -80,9 +80,10 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
         v.push(("bg_mixer", 456.0, y));
     }
     v.push(("bg_master", 526.0, 50.0));
-    v.push(("bg_pcf", 526.0, 148.0));
-    v.push(("bg_delay", 526.0, 259.0));
-    v.push(("bg_dist", 526.0, 352.0));
+    // this fork's order: DELAY, DIST, PCF, COMP under the master
+    v.push(("bg_delay", 526.0, 148.0));
+    v.push(("bg_dist", 526.0, 241.0));
+    v.push(("bg_pcf", 526.0, 306.0));
     v.push(("bg_comp", 526.0, 417.0));
     v
 }
@@ -120,9 +121,9 @@ mod tests {
     fn layout_has_every_control() {
         let c = controls();
         // (this fork: 16 step LEDs replace the edit step display and its two arrows on each
-        // 303, 380 + 2 * 13; each mixer channel's on/off button is now its activity LED, SOLO
-        // and MUTE, + 4 * 2)
-        assert_eq!(c.len(), 414);
+        // 303, 380 + 2 * 13; each mixer channel's on/off button is now its green LED (MUTE),
+        // and it has an amber SOLO LED, + 4)
+        assert_eq!(c.len(), 410);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         assert_eq!((play.x, play.y, play.w, play.h), (112.0, 21.0, 32.0, 25.0));

@@ -944,7 +944,7 @@ impl App {
                 let down = r.is_pointer_button_down_on() || self.key_held(&c.id);
                 match kind {
                     "repeat" | "wind" => self.repeat(ui, c, &r),
-                    "switch" | "toggle" | "radio" | "trigger" | "grid" => {
+                    "switch" | "toggle" | "radio" | "trigger" | "grid" | "chanled" => {
                         // a right click on a pattern button opens the pattern menu instead
                         // (this fork, pattern_clip.rs): it does not select the pattern
                         let menu_click = pattern_button(&c.id).is_some()
@@ -953,7 +953,7 @@ impl App {
                             if let Some(k) = generate::synth_of(&c.id) {
                                 self.toggle_generate(k);
                             }
-                            if matches!(c.name(), "solo" | "mutebtn") {
+                            if matches!(c.name(), "solo" | "mutebtn" | "activity") {
                                 self.mix_button(c, now);
                             } else {
                                 self.panel.press(&c.id, now);
@@ -992,7 +992,8 @@ impl App {
         }
     }
 
-    /// A press of a mixer channel's SOLO or MUTE (this fork): turns it on or off; the second
+    /// A press of a mixer channel's SOLO (the amber LED) or MUTE (the green one, this fork):
+    /// turns it on or off; the second
     /// press of a double click on a lit one turns every one of its kind off.
     fn mix_button(&mut self, c: &Ctl, now: f64) {
         let lit = self.panel.toggle_on(&c.id);
@@ -1001,7 +1002,7 @@ impl App {
             .take()
             .is_some_and(|(id, t, was_lit)| id == c.id && now - t < 0.4 && was_lit);
         if double {
-            self.panel.clear_channels(c.name() == "mutebtn");
+            self.panel.clear_channels(c.name() != "solo");
         } else {
             self.panel.press(&c.id, now);
             self.mix_press = Some((c.id.clone(), now, lit));

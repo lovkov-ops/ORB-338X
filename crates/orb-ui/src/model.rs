@@ -675,7 +675,8 @@ impl Panel {
             (_, "solo") if sec.starts_with("mixer") => {
                 self.solo[index_of(sec, "mixer").unwrap_or(0).min(3)]
             }
-            (_, "mutebtn") if sec.starts_with("mixer") => {
+            // MUTE: the channel's green LED (this fork; `mutebtn` its older name)
+            (_, "mutebtn" | "activity") if sec.starts_with("mixer") => {
                 self.mute[index_of(sec, "mixer").unwrap_or(0).min(3)]
             }
             (_, "pcf") if sec.starts_with("mixer") => {
@@ -732,7 +733,7 @@ impl Panel {
                         self.solo[c] = !self.solo[c];
                         self.apply_channels();
                     }
-                    "mutebtn" => {
+                    "mutebtn" | "activity" => {
                         self.mute[c] = !self.mute[c];
                         self.apply_channels();
                     }

@@ -450,13 +450,13 @@ fn the_mixer_sends_msg_145_and_147() {
         // (control, field k of msg 147): mute 0, level 1, pan 2, delay send 3, dist 4 (this
         // fork: the channel's MUTE button sends the enable)
         h.take_log();
-        h.click(&format!("mixer{n}.mutebtn"));
+        h.click(&format!("mixer{n}.activity"));
         assert_eq!(
             h.take_log(),
             vec![dev(Device::Mixer, 147, &[c, 0, 0])],
             "mute {n}"
         );
-        h.click(&format!("mixer{n}.mutebtn"));
+        h.click(&format!("mixer{n}.activity"));
         h.take_log();
         // a press off the handle jumps it to the pointer, the drag then moves it: two values
         h.drag(&format!("mixer{n}.level"), 12.0);

@@ -8,9 +8,9 @@ use std::collections::HashMap;
 
 use crate::parts::{
     CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303, KNOBS, KNOBS_909,
-    LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MIX_BTN_W, MOD_VIEW_808,
-    PITCH_LED_Y_303, PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303,
-    column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
+    LEFT_X_303, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X, LOGO_Y, MOD_VIEW_808, PITCH_LED_Y_303,
+    PITCH_Y_303, STEPS_Y_909, TUNE_Y_303, WAVE_X_303, WAVE_Y_303, WHITE_303, column_909,
+    knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -509,32 +509,23 @@ fn mixer(b: &mut Builder, c: usize) {
         456.0,
         50.0 + 115.0 * c as f32,
     );
-    // The strip is symmetric about its middle (x 35, this fork): the left column at x 19, the
-    // right one at x 51. The header (2..28): MIX at its top; under it, centered on one line
-    // (y 18), the activity LED at the left (no button now: green while the channel sounds),
-    // SOLO and MUTE in the middle and the meter at the right, mirrored about x 35.
-    b.part("activity", "chanled", "power_14x14_off", 3.0, 11.0);
-    b.part(
-        "solo",
-        "toggle",
-        "mixbtn_solo_off",
-        35.0 - 1.0 - MIX_BTN_W,
-        13.0,
-    );
-    b.part("mutebtn", "toggle", "mixbtn_mutebtn_off", 35.0 + 1.0, 13.0);
+    // The header (2..20, this fork): the green LED (green while the channel sounds; a click
+    // mutes the channel, MUTE), the amber SOLO LED, MIX and the meter, 2 px from its edges.
+    b.part("activity", "chanled", "power_14x14_off", 4.0, 4.0);
+    b.part("solo", "toggle", "solo_14x14_off", 19.0, 4.0);
     b.part(
         "meter",
         "meter",
         &format!("meter_8x14_{}", [6, 5, 8, 3][c]),
-        56.0,
-        11.0,
+        58.0,
+        4.0,
     );
-    // Pan and the delay send side by side under the header (labels at 55.5), then the fader
+    // Pan and the delay send side by side under the header (labels at 52.5), then the fader
     // under PAN and the three routing keys stacked under DELAY, centered on the fader.
-    b.pan("pan", KNOB_22, 8.0, 31.0, 0.5);
-    b.knob("delay", KNOB_22, 40.0, 31.0, [0.0, 0.25, 0.1, 0.0][c]);
-    b.fader("level", 11.5, 59.5, [0.7, 0.7, 0.8, 0.75][c]);
-    b.part("dist", "toggle", "mixsw_dist_off", 37.0, 64.0);
+    b.pan("pan", KNOB_22, 8.0, 26.0, 0.5);
+    b.knob("delay", KNOB_22, 40.0, 26.0, [0.0, 0.25, 0.1, 0.0][c]);
+    b.fader("level", 11.5, 58.0, [0.7, 0.7, 0.8, 0.75][c]);
+    b.part("dist", "toggle", "mixsw_dist_off", 37.0, 62.0);
     b.part(
         "pcf",
         "radio",
@@ -544,9 +535,9 @@ fn mixer(b: &mut Builder, c: usize) {
             "mixsw_pcf_off"
         },
         37.0,
-        80.0,
+        78.0,
     );
-    b.part("comp", "radio", "mixsw_comp_off", 37.0, 96.0);
+    b.part("comp", "radio", "mixsw_comp_off", 37.0, 94.0);
 }
 
 fn master(b: &mut Builder) {
@@ -565,8 +556,10 @@ fn fx_header(b: &mut Builder, on: bool, level: u8) {
     b.part("meter", "meter", &format!("meter_8x14_{level}"), 70.0, 4.0);
 }
 
+/// The effects under the master (this fork's order, top to bottom): DELAY (148..241), DIST
+/// (..306), PCF (..417) and COMP (..510).
 fn effects(b: &mut Builder) {
-    b.section("pcf", "bg_pcf", 526.0, 148.0);
+    b.section("pcf", "bg_pcf", 526.0, 306.0);
     fx_header(b, true, 4);
     b.display("pattern", 10.0, 23.0, 18.0, 2, "25");
     b.part("pattern_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
@@ -583,7 +576,7 @@ fn effects(b: &mut Builder) {
     }
 
     // The knobs are centered in the two halves (x 21 and 62).
-    b.section("delay", "bg_delay", 526.0, 259.0);
+    b.section("delay", "bg_delay", 526.0, 148.0);
     fx_header(b, false, 0);
     b.display("steps", 9.0, 23.0, 19.0, 2, " 3");
     b.part("steps_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
@@ -592,7 +585,7 @@ fn effects(b: &mut Builder) {
     b.pan("pan", KNOB_22, 10.0, 55.0, 0.5);
     b.knob("feedback", KNOB_22, 51.0, 55.0, 0.4);
 
-    b.section("dist", "bg_dist", 526.0, 352.0);
+    b.section("dist", "bg_dist", 526.0, 241.0);
     fx_header(b, false, 0);
     b.knob("amount", KNOB_22, 10.0, 27.0, 0.4);
     b.knob("shape", KNOB_22, 51.0, 27.0, 0.5);

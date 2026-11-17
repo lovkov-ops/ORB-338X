@@ -321,36 +321,6 @@ fn key_3d(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, r: f32, base: &str, face:
 
 /// The mixer's routing key, 28 x 13: a face over a darker base that shows as a soft rim and a
 /// lip, an amber LED at the left and the label left-aligned after it.
-/// The mixer's header height (this fork: room for SOLO and MUTE under MIX).
-pub const MIX_HEADER_H: f32 = 26.0;
-/// The SOLO and MUTE buttons under MIX: their size.
-pub const MIX_BTN_W: f32 = 15.0;
-pub const MIX_BTN_H: f32 = 10.0;
-
-/// SOLO and MUTE (this fork): a small dark key with its name; on, the name red with a glow.
-fn mix_buttons(out: &mut Vec<Part>) {
-    let (w, h) = (MIX_BTN_W, MIX_BTN_H);
-    for (name, text_) in [("solo", "SOLO"), ("mutebtn", "MUTE")] {
-        for on in [false, true] {
-            let state = if on { "on" } else { "off" };
-            out.push(Part::new(format!("mixbtn_{name}_{state}"), w, h, |s| {
-                s.rect(0.0, 0.0, w, h, 2.0, "#2a323d");
-                s.rect(0.6, 0.6, w - 1.2, h - 1.2, 1.6, "#4b5767");
-                s.rect(0.6, 0.6, w - 1.2, 3.6, 1.6, "#ffffff0c");
-                if on {
-                    s.raw(&format!(
-                        r#"<filter id="{name}_glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.8"/></filter><g filter="url(#{name}_glow)" opacity="0.95">"#
-                    ));
-                    label(s, w / 2.0, h / 2.0, 3.0, pal::RED, text_);
-                    s.raw("</g>");
-                }
-                let color = if on { pal::RED } else { pal::INK };
-                label(s, w / 2.0, h / 2.0, 3.0, color, text_);
-            }));
-        }
-    }
-}
-
 fn mixsw_body(s: &mut Svg, label_: &str, on: bool) {
     s.rect(0.0, 0.0, 28.0, 13.0, 2.5, "#2a323d");
     s.rect(0.6, 0.6, 26.8, 10.6, 2.0, "#4b5767");
@@ -478,7 +448,6 @@ fn switches(out: &mut Vec<Part>) {
     switch(out, "switch_808", 11.0, 17.0, false);
     switch(out, "switch_fx", 9.0, 18.0, false);
     switch(out, "switch_mode", 26.0, 19.0, true);
-    mix_buttons(out);
     // Dist, PCF and Comp routing keys of the mixer (and the master's).
     for (kind, text_) in [("dist", "DIST"), ("pcf", "PCF"), ("comp", "COMP")] {
         for (state, on) in [("off", false), ("on", true)] {
@@ -504,6 +473,12 @@ fn power_buttons(out: &mut Vec<Part>) {
                 |s| led_3d(s, w / 2.0, h / 2.0, 2.6, on, "green"),
             ));
         }
+    }
+    // The mixer channel's SOLO LED (this fork): the same LED in amber.
+    for (state, on) in [("off", false), ("on", true)] {
+        out.push(Part::new(format!("solo_14x14_{state}"), 14.0, 14.0, |s| {
+            led_3d(s, 7.0, 7.0, 2.6, on, "amber")
+        }));
     }
 }
 
@@ -1471,13 +1446,13 @@ fn tr909_bg(out: &mut Vec<Part>) {
 fn mixer_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_mixer", 70.0, 115.0, |s| {
         face(s, 70.0, 115.0, pal::SLATE);
-        // this fork: a taller header (2..28) with MIX at its top, centered on the strip, SOLO
-        // and MUTE under it between the activity LED (3..17) and the meter (56..64)
-        header(s, 2.0, 2.0, 66.0, MIX_HEADER_H, MIXER_HEADER);
-        label(s, 35.0, 6.6, 4.4, pal::WHITE, "MIX");
+        // this fork: the header holds the green LED (the channel's sound; a click mutes it),
+        // the amber SOLO LED, MIX and the meter
+        header(s, 2.0, 2.0, 66.0, 18.0, MIXER_HEADER);
+        label(s, 43.0, 11.0, 4.4, pal::WHITE, "MIX");
         // pan and delay send side by side; the fader and the routing keys below
-        label(s, 19.0, 55.5, 3.0, pal::INK_DIM, "PAN");
-        label(s, 51.0, 55.5, 3.0, pal::INK_DIM, "DELAY");
+        label(s, 19.0, 52.5, 3.0, pal::INK_DIM, "PAN");
+        label(s, 51.0, 52.5, 3.0, pal::INK_DIM, "DELAY");
     }));
 }
 

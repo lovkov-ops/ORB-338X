@@ -195,7 +195,8 @@ fn two_position_switch_flips_on_a_click_anywhere() {
     h.up();
     assert_eq!(h.app.panel.switch("tb303_1.wave"), 0);
     // The delay's triplet switch is vertical: a click on its top half flips it.
-    h.move_to(Pos2::new(579.0, 281.0 + 3.0));
+    // (this fork: DELAY moved up, its section at y 148)
+    h.move_to(Pos2::new(579.0, 170.0 + 3.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.switch("delay.triplet"), 1);
