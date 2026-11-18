@@ -74,7 +74,8 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
                 2 => "bg_tr808",
                 _ => "bg_tr909",
             },
-            90.0,
+            // this fork: 2 px left of the original 90 (4 px each side)
+            88.0,
             y,
         ));
         v.push(("bg_mixer", 456.0, y));
@@ -90,7 +91,7 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
 
 /// The focus bar of row `r` (0..=3): (x, y, w, h).
 pub fn focus_bar(r: usize) -> (f32, f32, f32, f32) {
-    (86.0, 50.0 + 115.0 * r as f32, 4.0, 115.0)
+    (85.0, 50.0 + 115.0 * r as f32, 4.0, 115.0)
 }
 
 /// The row (0..=3) containing a panel point, as the window's click handler tests it.
@@ -110,8 +111,8 @@ pub fn on_logo(x: f32, y: f32) -> bool {
 }
 
 /// The origins of the drum machine sections (panel pixels), for pointer math.
-pub const TR808_ORIGIN: (f32, f32) = (90.0, 280.0);
-pub const TR909_ORIGIN: (f32, f32) = (90.0, 395.0);
+pub const TR808_ORIGIN: (f32, f32) = (88.0, 280.0);
+pub const TR909_ORIGIN: (f32, f32) = (88.0, 395.0);
 
 #[cfg(test)]
 mod tests {

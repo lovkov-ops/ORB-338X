@@ -162,10 +162,10 @@ fn fader_jumps_to_the_pointer_and_drags() {
 #[test]
 fn two_position_switch_flips_on_a_click_anywhere() {
     let mut h = Harness::new();
-    // The 303 waveform (this fork) is the saw and the square side by side at (107, 92.5),
+    // The 303 waveform (this fork) is the saw and the square side by side at (105, 90.5),
     // 24 x 11, under TUNE: a click on a picture chooses it, a click on the chosen one keeps it.
-    let saw = Pos2::new(107.0 + 6.0, 98.0);
-    let square = Pos2::new(107.0 + 18.0, 98.0);
+    let saw = Pos2::new(105.0 + 6.0, 96.0);
+    let square = Pos2::new(105.0 + 18.0, 96.0);
     assert_eq!(h.app.panel.switch("tb303_1.wave"), 0);
     h.move_to(saw);
     h.down(Modifiers::NONE);
@@ -290,18 +290,18 @@ fn tr808_steps_paint_across_a_drag_and_erase_from_a_lit_step() {
     let mut h = Harness::new();
     assert_eq!(h.app.panel.inst808, 1);
     // (this fork) steps 1-4 at x = 96 + 22.125 i, y = 368 + 10.
-    h.move_to(Pos2::new(96.0 + 11.0, 378.0));
+    h.move_to(Pos2::new(94.0 + 11.0, 378.0));
     h.down(Modifiers::NONE);
-    h.move_to(Pos2::new(96.0 + 22.125 * 3.0 + 11.0, 378.0));
+    h.move_to(Pos2::new(94.0 + 22.125 * 3.0 + 11.0, 378.0));
     h.up();
     assert_eq!(
         &h.app.panel.steps808[1][..5],
         &[true, true, true, true, false]
     );
     // Starting on a lit step erases every step crossed.
-    h.move_to(Pos2::new(96.0 + 22.125 * 3.0 + 11.0, 378.0));
+    h.move_to(Pos2::new(94.0 + 22.125 * 3.0 + 11.0, 378.0));
     h.down(Modifiers::NONE);
-    h.move_to(Pos2::new(96.0 + 22.125 + 11.0, 378.0));
+    h.move_to(Pos2::new(94.0 + 22.125 + 11.0, 378.0));
     h.up();
     assert_eq!(
         &h.app.panel.steps808[1][..5],
@@ -312,7 +312,7 @@ fn tr808_steps_paint_across_a_drag_and_erase_from_a_lit_step() {
 #[test]
 fn tr909_step_click_cycles_and_modifiers_pick_the_value() {
     let mut h = Harness::new();
-    let step = |i: usize| Pos2::new(119.0 + 21.0 * i as f32 + 10.0, 481.0 + 8.0);
+    let step = |i: usize| Pos2::new(117.0 + 21.0 * i as f32 + 10.0, 481.0 + 8.0);
     h.move_to(step(0));
     h.down(Modifiers::NONE);
     h.up();
@@ -339,22 +339,22 @@ fn tr909_step_click_cycles_and_modifiers_pick_the_value() {
 fn instrument_legends_select_and_drag_keeps_selecting() {
     let mut h = Harness::new();
     // (this fork) the 808's name pills: 12 columns of 29.5 px from x 96, y 355..365.
-    h.move_to(Pos2::new(96.0 + 29.5 * 9.0 + 5.0, 360.0));
+    h.move_to(Pos2::new(94.0 + 29.5 * 9.0 + 5.0, 360.0));
     h.down(Modifiers::NONE);
     assert_eq!(h.app.panel.inst808, 9);
-    h.move_to(Pos2::new(96.0 + 29.5 * 11.0 + 5.0, 360.0));
+    h.move_to(Pos2::new(94.0 + 29.5 * 11.0 + 5.0, 360.0));
     assert_eq!(h.app.panel.inst808, 11);
     h.up();
     // The 909 legend, AC included; the area under AC's level knob no longer selects.
-    h.move_to(Pos2::new(90.0 + 10.0, 395.0 + 50.0));
+    h.move_to(Pos2::new(88.0 + 10.0, 395.0 + 50.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.inst909, 1);
-    h.move_to(Pos2::new(90.0 + 10.0, 395.0 + 10.0));
+    h.move_to(Pos2::new(88.0 + 10.0, 395.0 + 10.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.inst909, 0);
-    h.move_to(Pos2::new(90.0 + 26.0 + 42.0 * 2.0 + 5.0, 395.0 + 10.0));
+    h.move_to(Pos2::new(88.0 + 26.0 + 42.0 * 2.0 + 5.0, 395.0 + 10.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.inst909, 3);

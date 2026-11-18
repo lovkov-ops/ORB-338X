@@ -1221,18 +1221,18 @@ fn pattern_bg(out: &mut Vec<Part>) {
 }
 
 /// The 303's key band (this fork, as the reference picture): one black frame (x, y, w, h)
-/// holding pitch mode and clear (12..46), the keys on light paper (46..242) and the flags with
-/// the step LEDs (242..354), 1 px of black between them. The pitch/clear and the flags blocks
-/// are black above and light below their splits.
+/// holding pitch mode and clear (13..45), the keys on light paper (46..242) and the flags with
+/// the step LEDs (243..353), the frame and the two lines between them all 1 px of black. The
+/// pitch/clear and the flags blocks are black above and light below their splits.
 pub const BAND_303: (f32, f32, f32, f32) = (12.0, 54.0, 342.0, 58.0);
-const PAPER_X_303: (f32, f32) = (46.5, 241.5);
+const PAPER_X_303: (f32, f32) = (46.0, 242.0);
 pub const KEYS_PAPER_303: &str = "#e4e5e9";
 pub const PITCH_SPLIT_303: f32 = 88.0;
 pub const FLAGS_SPLIT_303: f32 = 80.0;
 pub const BLACK_NOTES_303: [(usize, u8); 5] = [(0, 1), (1, 3), (3, 6), (4, 8), (5, 10)];
 /// The keyboard's lines: 21 px apart from the first, left of the first C, to the last, right
 /// of the last C, down to just over the note names (their center height).
-const LINE_X0_303: f32 = 59.75;
+const LINE_X0_303: f32 = 60.0;
 const LINE_END_303: f32 = 103.75;
 const NOTE_Y_303: f32 = 108.0;
 /// The black keys' slots: 13.5 wide, centered on a line, from the band's top.
@@ -1257,8 +1257,8 @@ const PITCH_LABEL_Y_303: f32 = 57.6;
 const CLEAR_LABEL_Y_303: f32 = 91.3;
 /// The left edges of the 303's white keys (centered between the lines) and its flags (DOWN,
 /// UP, ACCENT, SLIDE, NOTE), the flags 22 px apart.
-pub const WHITE_303: [f32; 8] = [65.25, 86.25, 107.25, 128.25, 149.25, 170.25, 191.25, 212.25];
-pub const FLAGS_303: [f32; 5] = [250.0, 272.0, 294.0, 316.0, 338.0];
+pub const WHITE_303: [f32; 8] = [65.5, 86.5, 107.5, 128.5, 149.5, 170.5, 191.5, 212.5];
+pub const FLAGS_303: [f32; 5] = [249.0, 271.0, 293.0, 315.0, 337.0];
 /// The left edge of the black key right of white key `i`: centered on the line between them.
 pub fn black_x_303(i: usize) -> f32 {
     LINE_X0_303 + 21.0 * (i + 1) as f32 - BLACK_KEY_W_303 / 2.0
@@ -1268,7 +1268,7 @@ pub fn black_x_303(i: usize) -> f32 {
 /// The EDIT STEP label is over them at the block's top, the RNDM pill right of them.
 pub const STEP_LED_303: f32 = 8.0;
 const STEP_LED_PITCH_303: f32 = 9.0;
-const STEP_LED_X_303: f32 = 246.5;
+const STEP_LED_X_303: f32 = 245.875;
 const STEP_LED_Y_303: f32 = 61.0;
 const EDIT_LABEL_Y_303: f32 = 57.6;
 
@@ -1285,7 +1285,9 @@ pub fn step_led_303(i: usize) -> (f32, f32) {
 pub const RNDM_W_303: f32 = 29.0;
 pub const RNDM_H_303: f32 = 15.0;
 pub fn rndm_303() -> (f32, f32) {
-    (354.0 - 4.0 - RNDM_W_303 + 0.25, STEP_LED_Y_303 + 1.0)
+    // the LEDs' lights (6 of the 8 px) and RNDM (28.5 of its 29) span the block's middle
+    let (x, _) = step_led_303(7);
+    (x + 7.0 + 4.75, STEP_LED_Y_303 + 1.0)
 }
 /// The five large knobs (CUTOFF to ACCENT): their size (`knob_303`) and top. TUNE is the small
 /// knob under the waveform.
@@ -1295,7 +1297,8 @@ pub const KNOB_Y_303: f32 = 9.0;
 /// How far a large knob's group reaches from its center: the row under it, left to the RATE
 /// knob or its label, right to the AMOUNT knob or its label (the wider).
 fn lfo_reach_303() -> (f32, f32) {
-    let half = KNOBS[3].w / 2.0; // the 909's small knob (KNOBS[3])
+    // what shows of the LFO's small knob (KNOBS[5]): its value ring
+    let half = KNOBS[5].ring_r + KNOBS[5].ring_w / 2.0;
     let cap = LFO_LABEL_CAP_303;
     let reach = |t: &str| LFO_DX_303 + half.max(font::text_width(cap, t) / 2.0);
     (reach("RATE"), reach("AMT"))
@@ -1307,8 +1310,10 @@ fn lfo_reach_303() -> (f32, f32) {
 /// under it) the same as from the last group (its AMOUNT label) to the right edge (366).
 pub fn knob_x_303(k: usize) -> f32 {
     let (_, right) = lfo_reach_303();
-    let margin = LEFT_X_303 - KNOB_W_303.max(WAVE_W_303) / 2.0;
-    let last = 366.0 - margin - right.max(KNOB_W_303 / 2.0);
+    // what shows of a large knob: its value ring
+    let knob = KNOBS[0].ring_r + KNOBS[0].ring_w / 2.0;
+    let margin = LEFT_X_303 - knob.max(WAVE_W_303 / 2.0);
+    let last = 366.0 - margin - right.max(knob);
     let pitch = (last - LEFT_X_303) / 5.0;
     LEFT_X_303 + pitch * (k + 1) as f32 - KNOB_W_303 / 2.0
 }
@@ -1396,12 +1401,15 @@ fn tb303_bg(out: &mut Vec<Part>) {
         let bottom = by + bh - 1.0;
         let (px0, px1) = PAPER_X_303;
         s.rect(px0, by + 1.0, px1 - px0, bh - 2.0, 0.0, KEYS_PAPER_303);
-        for (x0, x1, split) in [
-            (bx + 1.0, px0 - 1.0, PITCH_SPLIT_303),
-            (px1 + 1.0, bx + bw - 1.0, FLAGS_SPLIT_303),
+        // square where they meet the lines, rounded only at the frame's corners
+        for (x0, x1, split, left) in [
+            (bx + 1.0, px0 - 1.0, PITCH_SPLIT_303, true),
+            (px1 + 1.0, bx + bw - 1.0, FLAGS_SPLIT_303, false),
         ] {
             s.rect(x0, split, x1 - x0, bottom - split, 3.0, KEYS_PAPER_303);
             s.rect(x0, split, x1 - x0, 4.0, 0.0, KEYS_PAPER_303);
+            let sq = if left { x1 - 4.0 } else { x0 };
+            s.rect(sq, split, 4.0, bottom - split, 0.0, KEYS_PAPER_303);
         }
         for k in 0..9 {
             let x = LINE_X0_303 + 21.0 * k as f32;

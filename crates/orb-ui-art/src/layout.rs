@@ -180,6 +180,9 @@ const KNOB_808_RED: usize = 1;
 const KNOB_808_WHITE: usize = 2;
 const KNOB_909: usize = 3;
 const KNOB_LFO: usize = 5;
+/// The instruments' column (this fork: 2 px left of the original 90, so that 4 px show between
+/// it and the pattern sections, the focus bar in them, and 4 px between it and the mixer).
+const INSTR_X: f32 = 88.0;
 /// The top of the header meters (the mixer's and the effects', 12 high): centered on the
 /// header's face, 2..18.7, above its 1.3 px darker lip.
 const HEADER_METER_Y: f32 = 4.35;
@@ -282,14 +285,14 @@ fn pattern(b: &mut Builder, r: usize) {
     b.section(
         &format!("focus{}", r + 1),
         if r == 0 { "focus_on" } else { "focus_off" },
-        86.0,
+        INSTR_X - 3.0,
         oy,
     );
 }
 
 fn tb303(b: &mut Builder, r: usize) {
     let oy = 50.0 + 115.0 * r as f32;
-    b.section(&format!("tb303_{}", r + 1), "bg_tb303", 90.0, oy);
+    b.section(&format!("tb303_{}", r + 1), "bg_tb303", INSTR_X, oy);
     // The waveform: the saw and the square on one frame over the pitch/clear block, under the
     // label; a click on either chooses it (orb-ui's App::control).
     b.part("wave", "hswitch", "switch_wave_0", WAVE_X_303, WAVE_Y_303);
@@ -444,7 +447,7 @@ const KNOBS_808: [(f32, f32, usize, &str); 22] = [
 ];
 
 fn tr808(b: &mut Builder) {
-    b.section("tr808", "bg_tr808", 90.0, 280.0);
+    b.section("tr808", "bg_tr808", INSTR_X, 280.0);
     // this fork: the knobs centered in their instrument's column (KNOBS_808 keeps the
     // original's x, 22 px a column from 14: the column is (x - 14) / 22)
     for (i, &(x, y, design, id)) in KNOBS_808.iter().enumerate() {
@@ -494,7 +497,7 @@ fn tr808(b: &mut Builder) {
 }
 
 fn tr909(b: &mut Builder) {
-    b.section("tr909", "bg_tr909", 90.0, 395.0);
+    b.section("tr909", "bg_tr909", INSTR_X, 395.0);
     let half = KNOBS[KNOB_909].w / 2.0;
     for (i, (group, col, lower, id, _)) in KNOBS_909.into_iter().enumerate() {
         let (x, y) = (column_909(group, col) - half, knob_y_909(group, lower));
