@@ -163,6 +163,8 @@ pub struct App {
     pub(crate) after_save: Option<Then>,
     pub(crate) export: Option<Job>,
     pub(crate) mod_list: Option<Result<Vec<ModEntry>, String>>,
+    /// The drum machines' own kits (this fork's KIT menu, kit_menu.rs).
+    pub(crate) machine_kit: [Option<orb_cli::mods::Kit>; 2],
     /// Whether a mod file has a `Demo.rbs`, for the file last asked (the Mods menu's item).
     pub(crate) demo_cache: Option<(PathBuf, bool)>,
     /// The splash picture of the kit last shown in the 808's mod window (`App::mod_view`).
@@ -267,6 +269,7 @@ impl App {
             after_save: None,
             export: None,
             mod_list: None,
+            machine_kit: [None, None],
             demo_cache: None,
             splash: None,
             info_open: false,
@@ -898,7 +901,12 @@ impl App {
     fn control(&mut self, ui: &mut Ui, view: &View, c: &Ctl, now: f64) {
         let rect = view.rect(c.x, c.y, c.w, c.h);
         match c.kind.as_str() {
-            "area" | "steps" | "kit" => {}
+            "area" | "steps" => {}
+            // the FLIP faces' KIT menu (this fork, kit_menu.rs)
+            "kit" => {
+                let r = self.hit(ui, c, rect);
+                self.kit_menu(&r, usize::from(c.section == "tr909f"));
+            }
             "modview" => {
                 paint_part(ui, &c.part, rect);
                 self.mod_view(ui, view, c);
@@ -1300,10 +1308,13 @@ impl App {
         let (o8, o9) = (layout::TR808_ORIGIN, layout::TR909_ORIGIN);
         /// (is the 808, section origin, [x y w h] in the section, name)
         type Area = (bool, (f32, f32), [f32; 4], &'static str);
+        // the 909's FLIP face has KIT over the accent's column (this fork): its header row
+        // starts at BD
+        let x9 = if self.panel.flipped(1) { 26.0 } else { 4.0 };
         let areas: [Area; 4] = [
             (true, o8, [6.0, 75.0, 354.0, 10.0], "legend808"),
             (true, o8, [94.5, 45.5, 147.5, 10.0], "upper808"),
-            (false, o9, [4.0, 4.0, 358.0, 10.0], "legend909"),
+            (false, o9, [x9, 4.0, 362.0 - x9, 10.0], "legend909"),
             (false, o9, [26.0, 75.0, 336.0, 10.0], "names909"),
         ];
         for (is808, o, [x, y, w, h], name) in areas {

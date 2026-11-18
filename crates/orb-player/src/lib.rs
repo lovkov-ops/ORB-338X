@@ -277,6 +277,8 @@ pub fn mix_preview(buf: &mut [i16], audio: &[i16], pos: usize) -> usize {
 pub struct ModSwap {
     samples: Arc<SampleSet>,
     retired: Retired,
+    /// This fork's KIT menu: only this drum machine takes the samples (`None`: both).
+    device: Option<Device>,
 }
 
 impl ModSwap {
@@ -516,6 +518,16 @@ impl Player {
         self.send(Command::Mod(Box::new(ModSwap {
             samples,
             retired: Retired::default(),
+            device: None,
+        })))
+    }
+
+    /// This fork (the FLIP faces' KIT menu): [`Player::set_mod`] for one drum machine only.
+    pub fn set_kit_of(&mut self, device: Device, samples: Arc<SampleSet>) -> Result<(), Command> {
+        self.send(Command::Mod(Box::new(ModSwap {
+            samples,
+            retired: Retired::default(),
+            device: Some(device),
         })))
     }
 
@@ -743,8 +755,15 @@ impl Audio {
             }
             Command::Load(new) => self.activate(new),
             Command::Mod(mut m) => {
-                let ModSwap { samples, retired } = &mut *m;
-                self.target().set_samples(samples, retired);
+                let ModSwap {
+                    samples,
+                    retired,
+                    device,
+                } = &mut *m;
+                match device {
+                    Some(d) => self.target().set_samples_of(*d, samples, retired),
+                    None => self.target().set_samples(samples, retired),
+                }
                 self.throw(Garbage::Mod(m));
             }
             Command::Preview(p) => {

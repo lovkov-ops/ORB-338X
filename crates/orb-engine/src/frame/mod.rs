@@ -1523,6 +1523,23 @@ impl Engine {
         d.channels[3].set_samples(samples, retired);
     }
 
+    /// This fork (the FLIP faces' KIT menu, not a message of the original): only the 808
+    /// ([`song::Device::Tr808`]) or only the 909 takes `samples`, as [`Engine::set_samples`]
+    /// gives them to both. Other devices: nothing.
+    pub fn set_samples_of(
+        &mut self,
+        dev: song::Device,
+        samples: &Arc<SampleSet>,
+        retired: &mut Retired,
+    ) {
+        let c = match dev {
+            song::Device::Tr808 => 2,
+            song::Device::Tr909 => 3,
+            _ => return,
+        };
+        self.frame.devices.channels[c].set_samples(samples, retired);
+    }
+
     /// Song msg 35 `{0,m}` (`sub_1001FBE0`): song mode (1) or pattern mode (0).
     pub fn set_song_mode(&mut self, mode: u8) {
         let f = &mut self.frame;

@@ -19,6 +19,7 @@ pub mod generate;
 pub mod info;
 pub mod key_help;
 pub mod keys;
+pub mod kit_menu;
 pub mod layout;
 pub mod lfo;
 pub mod link;

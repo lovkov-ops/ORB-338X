@@ -159,7 +159,8 @@ impl App {
         let Some(link) = &mut self.link else {
             return;
         };
-        if let Some(audio) = render_drum(tables, link.kit(), &song, is808, pattern, inst) {
+        let dev = if is808 { Device::Tr808 } else { Device::Tr909 };
+        if let Some(audio) = render_drum(tables, link.kit_of(dev), &song, is808, pattern, inst) {
             link.preview(&audio);
         }
     }

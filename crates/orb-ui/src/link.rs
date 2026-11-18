@@ -370,6 +370,9 @@ pub struct Link {
     /// The drum samples of the newest song (its mod's), whose startup sound
     /// [`Link::startup_sound`] plays.
     kit: Option<Arc<SampleSet>>,
+    /// This fork's KIT menu: the 808's and the 909's own kits, `None` while it plays the
+    /// song's (`kit`).
+    machine_kit: [Option<Arc<SampleSet>>; 2],
     /// The generation and revision last published after recording changed the open song.
     recorded_at: Option<(u32, u64)>,
     /// The first player generation that can be the open song: a copy of an older song's tracks
@@ -437,6 +440,7 @@ impl Link {
             mark: 0,
             log: None,
             kit,
+            machine_kit: [None, None],
             recorded_at: None,
             tracks_from: 0,
             loaded,
@@ -616,6 +620,7 @@ impl Link {
         // what the panel did before is sent first (the panel is replaced after)
         self.forward(panel);
         self.kit = samples;
+        self.machine_kit = [None, None];
         self.loaded = std::array::from_fn(|t| engine.frame.seq.events(t).to_vec());
         self.loaded_at = None;
         // the open song stops first (task-090): the new song then becomes current at once, at
@@ -641,6 +646,7 @@ impl Link {
     pub fn set_mod(&mut self, samples: Arc<SampleSet>, panel: &mut Panel) {
         self.forward(panel);
         self.kit = Some(samples.clone());
+        self.machine_kit = [None, None];
         if let Err(c) = self.player.set_mod(samples) {
             // a full queue: the change waits in the backlog, behind what is queued
             self.backlog.push_back(c);
@@ -665,6 +671,36 @@ impl Link {
     /// The drum samples of the kit that plays (this fork: a heard drum, `audition.rs`).
     pub fn kit(&self) -> Option<Arc<SampleSet>> {
         self.kit.clone()
+    }
+
+    /// The drum samples drum machine `device` plays: its own kit (this fork's KIT menu), else
+    /// the song's.
+    pub fn kit_of(&self, device: Device) -> Option<Arc<SampleSet>> {
+        let k = usize::from(device == Device::Tr909);
+        self.machine_kit[k].clone().or_else(|| self.kit.clone())
+    }
+
+    /// Whether drum machine `device` plays a kit of its own (this fork's KIT menu).
+    pub fn has_kit_of(&self, device: Device) -> bool {
+        self.machine_kit[usize::from(device == Device::Tr909)].is_some()
+    }
+
+    /// This fork's KIT menu: only drum machine `device` takes `samples`, its own kit (`own`) or
+    /// the song's again. The pending panel events go first, as for the Mods menu.
+    pub fn set_kit_of(
+        &mut self,
+        device: Device,
+        samples: Arc<SampleSet>,
+        own: bool,
+        panel: &mut Panel,
+    ) {
+        self.forward(panel);
+        let k = usize::from(device == Device::Tr909);
+        self.machine_kit[k] = own.then(|| samples.clone());
+        if let Err(c) = self.player().set_kit_of(device, samples) {
+            self.backlog.push_back(c);
+        }
+        self.flush_marked();
     }
 
     /// The preview player plays `audio` (mono int16, this fork: the note a 303 key plays in

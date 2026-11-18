@@ -395,7 +395,7 @@ impl App {
     }
 
     /// The drum samples of a kit: the built-in ones, or a mod's on top of them.
-    fn kit_samples(&self, kit: &Kit) -> Result<Option<Arc<SampleSet>>, String> {
+    pub(crate) fn kit_samples(&self, kit: &Kit) -> Result<Option<Arc<SampleSet>>, String> {
         match kit {
             Kit::Standard => Ok(self.samples.clone()),
             Kit::Mod(path) => {

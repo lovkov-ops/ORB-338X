@@ -3388,3 +3388,47 @@ fn the_info_fields_fill_the_window_and_follow_its_width() {
         win(&h).width()
     );
 }
+
+/// (this fork) The FLIP faces' KIT menu: one drum machine plays a kit of its own, the other
+/// and the song's kit stay; the song's kit again, or a new song, ends it.
+#[test]
+fn a_drum_machine_plays_a_kit_of_its_own() {
+    let mut h = Harness::new();
+    let own = Kit::Mod(standard_mod());
+    h.app.use_kit_of(1, Some(own.clone()));
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+    assert_eq!(h.app.kit_of(1), Some(&own));
+    assert_eq!(h.app.kit_of(0), None);
+    assert_eq!(h.app.doc.kit, Kit::Standard);
+    assert!(!h.app.doc.modified, "the song's kit stays");
+    h.calls(1);
+    h.app.use_kit_of(1, None);
+    assert_eq!(h.app.kit_of(1), None);
+    h.app.use_kit_of(0, Some(Kit::Standard));
+    assert_eq!(h.app.kit_of(0), Some(&Kit::Standard));
+    h.calls(1);
+    h.app.command(Cmd::New);
+    h.calls(1);
+    assert_eq!(h.app.kit_of(0), None);
+}
+
+/// (this fork) A click on KIT of the 909's FLIP face opens its menu: the song's kit, the
+/// built-in one and the Mods folder's.
+#[test]
+fn a_click_on_kit_opens_the_kit_menu() {
+    let mut h = Harness::new();
+    let c = orb_ui::layout::controls()
+        .into_iter()
+        .find(|c| c.id == "tr909.flip")
+        .unwrap();
+    h.click(Pos2::new(c.x + c.w / 2.0, c.y + c.h / 2.0));
+    assert!(h.app.panel.flipped(1));
+    let k = orb_ui::layout::controls()
+        .into_iter()
+        .find(|c| c.id == "tr909f.kit")
+        .unwrap();
+    h.click(Pos2::new(k.x + k.w / 2.0, k.y + k.h / 2.0));
+    let shapes = h.frame_shapes(vec![]);
+    assert!(shapes.contains("Song's kit"), "no kit menu");
+    assert!(shapes.contains(STANDARD), "no built-in kit");
+}
