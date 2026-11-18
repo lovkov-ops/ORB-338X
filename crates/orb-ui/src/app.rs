@@ -1251,6 +1251,14 @@ impl App {
         }
         g.down = down;
         ui.data_mut(|d| d.insert_temp(id, g));
+        // a double click sets the fader to its value in a new empty song, as on the knobs
+        // (this fork)
+        if r.double_clicked()
+            && let Some(v) = self.link.as_ref().and_then(|l| l.knob_default(&c.id))
+        {
+            let p = behavior::knob_from_engine(v as i32).min(behavior::FADER_MAX);
+            self.panel.set_fader(&c.id, p);
+        }
         paint_part(ui, "fader_track", rect);
         let top = behavior::fader_handle_top(self.panel.fader(&c.id));
         paint_part(ui, "fader_handle", view.rect(c.x, c.y + top, 15.0, 11.0));

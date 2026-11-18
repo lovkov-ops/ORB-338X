@@ -426,14 +426,10 @@ impl Panel {
         self.apply_channels();
     }
 
-    /// Whether a mixer channel plays (its enable), and whether it sounds now: plays and its
-    /// meter shows a signal (the activity LED, this fork).
+    /// Whether a mixer channel plays (its enable): the MUTE LED (this fork) is green while it
+    /// does, signal or not (the VU meter shows the signal).
     pub fn channel_active(&self, c: usize) -> bool {
         self.toggle_on(&format!("mixer{}.mute", c + 1))
-            && self
-                .meters
-                .get(&format!("mixer{}.meter", c + 1))
-                .is_some_and(|&m| m > 0)
     }
 
     /// A lively state for screenshots: song mode, playing, some steps, levels and meters.
@@ -1271,7 +1267,7 @@ impl Panel {
             }
             "trigger" | "wind" | "repeat" => push(),
             "led" => on_off(self.led_on(c, now)),
-            // the mixer channel's activity LED (this fork): green while it sounds
+            // the mixer channel's MUTE LED (this fork): green while it plays
             "chanled" => on_off(self.channel_active(index_of(sec, "mixer").unwrap_or(0).min(3))),
             "grid" => {
                 if let Some(n) = name.strip_prefix("pattern") {
@@ -1499,11 +1495,17 @@ mod tests {
         assert_eq!(plays(&p), [false, true, true, false]);
         p.clear_channels(true);
         assert_eq!(plays(&p), [true; 4]);
-        // the activity LED: a playing channel with a signal
+        // the MUTE LED: green while the channel plays, with or without a signal
+        assert!(
+            (0..4).all(|c| p.channel_active(c)),
+            "at the start: all green"
+        );
         p.meters.insert("mixer3.meter".into(), 4);
-        assert!(p.channel_active(2) && !p.channel_active(0));
         p.press("mixer3.mutebtn", 0.0);
         assert!(!p.channel_active(2), "muted: dark");
+        assert!(p.channel_active(0), "no signal: still green");
+        p.press("mixer3.mutebtn", 0.0);
+        assert!(p.channel_active(2), "unmuted: green again");
     }
 
     /// (this fork) TUNE moves by whole semitones, -12..=12, and every one is sent as a value

@@ -1258,11 +1258,55 @@ fn a_double_click_sets_every_knob_to_its_value_in_a_new_song() {
     let link = h.app.link.as_ref().unwrap();
     assert_eq!(link.knob_default("mixer1.pan"), Some(64));
     assert_eq!(link.knob_default("mixer4.delay"), Some(0));
-    assert_eq!(
-        link.knob_default("mixer1.level"),
-        None,
-        "a fader has no reset"
-    );
+}
+
+/// The engine's value of the fader `id`, from the snapshot.
+fn engine_fader(h: &mut Harness, id: &str) -> u8 {
+    let s = h.snap();
+    let (section, _) = id.split_once('.').unwrap();
+    if id == "master.fader" {
+        s.mixer.master
+    } else if let Some(n) = section.strip_prefix("mixer") {
+        s.mixer.channels[n.parse::<usize>().unwrap() - 1].level
+    } else {
+        let (d, ctrl) = orb_ui::link::controls()[id];
+        s.live[d as usize].as_slice()[live_index(d, ctrl)]
+    }
+}
+
+/// (this fork) A double click on a fader's handle sets it to its value in a new song, as on
+/// the knobs: the mixer's levels, the master and the PCF's four.
+#[test]
+fn a_double_click_sets_every_fader_to_its_value_in_a_new_song() {
+    let mut h = Harness::new();
+    let faders: Vec<_> = layout::controls()
+        .into_iter()
+        .filter(|c| c.kind == "fader")
+        .collect();
+    assert_eq!(faders.len(), 9);
+    for c in &faders {
+        let id = c.id.as_str();
+        let new_song = h.app.panel.value(id).unwrap();
+        let default = h.app.link.as_ref().unwrap().knob_default(id);
+        assert_eq!(default, Some(new_song), "{id}");
+        let up = h.app.panel.fader(id) < 500;
+        h.drag(id, if up { 15.0 } else { -15.0 });
+        h.calls(2);
+        assert_ne!(engine_fader(&mut h, id), new_song, "{id} was dragged away");
+        h.take_log();
+
+        for _ in 0..25 {
+            h.frame(vec![]);
+        }
+        let top = orb_ui::behavior::fader_handle_top(h.app.panel.fader(id));
+        let p = Pos2::new(c.x + c.w / 2.0, c.y + top + 5.5);
+        h.click_at(p);
+        h.click_at(p);
+        assert_eq!(h.app.panel.value(id), Some(new_song), "{id}");
+        assert_eq!(h.take_log().len(), 1, "{id}: one message");
+        h.calls(2);
+        assert_eq!(engine_fader(&mut h, id), new_song, "{id}: the engine");
+    }
 }
 
 #[test]

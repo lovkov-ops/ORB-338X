@@ -268,9 +268,9 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
     (c < 4).then_some(MixerTarget::Channel(c, k))
 }
 
-/// The value of every knob of the panel in `engine`, a new empty song as the song constructor
-/// made it, by layout id: the values [`Link::follow_values`] gives the panel for such a song
-/// (the devices' live blocks, the mixer's pan and delay send, the shuffle). The values are the
+/// The value of every knob and fader of the panel in `engine`, a new empty song as the song
+/// constructor made it, by layout id: the values [`Link::follow_values`] gives the panel for such a
+/// song (the devices' live blocks, the mixer's pan and delay send, the shuffle). The values are the
 /// device constructors' and do not depend on the kit; a drum machine built without samples is
 /// a placeholder with no live block, so its knobs are left out.
 fn new_song_knobs(
@@ -295,10 +295,13 @@ fn new_song_knobs(
     };
     let mut knobs = HashMap::new();
     for c in crate::layout::controls() {
-        if c.kind != "knob" {
+        if c.kind != "knob" && c.kind != "fader" {
             continue;
         }
         let v = match mixer_target(&c.id) {
+            // the faders (this fork: a double click sets them too)
+            Some(MixerTarget::Global(0)) => Some(d.mixer.live.master),
+            Some(MixerTarget::Channel(ch, 1)) => Some(d.mixer.live.channels[ch as usize].level),
             Some(MixerTarget::Channel(ch, 2)) => Some(d.mixer.live.channels[ch as usize].pan),
             Some(MixerTarget::Channel(ch, 3)) => Some(d.mixer.live.channels[ch as usize].send),
             Some(_) => None,
@@ -452,8 +455,8 @@ impl Link {
         (link, audio)
     }
 
-    /// The value (0..=127) the knob `id` has in a new empty song, which a double click sets.
-    /// `None` for an id that is not a knob, and for a drum machine's knob on a link made
+    /// The value (0..=127) the knob or fader `id` has in a new empty song, which a double click
+    /// sets. `None` for an id that is neither, and for a drum machine's knob on a link made
     /// without samples.
     pub fn knob_default(&self, id: &str) -> Option<u8> {
         // the FLIP faces' pans (this fork): the middle
