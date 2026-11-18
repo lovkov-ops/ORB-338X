@@ -364,12 +364,12 @@ const KEY_BORDER_DARK_303: &str = "#0d0e0f";
 /// translucent plastic lit it, the face a pale green, brighter in its middle and fading to the
 /// edges.
 fn key_scale_303(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, border: &str) {
-    key_303(s, x, y, w, h, border, "#eef8ef");
+    key_303(s, x, y, w, h, border, "#e6f6e8");
     s.raw(concat!(
         "<defs><radialGradient id=\"scale_glow\" cx=\"0.5\" cy=\"0.45\" r=\"0.6\">",
-        "<stop offset=\"0\" stop-color=\"#7fe08e\" stop-opacity=\"0.85\"/>",
-        "<stop offset=\"0.55\" stop-color=\"#a6eab0\" stop-opacity=\"0.45\"/>",
-        "<stop offset=\"1\" stop-color=\"#d8f4dc\" stop-opacity=\"0\"/>",
+        "<stop offset=\"0\" stop-color=\"#5fd872\" stop-opacity=\"1\"/>",
+        "<stop offset=\"0.5\" stop-color=\"#8ae498\" stop-opacity=\"0.75\"/>",
+        "<stop offset=\"1\" stop-color=\"#bdeec4\" stop-opacity=\"0.3\"/>",
         "</radialGradient></defs>",
     ));
     s.rect(
