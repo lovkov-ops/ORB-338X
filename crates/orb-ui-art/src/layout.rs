@@ -7,11 +7,11 @@
 use std::collections::HashMap;
 
 use crate::parts::{
-    BLACK_NOTES_303, CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303, KNOB_Y_303,
-    KNOB_Y_909, KNOBS, KNOBS_909, LEFT_X_303, LEGEND808_Y, LFO_MODE_W, LFO_MODE_Y_303, LOGO_X,
-    LOGO_Y, NAMES_Y_909, PILL808_H, PILL808_W, PITCH_LED_Y_303, PITCH_Y_303, STEP808_Y,
-    STEPS_Y_909, TUNE_Y_303, UPPER808_Y, WAVE_X_303, WAVE_Y_303, WHITE_303, col808, column_909,
-    knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303, step808_x,
+    BLACK_KEY_W_303, BLACK_NOTES_303, CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303,
+    KNOB_Y_303, KNOB_Y_909, KNOBS, KNOBS_909, LEFT_X_303, LEGEND808_Y, LFO_MODE_W, LFO_MODE_Y_303,
+    LOGO_X, LOGO_Y, NAMES_Y_909, PILL_W_303, PILL808_H, PILL808_W, PITCH_LED_Y_303, PITCH_Y_303,
+    STEP808_Y, STEPS_Y_909, TUNE_Y_303, UPPER808_Y, WAVE_X_303, WAVE_Y_303, WHITE_303, black_x_303,
+    col808, column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303, step808_x,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -179,6 +179,7 @@ const KNOB_303: usize = 0;
 const KNOB_808_RED: usize = 1;
 const KNOB_808_WHITE: usize = 2;
 const KNOB_909: usize = 3;
+const KNOB_LFO: usize = 5;
 const KNOB_22: usize = 4;
 
 /// The control rectangles of the whole panel, with the demo state used for
@@ -298,7 +299,7 @@ fn tb303(b: &mut Builder, r: usize) {
         0.5,
     );
     let vals = [0.35, 0.6, 0.45, 0.4, 0.55];
-    let half = KNOBS[KNOB_909].w / 2.0;
+    let half = KNOBS[KNOB_LFO].w / 2.0;
     for (k, name) in ["cutoff", "reso", "envmod", "decay", "accent"]
         .into_iter()
         .enumerate()
@@ -309,11 +310,11 @@ fn tb303(b: &mut Builder, r: usize) {
         // hold) under it
         let ((rx, ry), (ax, ay)) = lfo_knobs_303(k);
         let lfo = format!("{name}_lfo");
-        b.knob_of("lfoknob", &lfo, KNOB_909, rx - half, ry - half, 0.5);
+        b.knob_of("lfoknob", &lfo, KNOB_LFO, rx - half, ry - half, 0.5);
         b.knob_of(
             "lfoknob",
             &format!("{name}_amt"),
-            KNOB_909,
+            KNOB_LFO,
             ax - half,
             ay - half,
             0.0,
@@ -345,15 +346,15 @@ fn tb303(b: &mut Builder, r: usize) {
     b.part(
         "pitch_button",
         "trigger",
-        "btn_pill_22x10_rest",
-        LEFT_X_303 - 11.0,
+        "btn_pitch_rest",
+        LEFT_X_303 - PILL_W_303 / 2.0,
         PITCH_Y_303,
     );
     b.part(
         "clear",
         "trigger",
-        "btn_pill_22x10_rest",
-        LEFT_X_303 - 11.0,
+        "btn_clear_rest",
+        LEFT_X_303 - PILL_W_303 / 2.0,
         CLEAR_Y_303,
     );
     // The keys, in the rows of `KEY_ROWS_303`: each LED above its key.
@@ -374,10 +375,11 @@ fn tb303(b: &mut Builder, r: usize) {
         } else {
             "led_8_off"
         };
-        b.part(&format!("key{note}_led"), "led", led, x + 0.5, white_led_y);
+        b.part(&format!("key{note}_led"), "led", led, x + 1.0, white_led_y);
     }
     for (i, note) in black_notes {
-        let x = WHITE_303[i] + 11.0;
+        // the part is whole pixels wide, the key centered in it
+        let x = black_x_303(i) - (BLACK_KEY_W_303.ceil() - BLACK_KEY_W_303) / 2.0;
         b.part(
             &format!("key{note}"),
             "trigger",
@@ -389,7 +391,7 @@ fn tb303(b: &mut Builder, r: usize) {
             &format!("key{note}_led"),
             "led",
             "led_8_off",
-            x,
+            x + 1.0,
             black_led_y,
         );
     }
@@ -406,7 +408,7 @@ fn tb303(b: &mut Builder, r: usize) {
             led,
             "led",
             if lit { "led_8_on" } else { "led_8_off" },
-            x + 0.5,
+            x + 1.0,
             white_led_y,
         );
     }

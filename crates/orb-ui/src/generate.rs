@@ -142,18 +142,6 @@ pub fn glows(sk: &ScaleKeys, id: &str) -> bool {
     sk.get(synth).mask().is_some_and(|m| scale::key_in(m, n))
 }
 
-/// The green glow around a key of the chosen scale, painted under the key.
-pub fn paint_glow(ui: &Ui, key: Rect, scale: f32) {
-    let p = ui.painter();
-    for (grow, alpha) in [(3.5, 45), (2.0, 110)] {
-        p.rect_filled(
-            key.expand(grow * scale),
-            CornerRadius::same((2.5 * scale) as u8),
-            Color32::from_rgba_unmultiplied(GREEN.r(), GREEN.g(), GREEN.b(), alpha),
-        );
-    }
-}
-
 /// The items of a list: the indexes into `SCALES` or `KEYS`.
 fn options(sk: &ScaleKeys, synth: usize, field: Field) -> Vec<usize> {
     match field {

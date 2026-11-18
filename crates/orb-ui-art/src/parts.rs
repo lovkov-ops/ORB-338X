@@ -33,7 +33,7 @@ pub struct KnobDesign {
     pub track: &'static str,
 }
 
-pub const KNOBS: [KnobDesign; 5] = [
+pub const KNOBS: [KnobDesign; 6] = [
     KnobDesign {
         // (this fork: 10% under the original 30 px, the same look)
         name: "knob_303",
@@ -43,11 +43,11 @@ pub const KNOBS: [KnobDesign; 5] = [
         cy: 13.5,
         ring_r: 12.24,
         ring_w: 1.44,
-        body_r: 9.9,
-        ptr0: 2.7,
-        ptr1: 8.64,
-        ptr_w: 1.62,
-        body: pal::STEEL,
+        body_r: 9.75,
+        ptr0: 1.8,
+        ptr1: 6.0,
+        ptr_w: 1.3,
+        body: KNOB_CAP_303,
         pointer: pal::BLACK,
         arc: pal::RED,
         track: "#00000026",
@@ -121,6 +121,24 @@ pub const KNOBS: [KnobDesign; 5] = [
         arc: pal::AMBER,
         track: "#00000040",
     },
+    // The 303's LFO knobs (this fork): the 909's small knob with a red arc.
+    KnobDesign {
+        name: "knob_lfo",
+        w: 12.0,
+        h: 12.0,
+        cx: 6.0,
+        cy: 6.0,
+        ring_r: 5.3,
+        ring_w: 0.9,
+        body_r: 4.0,
+        ptr0: 1.3,
+        ptr1: 3.5,
+        ptr_w: 1.2,
+        body: pal::BLACK,
+        pointer: pal::WHITE,
+        arc: pal::RED,
+        track: "#0000002a",
+    },
 ];
 
 fn knobs(out: &mut Vec<Part>) {
@@ -131,8 +149,12 @@ fn knobs(out: &mut Vec<Part>) {
                 k.track,
                 k.ring_w,
             );
-            s.circle(k.cx, k.cy, k.body_r, k.body);
-            s.circle_stroke(k.cx, k.cy, k.body_r - 0.6, "#ffffff2a", 0.5);
+            if k.name == "knob_303" {
+                knob_body_303(s, k.cx, k.cy);
+            } else {
+                s.circle(k.cx, k.cy, k.body_r, k.body);
+                s.circle_stroke(k.cx, k.cy, k.body_r - 0.6, "#ffffff2a", 0.5);
+            }
         }));
         out.push(Part::new(format!("{}_pointer", k.name), k.w, k.h, |s| {
             // Drawn pointing up; the app rotates it around (cx, cy).
@@ -141,6 +163,29 @@ fn knobs(out: &mut Vec<Part>) {
             s.line(x0, y0, x1, y1, k.pointer, k.ptr_w);
         }));
     }
+}
+
+/// The 303's large knob (this fork, as the reference picture): a dark rim, a gray bezel with a
+/// darker inner edge, and a cap whose part above a chord just over the center is gray, the
+/// rest light (the color of the 303's paper).
+const KNOB_CAP_303: &str = "#c9cbd1";
+fn knob_body_303(s: &mut Svg, cx: f32, cy: f32) {
+    s.circle(cx, cy, 9.75, "#56575c");
+    s.circle(cx, cy, 8.9, "#acafb8");
+    s.circle(cx, cy, 6.6, "#888b92");
+    s.circle(cx, cy, 6.1, KNOB_CAP_303);
+    let (r, d) = (6.1_f32, 1.0_f32);
+    let half = (r * r - d * d).sqrt();
+    s.path(
+        &format!(
+            "M{} {} A{r} {r} 0 0 1 {} {} Z",
+            n(cx - half),
+            n(cy - d),
+            n(cx + half),
+            n(cy - d)
+        ),
+        "#acafb8",
+    );
 }
 
 /// The four colors of the 808's steps, which the app icon and the wordmark's underline reuse.
@@ -304,6 +349,20 @@ fn led_3d(s: &mut Svg, cx: f32, cy: f32, r: f32, on: bool, hue: &str) {
     ));
 }
 
+/// The 303's keys (this fork, as the reference picture): a border (dark on black, gray on the
+/// paper), a light rim, thicker at the bottom, and a white face. `face` is the face's color.
+#[allow(clippy::too_many_arguments)]
+fn key_303(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, border: &str, face: &str) {
+    s.rect(x, y, w, h, 2.0, border);
+    s.rect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, 1.6, "#c4c7cb");
+    s.rect(x + 1.25, y + 1.25, w - 2.5, h - 3.25, 1.3, face);
+}
+pub const KEY_FACE_303: &str = "#fbfbf8";
+const KEY_BORDER_303: &str = "#727274";
+const KEY_BORDER_DARK_303: &str = "#0d0e0f";
+/// A key of the chosen scale (the GENERATE menu): its face green.
+const KEY_SCALE_303: &str = "#7fdc8c";
+
 /// A keycap: a face over a 1.8 px darker lip, with a thin outline.
 fn keycap(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, face: &str, lip: &str) {
     s.rect(x, y, w, h, 2.2, lip);
@@ -405,11 +464,11 @@ fn lfo_modes(out: &mut Vec<Part>) {
                 ));
                 s.line(nx + 0.9, yc + 2.1, nx + 0.9, yc - 3.6, c, 0.7);
                 s.path_stroke(&flag, c, 0.7);
-                // the wave: the sine yellow, the random sine green, each with its glow
+                // the wave: the sine red, the random sine green, each with its glow
                 let (d, color, glow) = if hold {
                     (&random, pal::GREEN, WAVE_GLOW)
                 } else {
-                    (&sine, pal::YELLOW, "#f2c53159")
+                    (&sine, pal::RED, "#e2413b59")
                 };
                 s.path_stroke(d, glow, 2.8);
                 s.path_stroke(d, color, 1.2);
@@ -422,7 +481,7 @@ fn switches(out: &mut Vec<Part>) {
     lfo_modes(out);
     // The 303's waveform (this fork): no slider, the saw and the square side by side on one
     // black frame of the LFO mode buttons' size and look, each half a click target; the
-    // chosen one (position 0 saw, 1 square) green with a soft glow, the other a dull red.
+    // chosen one (position 0 saw, 1 square) white, the other gray.
     let (w, h) = (WAVE_W_303, WAVE_H_303);
     let half = w / 2.0;
     for pos in 0..2 {
@@ -432,16 +491,10 @@ fn switches(out: &mut Vec<Part>) {
             s.line(half, 2.5, half, h - 2.5, "#0e0f10", 1.0);
             let (sx, qx) = (half / 2.0 - 3.75, half + half / 2.0 - 3.75);
             let on = if pos == 0 {
-                (pal::GREEN, WAVE_OFF)
+                (KEY_FACE_303, WAVE_OFF)
             } else {
-                (WAVE_OFF, pal::GREEN)
+                (WAVE_OFF, KEY_FACE_303)
             };
-            let glow = if pos == 0 {
-                (WAVE_GLOW, "none")
-            } else {
-                ("none", WAVE_GLOW)
-            };
-            wave_glyphs(s, sx, qx, h / 2.0, glow, 2.8);
             wave_glyphs(s, sx, qx, h / 2.0, on, 1.3);
         }));
     }
@@ -678,30 +731,42 @@ fn pattern_buttons(out: &mut Vec<Part>) {
 }
 
 fn small_buttons(out: &mut Vec<Part>) {
-    for (w, h) in [(22.0, 10.0)] {
+    // the 303's pitch mode and clear keys: white keys, the pitch key's border dark on black
+    for (border, kind) in [(KEY_BORDER_DARK_303, "pitch"), (KEY_BORDER_303, "clear")] {
         for state in ["rest", "pressed"] {
-            out.push(Part::new(
-                format!("btn_pill_{}x{}_{state}", n(w), n(h)),
-                w,
-                h,
-                |s| {
-                    key_3d(s, 0.5, 0.0, w - 1.0, h, 2.0, "#a4aab2", pal::STEEL);
-                    if state == "pressed" {
-                        s.rect(0.5, 0.5, w - 1.0, h - 1.0, 2.0, "#00000040");
-                    }
-                },
-            ));
+            let (w, h) = (PILL_W_303, PILL_H_303);
+            out.push(Part::new(format!("btn_{kind}_{state}"), w, h, |s| {
+                key_303(s, 0.0, 0.0, w, h, border, KEY_FACE_303);
+                if state == "pressed" {
+                    s.rect(0.0, 0.0, w, h, 2.0, "#80808066");
+                }
+            }));
         }
     }
     // The 303's RNDM pill (this fork): the GENERATE menu's button, its name on it.
     for state in ["rest", "pressed"] {
         let (w, h) = (RNDM_W_303, RNDM_H_303);
         out.push(Part::new(format!("btn_rndm_{state}"), w, h, |s| {
-            key_3d(s, 0.5, 0.0, w - 1.0, h, 2.0, "#a4aab2", pal::STEEL);
+            key_303(
+                s,
+                0.0,
+                0.0,
+                w - 0.5,
+                h - 0.5,
+                KEY_BORDER_DARK_303,
+                KEY_FACE_303,
+            );
             if state == "pressed" {
-                s.rect(0.5, 0.5, w - 1.0, h - 1.0, 2.0, "#00000040");
+                s.rect(0.0, 0.0, w - 0.5, h - 0.5, 2.0, "#80808066");
             }
-            label(s, w / 2.0, h / 2.0, 4.0, pal::BLACK, "RNDM");
+            label(
+                s,
+                (w - 0.5) / 2.0,
+                (h - 0.5) / 2.0 - 0.5,
+                4.0,
+                pal::BLACK,
+                "RNDM",
+            );
         }));
     }
     // ... and while its menu is open: the button as it is, only its name green with a soft
@@ -709,48 +774,54 @@ fn small_buttons(out: &mut Vec<Part>) {
     {
         let (w, h) = (RNDM_W_303, RNDM_H_303);
         out.push(Part::new("btn_rndm_on", w, h, |s| {
-            key_3d(s, 0.5, 0.0, w - 1.0, h, 2.0, "#a4aab2", pal::STEEL);
+            key_303(s, 0.0, 0.0, w - 0.5, h - 0.5, KEY_BORDER_DARK_303, KEY_FACE_303);
             s.raw(
                 r#"<filter id="rndm_glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="0.9"/></filter><g filter="url(#rndm_glow)" opacity="0.9">"#,
             );
-            label(s, w / 2.0, h / 2.0, 4.0, pal::GREEN, "RNDM");
+            label(s, (w - 0.5) / 2.0, (h - 0.5) / 2.0 - 0.5, 4.0, pal::GREEN, "RNDM");
             s.raw("</g>");
-            label(s, w / 2.0, h / 2.0, 4.0, pal::GREEN, "RNDM");
+            label(s, (w - 0.5) / 2.0, (h - 0.5) / 2.0 - 0.5, 4.0, pal::GREEN, "RNDM");
         }));
     }
-    for state in ["rest", "pressed"] {
-        let (wh, bh) = (WHITE_KEY_H_303, BLACK_KEY_H_303);
-        out.push(Part::new(format!("key_white_{state}"), 9.0, wh, |s| {
-            key_3d(s, 0.5, 0.0, 8.0, wh, 1.5, "#c4c7cb", pal::WHITE);
-            if state == "pressed" {
-                s.rect(0.5, 0.0, 8.0, wh, 1.5, "#80808066");
+    // The 303's keys and flags (this fork): white keys with a border, gray on the paper and
+    // dark on the black keys' slots; a key of the chosen scale (the GENERATE menu) has a green
+    // face (`_scale`).
+    let (ww, bw, kh) = (WHITE_KEY_W_303, BLACK_KEY_W_303, KEY_H_303);
+    for state in ["rest", "pressed", "scale"] {
+        let face = if state == "scale" {
+            KEY_SCALE_303
+        } else {
+            KEY_FACE_303
+        };
+        for (name, w, border) in [
+            ("key_white", ww, KEY_BORDER_303),
+            ("key_black", bw, KEY_BORDER_DARK_303),
+            ("btn_flag", ww, KEY_BORDER_303),
+        ] {
+            if name == "btn_flag" && state == "scale" {
+                continue;
             }
-        }));
-        // this fork: the black key is a light button in its black slot (the slot is the
-        // background's), as the white one
-        out.push(Part::new(format!("key_black_{state}"), 8.0, bh, |s| {
-            key_3d(s, 0.0, 0.0, 8.0, bh, 1.5, "#c4c7cb", pal::WHITE);
-            if state == "pressed" {
-                s.rect(0.0, 0.0, 8.0, bh, 1.5, "#80808066");
-            }
-        }));
-        out.push(Part::new(format!("btn_flag_{state}"), 9.0, wh, |s| {
-            key_3d(s, 0.5, 0.0, 8.0, wh, 1.8, "#a4aab2", pal::STEEL);
-            if state == "pressed" {
-                s.rect(0.5, 0.0, 8.0, wh, 1.8, "#00000050");
-            }
-        }));
+            // the part in whole pixels, the key centered in it
+            let (pw, ph) = (w.ceil(), kh.ceil());
+            let x = (pw - w) / 2.0;
+            out.push(Part::new(format!("{name}_{state}"), pw, ph, |s| {
+                key_303(s, x, 0.0, w, kh, border, face);
+                if state == "pressed" {
+                    s.rect(x, 0.0, w, kh, 2.0, "#80808066");
+                }
+            }));
+        }
     }
 }
 
 fn leds(out: &mut Vec<Part>) {
-    for (state, color) in [("off", "#4a2a28"), ("on", pal::RED)] {
+    for (state, color) in [("off", "#6b302e"), ("on", pal::RED)] {
         out.push(Part::new(format!("led_8_{state}"), 8.0, 8.0, |s| {
             if state == "on" {
                 s.circle(4.0, 4.0, 4.0, "#e2413b40");
             }
-            s.circle(4.0, 4.0, 3.0, color);
-            s.circle_stroke(4.0, 4.0, 3.0, "#00000040", 0.5);
+            s.circle(4.0, 4.0, 2.75, color);
+            s.circle_stroke(4.0, 4.0, 2.75, "#00000059", 0.5);
         }));
     }
     // The 303's step LEDs (this fork): lit red for a step of the pattern's length, off past it
@@ -1140,48 +1211,57 @@ fn pattern_bg(out: &mut Vec<Part>) {
     }
 }
 
-/// The 303's key band: three blocks of one height 6 px apart, (x, y, w, h): pitch mode and
-/// clear, the keys, and the step flags with the edit step display. All span y 56..112: this
-/// fork lowered their top from 46, leaving a strip under the knobs for more buttons.
-pub const BAND_303: [(f32, f32, f32, f32); 3] = [
-    (12.0, 56.0, 34.0, 56.0),
-    (52.0, 56.0, 184.0, 56.0),
-    (242.0, 56.0, 112.0, 56.0),
-];
-/// This fork's keyboard look: the light paper of the keys and of the lower halves of the
-/// pitch/clear and the flags blocks, where those split from their black upper halves, and the
-/// black keys (the white key left of each, the note).
-pub const KEYS_PAPER_303: &str = "#e6e7ea";
-pub const PITCH_SPLIT_303: f32 = 87.5;
-pub const FLAGS_SPLIT_303: f32 = 81.5;
+/// The 303's key band (this fork, as the reference picture): one black frame (x, y, w, h)
+/// holding pitch mode and clear (12..46), the keys on light paper (46..242) and the flags with
+/// the step LEDs (242..354), 1 px of black between them. The pitch/clear and the flags blocks
+/// are black above and light below their splits.
+pub const BAND_303: (f32, f32, f32, f32) = (12.0, 54.0, 342.0, 58.0);
+const PAPER_X_303: (f32, f32) = (46.5, 241.5);
+pub const KEYS_PAPER_303: &str = "#e4e5e9";
+pub const PITCH_SPLIT_303: f32 = 88.0;
+pub const FLAGS_SPLIT_303: f32 = 80.0;
 pub const BLACK_NOTES_303: [(usize, u8); 5] = [(0, 1), (1, 3), (3, 6), (4, 8), (5, 10)];
+/// The keyboard's lines: 21 px apart from the first, left of the first C, to the last, right
+/// of the last C, down to just over the note names (their center height).
+const LINE_X0_303: f32 = 59.75;
+const LINE_END_303: f32 = 103.75;
+const NOTE_Y_303: f32 = 108.0;
+/// The black keys' slots: 13.5 wide, centered on a line, from the band's top.
+const SLOT_W_303: f32 = 13.5;
+const SLOT_END_303: f32 = 81.75;
 
 /// The rows of the key band (tops): the black keys' LEDs, the black keys, the white keys' (and
 /// flags') LEDs, the white keys and the flags.
-pub const KEY_ROWS_303: [f32; 4] = [58.0, 68.0, 83.0, 93.0];
-/// The heights of the 303's white keys (and flags) and black keys (16 and 15 before the band
-/// was lowered).
-pub const WHITE_KEY_H_303: f32 = 13.0;
-pub const BLACK_KEY_H_303: f32 = 12.0;
-/// The tops of the pitch mode LED, the pitch mode pill and the clear pill, and the centers of
-/// the PITCH and CLEAR labels.
-pub const PITCH_LED_Y_303: f32 = 65.0;
-pub const PITCH_Y_303: f32 = 75.0;
-pub const CLEAR_Y_303: f32 = 96.0;
-const PITCH_LABEL_Y_303: f32 = 61.0;
-const CLEAR_LABEL_Y_303: f32 = 91.5;
-/// The left edges of the 303's white keys and its flags (DOWN, UP, ACCENT, SLIDE, NOTE),
-/// the flags 22 px apart.
-pub const WHITE_303: [f32; 8] = [66.0, 87.0, 108.0, 129.0, 150.0, 171.0, 192.0, 213.0];
-pub const FLAGS_303: [f32; 5] = [250.5, 272.5, 294.5, 316.5, 338.5];
+pub const KEY_ROWS_303: [f32; 4] = [55.75, 65.0, 80.75, 90.0];
+/// The widths of the white keys (and flags) and of the black keys, and their height.
+pub const WHITE_KEY_W_303: f32 = 10.0;
+pub const BLACK_KEY_W_303: f32 = 9.5;
+pub const KEY_H_303: f32 = 14.5;
+/// The tops of the pitch mode LED, the pitch mode key and the clear key, the keys' size, and
+/// the centers of the PITCH and CLEAR labels.
+pub const PITCH_LED_Y_303: f32 = 62.75;
+pub const PITCH_Y_303: f32 = 72.0;
+pub const CLEAR_Y_303: f32 = 95.0;
+pub const PILL_W_303: f32 = 22.0;
+pub const PILL_H_303: f32 = 12.0;
+const PITCH_LABEL_Y_303: f32 = 57.6;
+const CLEAR_LABEL_Y_303: f32 = 91.3;
+/// The left edges of the 303's white keys (centered between the lines) and its flags (DOWN,
+/// UP, ACCENT, SLIDE, NOTE), the flags 22 px apart.
+pub const WHITE_303: [f32; 8] = [65.25, 86.25, 107.25, 128.25, 149.25, 170.25, 191.25, 212.25];
+pub const FLAGS_303: [f32; 5] = [250.0, 272.0, 294.0, 316.0, 338.0];
+/// The left edge of the black key right of white key `i`: centered on the line between them.
+pub fn black_x_303(i: usize) -> f32 {
+    LINE_X0_303 + 21.0 * (i + 1) as f32 - BLACK_KEY_W_303 / 2.0
+}
 /// The step LEDs (this fork, instead of the edit step display): 2 rows of 8 in the flags
 /// block's top part, steps 1-8 above 9-16, left-aligned with the flags; their size and pitch.
 /// The EDIT STEP label is over them at the block's top, the RNDM pill right of them.
 pub const STEP_LED_303: f32 = 8.0;
 const STEP_LED_PITCH_303: f32 = 9.0;
 const STEP_LED_X_303: f32 = 246.5;
-const STEP_LED_Y_303: f32 = 63.0;
-const EDIT_LABEL_Y_303: f32 = 59.5;
+const STEP_LED_Y_303: f32 = 61.0;
+const EDIT_LABEL_Y_303: f32 = 57.6;
 
 /// The left and top of step `i`'s LED (0..=15).
 pub fn step_led_303(i: usize) -> (f32, f32) {
@@ -1192,11 +1272,11 @@ pub fn step_led_303(i: usize) -> (f32, f32) {
 }
 
 /// The RNDM button (this fork: the GENERATE menu's button, moved from the knob row): right of
-/// the step LEDs, 4 px from the block's right edge (354), as high as the two LED rows.
-pub const RNDM_W_303: f32 = 28.0;
-pub const RNDM_H_303: f32 = 17.0;
+/// the step LEDs, 4 px from the band's right edge (354), level with the two LED rows.
+pub const RNDM_W_303: f32 = 29.0;
+pub const RNDM_H_303: f32 = 15.0;
 pub fn rndm_303() -> (f32, f32) {
-    (354.0 - 4.0 - RNDM_W_303, STEP_LED_Y_303)
+    (354.0 - 4.0 - RNDM_W_303 + 0.25, STEP_LED_Y_303 + 1.0)
 }
 /// The five large knobs (CUTOFF to ACCENT): their size (`knob_303`) and top. TUNE is the small
 /// knob under the waveform.
@@ -1228,8 +1308,8 @@ pub fn knob_x_303(k: usize) -> f32 {
 /// each labeled above. The knobs' centers' offset from the large knob's center line and their
 /// center height, the labels' center height and cap height, the mode buttons' top.
 pub const LFO_DX_303: f32 = LFO_MODE_W / 2.0 + 1.0 + 6.0;
-const LFO_KNOB_CY_303: f32 = 48.0;
-const LFO_LABEL_Y_303: f32 = 39.3;
+const LFO_KNOB_CY_303: f32 = 46.0;
+const LFO_LABEL_Y_303: f32 = 37.3;
 const LFO_LABEL_CAP_303: f32 = 3.0;
 pub const LFO_MODE_Y_303: f32 = LFO_KNOB_CY_303 - LFO_MODE_H / 2.0;
 
@@ -1255,8 +1335,8 @@ pub const WAVE_W_303: f32 = LFO_MODE_W;
 pub const WAVE_H_303: f32 = LFO_MODE_H;
 pub const WAVE_X_303: f32 = LEFT_X_303 - WAVE_W_303 / 2.0;
 pub const WAVE_Y_303: f32 = LFO_MODE_Y_303;
-/// The waveform not chosen (a dull red) and the glow under the one chosen.
-const WAVE_OFF: &str = "#8a3a33";
+/// The waveform not chosen (gray) and the green glow of the LFO's random sine and sync.
+const WAVE_OFF: &str = "#5e6063";
 const WAVE_GLOW: &str = "#53d86a40";
 /// The LFO mode buttons (`lfo_mode_*`): their size (two equal cells, the note and the wave),
 /// and the note's color when off (a dull blue).
@@ -1266,7 +1346,7 @@ const LFO_SYNC_OFF: &str = "#34557f";
 
 fn tb303_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tb303", 366.0, 115.0, |s| {
-        face(s, 366.0, 115.0, pal::PAPER);
+        face(s, 366.0, 115.0, KNOB_CAP_303);
         let ink = pal::BLACK;
         // the waveform switch under TUNE, labeled above it like the LFO row's knobs
         label(
@@ -1297,52 +1377,52 @@ fn tb303_bg(out: &mut Vec<Part>) {
             label(s, mid + LFO_MODE_W / 4.0, LFO_LABEL_Y_303, cap, ink, "WF");
             label(s, ax, LFO_LABEL_Y_303, cap, ink, "AMT");
         }
-        // The key band: pitch mode and clear, the keys on gray, the flags.
-        // The key band (this fork, a keyboard): the pitch/clear and the flags blocks black above
-        // and light below; the keys on light keyboard paper with lines between the white keys,
-        // the black keys in black slots, every key named under it.
-        for (i, (x, y, w, h)) in BAND_303.into_iter().enumerate() {
-            s.rect(x, y, w, h, 4.0, pal::BLACK);
-            let split = [PITCH_SPLIT_303, y, FLAGS_SPLIT_303][i];
-            s.rect(
-                x + 1.2,
-                split,
-                w - 2.4,
-                y + h - 1.2 - split,
-                3.0,
-                KEYS_PAPER_303,
-            );
+        // The key band (this fork, a keyboard as the reference picture): one black frame; the
+        // pitch/clear and the flags blocks black above and light below; the keys on light
+        // paper with lines between the white keys, the black keys in black slots, every key
+        // named under it.
+        let (bx, by, bw, bh) = BAND_303;
+        s.rect(bx, by, bw, bh, 4.0, pal::BLACK);
+        let bottom = by + bh - 1.0;
+        let (px0, px1) = PAPER_X_303;
+        s.rect(px0, by + 1.0, px1 - px0, bh - 2.0, 0.0, KEYS_PAPER_303);
+        for (x0, x1, split) in [
+            (bx + 1.0, px0 - 1.0, PITCH_SPLIT_303),
+            (px1 + 1.0, bx + bw - 1.0, FLAGS_SPLIT_303),
+        ] {
+            s.rect(x0, split, x1 - x0, bottom - split, 3.0, KEYS_PAPER_303);
+            s.rect(x0, split, x1 - x0, 4.0, 0.0, KEYS_PAPER_303);
         }
-        let (_, ky, _, kh) = BAND_303[1];
-        for &w in &WHITE_303[..WHITE_303.len() - 1] {
-            let x = w + 15.0;
-            s.line(x, ky + 1.2, x, ky + kh - 1.2, "#9a9da3", 0.6);
+        for k in 0..9 {
+            let x = LINE_X0_303 + 21.0 * k as f32;
+            s.line(x, by + 1.0, x, LINE_END_303, "#727274", 0.7);
         }
         for (i, _) in BLACK_NOTES_303 {
-            let x = WHITE_303[i] + 11.0;
-            s.rect(x - 2.0, ky + 1.2, 12.0, 26.0, 2.0, pal::BLACK);
+            let x = black_x_303(i) + BLACK_KEY_W_303 / 2.0 - SLOT_W_303 / 2.0;
+            s.rect(x, by, SLOT_W_303, SLOT_END_303 - by, 2.0, pal::BLACK);
         }
         let ink = pal::BLACK;
-        let note_y = ky + kh - 3.6;
+        let note_y = NOTE_Y_303;
         for (x, name) in WHITE_303
             .into_iter()
             .zip(["C", "D", "E", "F", "G", "A", "B", "C"])
         {
-            label(s, x + 4.5, note_y, 2.4, ink, name);
+            label(s, x + WHITE_KEY_W_303 / 2.0, note_y, 2.4, ink, name);
         }
         for ((i, _), name) in BLACK_NOTES_303.into_iter().zip(["C", "D", "F", "G", "A"]) {
             // the sharp: the letter and a small # up right of it, centered together
-            let x = WHITE_303[i] + 15.0;
+            let x = black_x_303(i) + BLACK_KEY_W_303 / 2.0;
             let (lw, sw) = (font::text_width(2.4, name), font::text_width(1.6, "#"));
             let x0 = x - (lw + 0.4 + sw) / 2.0;
             text(s, x0, note_y, 2.4, Anchor::Start, ink, name);
             text(s, x0 + lw + 0.4, note_y - 0.9, 1.6, Anchor::Start, ink, "#");
         }
         // "EDIT STEP" at the flags block's top, over the step LEDs
-        let (bx, _, bw, _) = BAND_303[2];
+        let (lx, _) = step_led_303(0);
+        let (rx, _) = step_led_303(7);
         label(
             s,
-            bx + bw / 2.0,
+            (lx + rx + STEP_LED_303) / 2.0,
             EDIT_LABEL_Y_303,
             3.2,
             pal::INK,
@@ -1355,7 +1435,14 @@ fn tb303_bg(out: &mut Vec<Part>) {
             .into_iter()
             .zip(["DOWN", "UP", "ACCENT", "SLIDE", "NOTE"])
         {
-            label(s, x + 4.5, 109.0, 3.2, pal::BLACK, name);
+            label(
+                s,
+                x + WHITE_KEY_W_303 / 2.0,
+                NOTE_Y_303,
+                3.2,
+                pal::BLACK,
+                name,
+            );
         }
     }));
 }

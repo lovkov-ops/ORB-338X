@@ -992,15 +992,17 @@ impl App {
                 {
                     self.pattern_menu(&r, row);
                 }
-                // the 303's keys of the chosen scale glow under the key (generate.rs)
-                if generate::glows(&self.scale_keys, &c.id) {
-                    generate::paint_glow(ui, rect, view.scale);
-                }
                 // the RNDM button while its menu is open (this fork): its name glows green
-                let name = match generate::synth_of(&c.id) {
+                let mut name = match generate::synth_of(&c.id) {
                     Some(k) if self.generate_open == Some(k) => "btn_rndm_on".to_string(),
                     _ => self.panel.part_name(c, down, now),
                 };
+                // the 303's keys of the chosen scale (generate.rs): the key's face green
+                if generate::glows(&self.scale_keys, &c.id)
+                    && let Some(key) = name.strip_suffix("_rest")
+                {
+                    name = format!("{key}_scale");
+                }
                 paint_part(ui, &name, rect);
             }
         }
