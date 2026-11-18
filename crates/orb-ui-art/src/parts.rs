@@ -360,8 +360,27 @@ fn key_303(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, border: &str, face: &str
 pub const KEY_FACE_303: &str = "#fbfbf8";
 const KEY_BORDER_303: &str = "#727274";
 const KEY_BORDER_DARK_303: &str = "#0d0e0f";
-/// A key of the chosen scale (the GENERATE menu): its face green.
-const KEY_SCALE_303: &str = "#7fdc8c";
+/// A key of the chosen scale (the GENERATE menu): as if a green LED inside the key's slightly
+/// translucent plastic lit it, the face a pale green, brighter in its middle and fading to the
+/// edges.
+fn key_scale_303(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, border: &str) {
+    key_303(s, x, y, w, h, border, "#eef8ef");
+    s.raw(concat!(
+        "<defs><radialGradient id=\"scale_glow\" cx=\"0.5\" cy=\"0.45\" r=\"0.6\">",
+        "<stop offset=\"0\" stop-color=\"#7fe08e\" stop-opacity=\"0.85\"/>",
+        "<stop offset=\"0.55\" stop-color=\"#a6eab0\" stop-opacity=\"0.45\"/>",
+        "<stop offset=\"1\" stop-color=\"#d8f4dc\" stop-opacity=\"0\"/>",
+        "</radialGradient></defs>",
+    ));
+    s.rect(
+        x + 1.25,
+        y + 1.25,
+        w - 2.5,
+        h - 3.25,
+        1.3,
+        "url(#scale_glow)",
+    );
+}
 
 /// A keycap: a face over a 1.8 px darker lip, with a thin outline.
 fn keycap(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, face: &str, lip: &str) {
@@ -481,7 +500,8 @@ fn switches(out: &mut Vec<Part>) {
     lfo_modes(out);
     // The 303's waveform (this fork): no slider, the saw and the square side by side on one
     // black frame of the LFO mode buttons' size and look, each half a click target; the
-    // chosen one (position 0 saw, 1 square) white, the other gray.
+    // chosen one (position 0 saw, 1 square) green with a soft glow, the other a dull red
+    // like an unlit LED.
     let (w, h) = (WAVE_W_303, WAVE_H_303);
     let half = w / 2.0;
     for pos in 0..2 {
@@ -491,10 +511,16 @@ fn switches(out: &mut Vec<Part>) {
             s.line(half, 2.5, half, h - 2.5, "#0e0f10", 1.0);
             let (sx, qx) = (half / 2.0 - 3.75, half + half / 2.0 - 3.75);
             let on = if pos == 0 {
-                (KEY_FACE_303, WAVE_OFF)
+                (pal::GREEN, WAVE_OFF)
             } else {
-                (WAVE_OFF, KEY_FACE_303)
+                (WAVE_OFF, pal::GREEN)
             };
+            let glow = if pos == 0 {
+                (WAVE_GLOW, "none")
+            } else {
+                ("none", WAVE_GLOW)
+            };
+            wave_glyphs(s, sx, qx, h / 2.0, glow, 2.8);
             wave_glyphs(s, sx, qx, h / 2.0, on, 1.3);
         }));
     }
@@ -788,11 +814,6 @@ fn small_buttons(out: &mut Vec<Part>) {
     // face (`_scale`).
     let (ww, bw, kh) = (WHITE_KEY_W_303, BLACK_KEY_W_303, KEY_H_303);
     for state in ["rest", "pressed", "scale"] {
-        let face = if state == "scale" {
-            KEY_SCALE_303
-        } else {
-            KEY_FACE_303
-        };
         for (name, w, border) in [
             ("key_white", ww, KEY_BORDER_303),
             ("key_black", bw, KEY_BORDER_DARK_303),
@@ -805,7 +826,11 @@ fn small_buttons(out: &mut Vec<Part>) {
             let (pw, ph) = (w.ceil(), kh.ceil());
             let x = (pw - w) / 2.0;
             out.push(Part::new(format!("{name}_{state}"), pw, ph, |s| {
-                key_303(s, x, 0.0, w, kh, border, face);
+                if state == "scale" {
+                    key_scale_303(s, x, 0.0, w, kh, border);
+                } else {
+                    key_303(s, x, 0.0, w, kh, border, KEY_FACE_303);
+                }
                 if state == "pressed" {
                     s.rect(x, 0.0, w, kh, 2.0, "#80808066");
                 }
@@ -1335,8 +1360,9 @@ pub const WAVE_W_303: f32 = LFO_MODE_W;
 pub const WAVE_H_303: f32 = LFO_MODE_H;
 pub const WAVE_X_303: f32 = LEFT_X_303 - WAVE_W_303 / 2.0;
 pub const WAVE_Y_303: f32 = LFO_MODE_Y_303;
-/// The waveform not chosen (gray) and the green glow of the LFO's random sine and sync.
-const WAVE_OFF: &str = "#5e6063";
+/// The waveform not chosen (a dull red, as an unlit LED) and the green glow of the chosen one
+/// (and of the LFO's random sine and sync).
+const WAVE_OFF: &str = "#6b302e";
 const WAVE_GLOW: &str = "#53d86a40";
 /// The LFO mode buttons (`lfo_mode_*`): their size (two equal cells, the note and the wave),
 /// and the note's color when off (a dull blue).
