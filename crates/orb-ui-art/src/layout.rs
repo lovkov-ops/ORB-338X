@@ -180,6 +180,9 @@ const KNOB_808_RED: usize = 1;
 const KNOB_808_WHITE: usize = 2;
 const KNOB_909: usize = 3;
 const KNOB_LFO: usize = 5;
+/// The top of the header meters (the mixer's and the effects', 12 high): centered on the
+/// header's face, 2..18.7, above its 1.3 px darker lip.
+const HEADER_METER_Y: f32 = 4.35;
 const KNOB_22: usize = 4;
 
 /// The control rectangles of the whole panel, with the demo state used for
@@ -536,9 +539,9 @@ fn mixer(b: &mut Builder, c: usize) {
     b.part(
         "meter",
         "meter",
-        &format!("meter_8x14_{}", [6, 5, 8, 3][c]),
+        &format!("meter_8x12_{}", [6, 5, 8, 3][c]),
         58.0,
-        4.0,
+        HEADER_METER_Y,
     );
     // Pan and the delay send side by side under the header (labels at 52.5), then the fader
     // under PAN and the three routing keys stacked under DELAY, centered on the fader.
@@ -573,7 +576,14 @@ fn master(b: &mut Builder) {
 fn fx_header(b: &mut Builder, on: bool, level: u8) {
     let state = if on { "on" } else { "off" };
     b.part("on", "toggle", &format!("power_14x14_{state}"), 4.0, 4.0);
-    b.part("meter", "meter", &format!("meter_8x14_{level}"), 70.0, 4.0);
+    // the meter centered on the header's face (2..18.7, above its darker lip)
+    b.part(
+        "meter",
+        "meter",
+        &format!("meter_8x12_{level}"),
+        70.0,
+        HEADER_METER_Y,
+    );
 }
 
 /// The effects under the master (this fork's order, top to bottom): DELAY (148..241), DIST

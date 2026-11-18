@@ -337,7 +337,7 @@ tr909.step15	tr909	steps	step909_b_0	410	484	21	22
 tr909.step16	tr909	steps	step909_b_0	431	484	21	22
 mixer1.activity	mixer1	chanled	power_14x14_off	460	54	14	14
 mixer1.solo	mixer1	toggle	solo_14x14_off	475	54	14	14
-mixer1.meter	mixer1	meter	meter_8x14_6	514	54	8	14
+mixer1.meter	mixer1	meter	meter_8x12_6	514	54.35	8	12
 mixer1.pan	mixer1	knob	knob_22	464	76	22	22
 mixer1.delay	mixer1	knob	knob_22	496	76	22	22
 mixer1.level	mixer1	fader	fader_track	467.5	108	15	54
@@ -346,7 +346,7 @@ mixer1.pcf	mixer1	radio	mixsw_pcf_off	493	128	28	13
 mixer1.comp	mixer1	radio	mixsw_comp_off	493	144	28	13
 mixer2.activity	mixer2	chanled	power_14x14_off	460	169	14	14
 mixer2.solo	mixer2	toggle	solo_14x14_off	475	169	14	14
-mixer2.meter	mixer2	meter	meter_8x14_5	514	169	8	14
+mixer2.meter	mixer2	meter	meter_8x12_5	514	169.35	8	12
 mixer2.pan	mixer2	knob	knob_22	464	191	22	22
 mixer2.delay	mixer2	knob	knob_22	496	191	22	22
 mixer2.level	mixer2	fader	fader_track	467.5	223	15	54
@@ -355,7 +355,7 @@ mixer2.pcf	mixer2	radio	mixsw_pcf_on	493	243	28	13
 mixer2.comp	mixer2	radio	mixsw_comp_off	493	259	28	13
 mixer3.activity	mixer3	chanled	power_14x14_off	460	284	14	14
 mixer3.solo	mixer3	toggle	solo_14x14_off	475	284	14	14
-mixer3.meter	mixer3	meter	meter_8x14_8	514	284	8	14
+mixer3.meter	mixer3	meter	meter_8x12_8	514	284.35	8	12
 mixer3.pan	mixer3	knob	knob_22	464	306	22	22
 mixer3.delay	mixer3	knob	knob_22	496	306	22	22
 mixer3.level	mixer3	fader	fader_track	467.5	338	15	54
@@ -364,7 +364,7 @@ mixer3.pcf	mixer3	radio	mixsw_pcf_off	493	358	28	13
 mixer3.comp	mixer3	radio	mixsw_comp_off	493	374	28	13
 mixer4.activity	mixer4	chanled	power_14x14_off	460	399	14	14
 mixer4.solo	mixer4	toggle	solo_14x14_off	475	399	14	14
-mixer4.meter	mixer4	meter	meter_8x14_3	514	399	8	14
+mixer4.meter	mixer4	meter	meter_8x12_3	514	399.35	8	12
 mixer4.pan	mixer4	knob	knob_22	464	421	22	22
 mixer4.delay	mixer4	knob	knob_22	496	421	22	22
 mixer4.level	mixer4	fader	fader_track	467.5	453	15	54
@@ -376,7 +376,7 @@ master.meter_r	master	meter	meter_15x56_7	577	74	15	56
 master.fader	master	fader	fader_track	559	75	15	54
 master.comp	master	radio	mixsw_comp_off	553	132	28	13
 pcf.on	pcf	toggle	power_14x14_on	530	310	14	14
-pcf.meter	pcf	meter	meter_8x14_4	596	310	8	14
+pcf.meter	pcf	meter	meter_8x12_4	596	310.35	8	12
 pcf.pattern	pcf	display	segb_0..9,segb_blank	536	329	18	16
 pcf.pattern_up	pcf	repeat	arrow_inc_rest	555	328	11	9
 pcf.pattern_down	pcf	repeat	arrow_dec_rest	555	337	11	9
@@ -386,7 +386,7 @@ pcf.q	pcf	fader	fader_track	549	352	15	54
 pcf.amt	pcf	fader	fader_track	568	352	15	54
 pcf.dec	pcf	fader	fader_track	587	352	15	54
 delay.on	delay	toggle	power_14x14_off	530	152	14	14
-delay.meter	delay	meter	meter_8x14_0	596	152	8	14
+delay.meter	delay	meter	meter_8x12_0	596	152.35	8	12
 delay.steps	delay	display	segb_0..9,segb_blank	535	171	19	16
 delay.steps_up	delay	repeat	arrow_inc_rest	555	170	11	9
 delay.steps_down	delay	repeat	arrow_dec_rest	555	179	11	9
@@ -394,11 +394,11 @@ delay.triplet	delay	vswitch	switch_fx_0	575	170	9	18
 delay.pan	delay	knob	knob_22	536	203	22	22
 delay.feedback	delay	knob	knob_22	577	203	22	22
 dist.on	dist	toggle	power_14x14_off	530	245	14	14
-dist.meter	dist	meter	meter_8x14_0	596	245	8	14
+dist.meter	dist	meter	meter_8x12_0	596	245.35	8	12
 dist.amount	dist	knob	knob_22	536	268	22	22
 dist.shape	dist	knob	knob_22	577	268	22	22
 comp.on	comp	toggle	power_14x14_on	530	421	14	14
-comp.meter	comp	meter	meter_8x14_3	596	421	8	14
+comp.meter	comp	meter	meter_8x12_3	596	421.35	8	12
 comp.gr1	comp	meter	gr_led_off	535.5	442	7	10
 comp.gr2	comp	meter	gr_led_off	542.5	442	7	10
 comp.gr3	comp	meter	gr_led_off	549.5	442	7	10

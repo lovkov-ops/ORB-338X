@@ -1001,7 +1001,7 @@ const LCD_OFF_LIGHT: &str = "#3a1a17";
 fn meters(out: &mut Vec<Part>) {
     // The channels' and effects' header meter (bare segments on the header), and the
     // master's two (segments in a dark well).
-    for (w, h) in [(8.0, 14.0), (15.0, 56.0)] {
+    for (w, h) in [(8.0, 12.0), (15.0, 56.0)] {
         let header = w == 8.0;
         let pad = if header { 0.0 } else { 1.5 };
         for level in 0..=10 {
