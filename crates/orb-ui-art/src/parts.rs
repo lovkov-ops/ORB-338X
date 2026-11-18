@@ -97,12 +97,12 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.75,
-        ring_w: 0.6,
+        ring_r: 5.6,
+        ring_w: 0.9,
         body_r: 4.5,
-        ptr0: 0.9,
-        ptr1: 4.0,
-        ptr_w: 1.3,
+        ptr0: 1.4,
+        ptr1: 4.2,
+        ptr_w: 0.9,
         body: "#4f5050",
         pointer: pal::ORANGE,
         arc: pal::ORANGE,
@@ -1713,13 +1713,11 @@ fn key909(s: &mut Svg, w: f32, h: f32, fill: &str) {
     s.rect(2.0, 3.0, w - 4.0, h - 6.0, 1.5, fill);
 }
 
-/// A 909 key's light: a small pill centered at (`cx`, `cy`).
+/// A 909 key's light: a small pill centered at (`cx`, `cy`), 8 x 3, no glow (as the
+/// reference picture).
 fn led909(s: &mut Svg, cx: f32, cy: f32, color: &str) {
-    if color != LED_OFF_909 {
-        s.rect(cx - 4.6, cy - 2.6, 9.2, 5.2, 2.6, &format!("{color}40"));
-    }
-    s.rect(cx - 3.0, cy - 1.5, 6.0, 3.0, 1.5, color);
-    s.rect_stroke(cx - 3.0, cy - 1.5, 6.0, 3.0, 1.5, "#00000040", 0.5);
+    s.rect(cx - 4.0, cy - 1.5, 8.0, 3.0, 1.5, color);
+    s.rect_stroke(cx - 4.0, cy - 1.5, 8.0, 3.0, 1.5, "#00000040", 0.5);
 }
 
 /// The 909's header pill of group `i` (dark, its name orange) and its name pill (light).
