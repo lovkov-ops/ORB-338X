@@ -157,7 +157,11 @@ fn knobs(out: &mut Vec<Part>) {
             }
         }));
         out.push(Part::new(format!("{}_pointer", k.name), k.w, k.h, |s| {
-            // Drawn pointing up; the app rotates it around (cx, cy).
+            // Drawn pointing up; the app rotates it around (cx, cy). The 303's knob turns its
+            // cap's darker part with the pointer (this fork).
+            if k.name == "knob_303" {
+                knob_cap_303(s, k.cx, k.cy);
+            }
             let (x0, y0) = polar(k.cx, k.cy, k.ptr0, 0.0);
             let (x1, y1) = polar(k.cx, k.cy, k.ptr1, 0.0);
             s.line(x0, y0, x1, y1, k.pointer, k.ptr_w);
@@ -166,14 +170,19 @@ fn knobs(out: &mut Vec<Part>) {
 }
 
 /// The 303's large knob (this fork, as the reference picture): a dark rim, a gray bezel with a
-/// darker inner edge, and a cap whose part above a chord just over the center is gray, the
-/// rest light (the color of the 303's paper).
+/// darker inner edge, and a light cap (the color of the 303's paper); the cap's part above a
+/// chord just over the center is gray and turns with the pointer (`knob_cap_303`, drawn on the
+/// pointer's layer), a stylized 3D look of the physical knob.
 const KNOB_CAP_303: &str = "#c9cbd1";
 fn knob_body_303(s: &mut Svg, cx: f32, cy: f32) {
     s.circle(cx, cy, 9.75, "#56575c");
     s.circle(cx, cy, 8.9, "#acafb8");
     s.circle(cx, cy, 6.6, "#888b92");
     s.circle(cx, cy, 6.1, KNOB_CAP_303);
+}
+
+/// The 303 knob cap's darker part, pointing up like the pointer that turns it.
+fn knob_cap_303(s: &mut Svg, cx: f32, cy: f32) {
     let (r, d) = (6.1_f32, 1.0_f32);
     let half = (r * r - d * d).sqrt();
     s.path(
