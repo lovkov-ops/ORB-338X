@@ -212,9 +212,6 @@ pub struct App {
     /// The last press of a SOLO or MUTE button: its id, the time and whether it was lit (a
     /// second press soon after on a lit one is a double click: all of its kind go off).
     mix_press: Option<(String, f64, bool)>,
-    /// The last FX key press of a FLIP face (this fork): its id and time, for the double
-    /// click that sets every sound's effects switch of the drum machine.
-    fx_press: Option<(String, f64)>,
     /// The engine tables the pitch mode's heard notes render with (`audition.rs`), made once.
     pub(crate) audition_tables: Option<std::sync::Arc<orb_engine::tables::Tables>>,
     /// Whether the logo plays its startup animation (task-114): the panel once, from the first
@@ -300,7 +297,6 @@ impl App {
             pattern_clip: None,
             clip_text: None,
             mix_press: None,
-            fx_press: None,
             audition_tables: None,
             logo_anim: false,
             logo_start: None,
@@ -1000,13 +996,17 @@ impl App {
                             }
                             if matches!(c.name(), "solo" | "mutebtn" | "activity") {
                                 self.mix_button(c, now);
-                            } else if crate::model::FLIP_FACES.contains(&c.section.as_str())
-                                && c.name().starts_with("fx")
-                            {
-                                self.fx_button(c, now);
                             } else {
                                 self.panel.press(&c.id, now);
                             }
+                        }
+                        // an FX key of a FLIP face (this fork): a double click, as on the
+                        // knobs, sets every sound of the drum machine
+                        if r.double_clicked()
+                            && crate::model::FLIP_FACES.contains(&c.section.as_str())
+                            && c.name().starts_with("fx")
+                        {
+                            self.fx_double_click(c);
                         }
                     }
                     // A click anywhere on a two-position switch flips the position it shows; the
@@ -1062,23 +1062,14 @@ impl App {
         }
     }
 
-    /// An FX key of a FLIP face (this fork): a click switches the sound's effects; a double
-    /// click (the second click 0.2 to 0.4 s after the first, `FX_DOUBLE`) sets every sound of
-    /// the drum machine as the first click left this one, all on or all off. Faster or slower,
-    /// the second click is a click of its own.
-    fn fx_button(&mut self, c: &Ctl, now: f64) {
-        let double = self
-            .fx_press
-            .take()
-            .is_some_and(|(id, t)| id == c.id && FX_DOUBLE.contains(&(now - t)));
-        if double {
-            let k = usize::from(c.section == "tr909f");
-            let on = self.panel.toggle_on(&c.id);
-            self.panel.set_all_fx(k, on);
-        } else {
-            self.panel.press(&c.id, now);
-            self.fx_press = Some((c.id.clone(), now));
-        }
+    /// A double click on an FX key of a FLIP face (this fork; egui's double click, as the
+    /// knobs take it): every sound of the drum machine as the first click left this one, all
+    /// on or all off. Each click switched the key, so it is back as it was: the first click
+    /// left it the other way.
+    fn fx_double_click(&mut self, c: &Ctl) {
+        let k = usize::from(c.section == "tr909f");
+        let on = !self.panel.toggle_on(&c.id);
+        self.panel.set_all_fx(k, on);
     }
 
     /// The 808's mod window: the current kit's `splash.jpg` (the embedded standard mod's for the
@@ -1451,9 +1442,6 @@ fn pattern_button(id: &str) -> Option<(usize, u8)> {
     let b: u8 = name.strip_prefix("pattern")?.parse().ok()?;
     ((1..=4).contains(&row) && (1..=8).contains(&b)).then(|| (row - 1, b - 1))
 }
-
-/// How long after the first click on an FX key the second makes a double click (seconds).
-const FX_DOUBLE: std::ops::RangeInclusive<f64> = 0.2..=0.4;
 
 fn part_size(name: &str) -> (f32, f32) {
     match name {
