@@ -951,18 +951,8 @@ impl App {
                 paint_part(ui, &name, rect);
                 // the step's number on its LED (this fork), dark on the lit colors
                 let n = c.name().strip_prefix("stepled").unwrap_or("");
-                let ink = if name.ends_with("off") {
-                    egui::Color32::from_rgb(0x9a, 0x5c, 0x56)
-                } else {
-                    egui::Color32::from_rgba_unmultiplied(0x2a, 0x08, 0x06, 0xe0)
-                };
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    n,
-                    egui::FontId::proportional(4.6 * view.scale),
-                    ink,
-                );
+                let off = if name.ends_with("off") { "_off" } else { "" };
+                paint_part(ui, &format!("stepnum_{n}{off}"), rect);
             }
             "fader" => self.fader(ui, view, c, rect),
             "display" => {
@@ -1392,13 +1382,13 @@ impl App {
         let (name, y) = if upper {
             (["LC", "MC", "HC", "CL", "MA"][i - 3], 46.0)
         } else {
-            (names[i], 75.5)
+            (names[i], 75.0)
         };
-        let fx = o8.0 + 6.0 + 29.5 * (i as f32 + 0.5) - 11.0;
+        let fx = o8.0 + 10.0 + 29.5 * i as f32;
         paint_part(
             ui,
             &format!("pill808_{name}_on"),
-            view.rect(fx, o8.1 + y, 22.0, 9.0),
+            view.rect(fx, o8.1 + y, 21.0, 10.0),
         );
         // The 909's (this fork): the name pill orange; the accent's header pill.
         let i = self.panel.inst909;

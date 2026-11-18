@@ -35,7 +35,7 @@ pub struct KnobDesign {
     pub outline: &'static str,
 }
 
-pub const KNOBS: [KnobDesign; 6] = [
+pub const KNOBS: [KnobDesign; 7] = [
     KnobDesign {
         // (this fork: 10% under the original 30 px, the same look)
         name: "knob_303",
@@ -61,7 +61,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.75,
+        ring_r: 5.9,
         ring_w: 0.9,
         body_r: 4.5,
         ptr0: 1.0,
@@ -79,7 +79,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.75,
+        ring_r: 5.9,
         ring_w: 0.9,
         body_r: 4.5,
         ptr0: 1.0,
@@ -97,7 +97,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.6,
+        ring_r: 5.9,
         ring_w: 0.9,
         body_r: 4.5,
         ptr0: 1.4,
@@ -135,7 +135,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 12.0,
         cx: 6.0,
         cy: 6.0,
-        ring_r: 5.3,
+        ring_r: 5.4,
         ring_w: 0.9,
         body_r: 4.0,
         ptr0: 1.3,
@@ -145,6 +145,25 @@ pub const KNOBS: [KnobDesign; 6] = [
         pointer: pal::WHITE,
         arc: pal::RED,
         track: "#0000002a",
+        outline: "",
+    },
+    // The effects' knobs (this fork, the mockup's): knob_22 with a lighter pointer.
+    KnobDesign {
+        name: "knob_fx",
+        w: 22.0,
+        h: 22.0,
+        cx: 11.0,
+        cy: 11.0,
+        ring_r: 10.1,
+        ring_w: 1.4,
+        body_r: 7.9,
+        ptr0: 2.4,
+        ptr1: 6.7,
+        ptr_w: 1.5,
+        body: pal::SLATE_DARK,
+        pointer: pal::STEEL,
+        arc: pal::AMBER,
+        track: "#00000040",
         outline: "",
     },
 ];
@@ -1975,5 +1994,7 @@ pub fn all_parts() -> Vec<Part> {
     digits(&mut v);
     meters(&mut v);
     app_icon(&mut v);
+    // the sections cut out of the mockup (this fork, cuts.rs)
+    crate::cuts::apply(&mut v);
     v
 }

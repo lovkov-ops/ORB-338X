@@ -345,16 +345,17 @@ fn instrument_legends_select_and_drag_keeps_selecting() {
     h.move_to(Pos2::new(94.0 + 29.5 * 11.0 + 5.0, 360.0));
     assert_eq!(h.app.panel.inst808, 11);
     h.up();
-    // The 909 legend, AC included; the area under AC's level knob no longer selects.
-    h.move_to(Pos2::new(88.0 + 10.0, 395.0 + 50.0));
+    // The 909 legend, AC included; the area under AC's level knob no longer selects (7 px
+    // from the FLIP key, out of egui's 5 px reach).
+    h.move_to(Pos2::new(90.0 + 10.0, 395.0 + 48.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.inst909, 1);
-    h.move_to(Pos2::new(88.0 + 10.0, 395.0 + 10.0));
+    h.move_to(Pos2::new(90.0 + 10.0, 395.0 + 10.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.inst909, 0);
-    h.move_to(Pos2::new(88.0 + 26.0 + 42.0 * 2.0 + 5.0, 395.0 + 10.0));
+    h.move_to(Pos2::new(90.0 + 26.0 + 42.0 * 2.0 + 5.0, 395.0 + 10.0));
     h.down(Modifiers::NONE);
     h.up();
     assert_eq!(h.app.panel.inst909, 3);

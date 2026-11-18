@@ -96,6 +96,22 @@ fn main() -> ExitCode {
             println!("{} ({} bytes)", out.display(), bytes.len());
             ExitCode::SUCCESS
         }
+        "mockup" => {
+            // (this fork) the shapes of mockup 1 or 2 (`ui-art mockup 1 [FILE]`); with FILE,
+            // also the whole mockup written back from its shapes (a check of the cut)
+            let m = match explicit_dir.as_deref().and_then(|p| p.to_str()) {
+                Some("2") => orb_ui_art::mockup::Mockup::panel_2(),
+                _ => orb_ui_art::mockup::Mockup::panel_1(),
+            };
+            print!("{}", orb_ui_art::mockup::dump(m));
+            if let Some(out) = args.next() {
+                let b = orb_ui_art::mockup::Bx::new(0.0, 0.0, 624.0, 510.0);
+                let svg = orb_ui_art::mockup::cut(&b, &m.shapes);
+                render(&svg, 2).expect("render").save_png(&out).unwrap();
+                eprintln!("{out}");
+            }
+            ExitCode::SUCCESS
+        }
         _ => {
             eprintln!("usage: ui-art gen|check [DIR] | iconset DIR | ico [FILE]");
             ExitCode::from(2)

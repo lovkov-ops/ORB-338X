@@ -180,9 +180,10 @@ const KNOB_808_RED: usize = 1;
 const KNOB_808_WHITE: usize = 2;
 const KNOB_909: usize = 3;
 const KNOB_LFO: usize = 5;
-/// The instruments' column (this fork: 2 px left of the original 90, so that 4 px show between
-/// it and the pattern sections, the focus bar in them, and 4 px between it and the mixer).
-const INSTR_X: f32 = 88.0;
+const KNOB_FX: usize = 6;
+/// The instruments' column (the original's and the mockup's 90: 4 px between it and the
+/// pattern sections, the focus bar in them).
+const INSTR_X: f32 = 90.0;
 /// The top of the header meters (the mixer's and the effects', 12 high): centered on the
 /// header's face, 2..18.7, above its 1.3 px darker lip.
 const HEADER_METER_Y: f32 = 4.35;
@@ -220,6 +221,8 @@ pub fn layout(parts: &[Part]) -> Layout {
     }
     master(&mut b);
     effects(&mut b);
+    // the sections cut out of the mockup (this fork): their controls where it has them
+    crate::cuts::place(&mut b.layout);
     b.layout
 }
 
@@ -287,7 +290,7 @@ fn pattern(b: &mut Builder, r: usize) {
     b.section(
         &format!("focus{}", r + 1),
         if r == 0 { "focus_on" } else { "focus_off" },
-        INSTR_X - 3.0,
+        INSTR_X - 4.0,
         oy,
     );
 }
@@ -649,13 +652,13 @@ fn effects(b: &mut Builder) {
     b.part("steps_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
     b.part("steps_down", "repeat", "arrow_dec_rest", 29.0, 31.0);
     b.part("triplet", "vswitch", "switch_fx_0", 49.0, 22.0);
-    b.pan("pan", KNOB_22, 10.0, 55.0, 0.5);
-    b.knob("feedback", KNOB_22, 51.0, 55.0, 0.4);
+    b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
+    b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
 
     b.section("dist", "bg_dist", 526.0, 241.0);
     fx_header(b, false, 0);
-    b.knob("amount", KNOB_22, 10.0, 27.0, 0.4);
-    b.knob("shape", KNOB_22, 51.0, 27.0, 0.5);
+    b.knob("amount", KNOB_FX, 10.0, 27.0, 0.4);
+    b.knob("shape", KNOB_FX, 51.0, 27.0, 0.5);
 
     b.section("comp", "bg_comp", 526.0, 417.0);
     fx_header(b, true, 3);
@@ -676,8 +679,8 @@ fn effects(b: &mut Builder) {
             25.0,
         );
     }
-    b.knob("ratio", KNOB_22, 10.0, 54.0, 0.3);
-    b.knob("threshold", KNOB_22, 51.0, 54.0, 0.6);
+    b.knob("ratio", KNOB_FX, 10.0, 54.0, 0.3);
+    b.knob("threshold", KNOB_FX, 51.0, 54.0, 0.6);
 }
 
 /// The `layout.tsv` text: one control per line, panel pixel rectangles.

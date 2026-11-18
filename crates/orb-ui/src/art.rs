@@ -55,7 +55,7 @@ pub struct KnobDesign {
     pub arc: [u8; 3],
 }
 
-pub const KNOBS: [KnobDesign; 6] = [
+pub const KNOBS: [KnobDesign; 7] = [
     KnobDesign {
         // (this fork: 10% under the original 30 px)
         name: "knob_303",
@@ -74,7 +74,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.75,
+        ring_r: 5.9,
         ring_w: 0.9,
         arc: [0xf2, 0xc5, 0x31],
     },
@@ -84,7 +84,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.75,
+        ring_r: 5.9,
         ring_w: 0.9,
         arc: [0xf2, 0xc5, 0x31],
     },
@@ -94,7 +94,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.6,
+        ring_r: 5.9,
         ring_w: 0.9,
         arc: [0xf0, 0x8a, 0x24],
     },
@@ -115,9 +115,20 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 12.0,
         cx: 6.0,
         cy: 6.0,
-        ring_r: 5.3,
+        ring_r: 5.4,
         ring_w: 0.9,
         arc: [0xe2, 0x41, 0x3b],
+    },
+    // the effects' knobs (this fork, the mockup's)
+    KnobDesign {
+        name: "knob_fx",
+        w: 22.0,
+        h: 22.0,
+        cx: 11.0,
+        cy: 11.0,
+        ring_r: 10.1,
+        ring_w: 1.4,
+        arc: [0xff, 0xb0, 0x00],
     },
 ];
 

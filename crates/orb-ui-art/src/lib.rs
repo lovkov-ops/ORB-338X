@@ -2,8 +2,10 @@
 //! render functions draw them with resvg, the renderer egui_extras uses, so
 //! what the check shows is what the app will show.
 
+pub mod cuts;
 pub mod font;
 pub mod layout;
+pub mod mockup;
 pub mod parts;
 pub mod svg;
 

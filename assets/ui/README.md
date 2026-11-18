@@ -15,6 +15,15 @@ cargo run --release -p orb-ui-art -- check    # renders everything at 1x/2x/3x i
 cargo test -p orb-ui-art                      # committed files = generator; render + spec checks
 ```
 
+**This fork: cut out of the mockup.** The parts are now the shapes of the user's mockup
+(`assets/mockup/panel_1.svg`, the panel as it plays, and `panel_2.svg`, the drum machines'
+FLIP faces): `crates/orb-ui-art/src/mockup.rs` reads it, `cuts.rs` cuts every control's group
+out of it as that control's part (a state the mockup does not show is the shown one recolored)
+and puts the control where the mockup has it; a section's background is what is left of the
+section. `ui-art mockup 1|2 [PNG]` lists the mockup's shapes. The logo stays the generated
+one (the mockup's is the same). The rest of this file describes the generated set the cuts
+replace.
+
 **The look since task-115** (the mockup session of 2026-10-29; docs/ui_spec.md section 19 has the
 numbers). The flat look keeps its palette; the small controls got a discreet 3D: keycaps for the
 pattern, bank and shuffle buttons (`keycap`), a darker base under the 303's keys and pills
