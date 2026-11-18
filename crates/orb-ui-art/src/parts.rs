@@ -1788,7 +1788,9 @@ fn tr909_bg(out: &mut Vec<Part>) {
             }
         }
         for (group, col, lower, _, t) in KNOBS_909 {
-            let y = knob_y_909(group, lower) - 3.7;
+            // FLAM's label a little nearer its knob, away from FLIP over it
+            let gap = if t == "FLAM" { 3.0 } else { 3.7 };
+            let y = knob_y_909(group, lower) - gap;
             label(s, column_909(group, col), y, 2.8, ink, t);
         }
         label(s, column_909(0, 2), KNOB_Y_909[1] - 3.7, 2.8, ink, "FLIP");
