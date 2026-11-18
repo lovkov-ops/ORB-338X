@@ -315,9 +315,9 @@ tr909.cc_level	tr909	knob	knob_909	412	423.5	13	13
 tr909.cc_tune	tr909	knob	knob_909	412	450.5	13	13
 tr909.rc_level	tr909	knob	knob_909	433	423.5	13	13
 tr909.rc_tune	tr909	knob	knob_909	433	450.5	13	13
-tr909.flam	tr909	knob	knob_909	96.5	474.75	13	13
+tr909.flam	tr909	knob	knob_909	96.5	470.5	13	13
 tr909.flip	tr909	toggle	flip909_off	95.5	450.5	15	13
-tr909.flam_button	tr909	toggle	toggle_flam_off	95.5	490	15	16
+tr909.flam_button	tr909	toggle	toggle_flam_off	95.5	484	15	22
 tr909.select_bd	tr909	area	sel_42x14	114	470	42	14
 tr909.step1	tr909	steps	step909_a_1	114	484	21	22
 tr909.step2	tr909	steps	step909_a_0	135	484	21	22

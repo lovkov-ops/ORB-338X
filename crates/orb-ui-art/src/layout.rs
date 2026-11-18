@@ -505,15 +505,9 @@ fn tr909(b: &mut Builder) {
         b.knob(id, KNOB_909, x, y, 0.3 + 0.025 * (i % 16) as f32);
     }
     // FLIP under the LEVEL knob (with the lower knobs), the flam key level with the step
-    // keys' bottoms, both centered in the AC column (4..26)
+    // keys (as high as they are), both centered in the AC column (4..26)
     b.part("flip", "toggle", "flip909_off", 7.5, KNOB_Y_909[1]);
-    b.part(
-        "flam_button",
-        "toggle",
-        "toggle_flam_off",
-        7.5,
-        STEPS_Y_909 + 6.0,
-    );
+    b.part("flam_button", "toggle", "toggle_flam_off", 7.5, STEPS_Y_909);
     b.part("select_bd", "area", "sel_42x14", 26.0, NAMES_Y_909);
     for i in 0..16 {
         let value = [1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 3, 0, 2, 0, 0, 0][i];

@@ -98,11 +98,11 @@ pub const KNOBS: [KnobDesign; 6] = [
         cx: 6.5,
         cy: 6.5,
         ring_r: 5.75,
-        ring_w: 0.9,
+        ring_w: 0.6,
         body_r: 4.5,
-        ptr0: 1.2,
-        ptr1: 3.9,
-        ptr_w: 1.0,
+        ptr0: 0.9,
+        ptr1: 4.0,
+        ptr_w: 1.3,
         body: "#4f5050",
         pointer: pal::ORANGE,
         arc: pal::ORANGE,
@@ -720,10 +720,15 @@ fn transport_buttons(out: &mut Vec<Part>) {
             },
         ));
         // The 909's flam button (this fork): a light key like a step key, its light red when on.
-        out.push(Part::new(format!("toggle_flam_{state}"), 15.0, 16.0, |s| {
-            key909(s, 15.0, 16.0, "#f6f4ec");
-            led909(s, 7.5, 5.5, if on { pal::RED } else { LED_OFF_909 });
-        }));
+        out.push(Part::new(
+            format!("toggle_flam_{state}"),
+            15.0,
+            STEP909_H,
+            |s| {
+                key909(s, 15.0, STEP909_H, "#f6f4ec");
+                led909(s, 7.5, 5.75, if on { pal::RED } else { LED_OFF_909 });
+            },
+        ));
         // the 909's FLIP (this fork): the same key, lower
         out.push(Part::new(format!("flip909_{state}"), 15.0, 13.0, |s| {
             key909(s, 15.0, 13.0, "#f6f4ec");
@@ -1673,8 +1678,9 @@ const HEAD909_Y: f32 = 4.0;
 const HEAD909_H: f32 = 10.0;
 const NAME909_H: f32 = 10.0;
 pub const STEP909_H: f32 = 22.0;
-/// The FLAM knob's top: under the FLAM label, over the flam key (95..111).
-const FLAM_Y_909: f32 = 79.75;
+/// The FLAM knob's top: under the FLAM label (under FLIP), over the flam key (89..111, as
+/// high as the step keys).
+const FLAM_Y_909: f32 = 75.5;
 
 /// The top of a 909 knob (see `KNOBS_909`).
 pub fn knob_y_909(group: usize, lower: bool) -> f32 {
