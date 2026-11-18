@@ -725,14 +725,26 @@ fn transport_buttons(out: &mut Vec<Part>) {
             15.0,
             STEP909_H,
             |s| {
-                key909(s, 15.0, STEP909_H, "#f6f4ec");
-                led909(s, 7.5, 5.75, if on { pal::RED } else { LED_OFF_909 });
+                key909(s, 15.0, STEP909_H, KEY909_LIGHT);
+                led909(
+                    s,
+                    7.5,
+                    5.75,
+                    if on { pal::RED } else { LED_OFF_909 },
+                    KEY909_LIGHT,
+                );
             },
         ));
         // the 909's FLIP (this fork): the same key, lower
         out.push(Part::new(format!("flip909_{state}"), 15.0, 13.0, |s| {
-            key909(s, 15.0, 13.0, "#f6f4ec");
-            led909(s, 7.5, 5.5, if on { pal::RED } else { LED_OFF_909 });
+            key909(s, 15.0, 13.0, KEY909_LIGHT);
+            led909(
+                s,
+                7.5,
+                5.5,
+                if on { pal::RED } else { LED_OFF_909 },
+                KEY909_LIGHT,
+            );
         }));
     }
 }
@@ -952,7 +964,7 @@ fn steps(out: &mut Vec<Part>) {
     }
     // the 909's step keys (this fork): light keys in a gray frame, in groups of four, the light
     // on top in the color of the value
-    for (grp, fill) in [("a", "#f6f4ec"), ("b", "#e9e0c9")] {
+    for (grp, fill) in [("a", KEY909_LIGHT), ("b", KEY909_DARK)] {
         for (value, led) in [
             (0, LED_OFF_909),
             (1, pal::ORANGE),
@@ -967,7 +979,7 @@ fn steps(out: &mut Vec<Part>) {
                     s.g_at(0.5, 0.0);
                     key909(s, 20.0, STEP909_H, fill);
                     s.end_g();
-                    led909(s, 10.5, 5.75, led);
+                    led909(s, 10.5, 5.75, led, fill);
                 },
             ));
         }
@@ -1702,22 +1714,41 @@ pub fn column_909(group: usize, col: usize) -> f32 {
 }
 
 /// The 909's unlit step light.
-const LED_OFF_909: &str = "#c2bfb5";
+/// The 909's unlit step light: a shade of its key's face (`led909`).
+const LED_OFF_909: &str = "off";
 
 /// A 909 key (`w` by `h`): a gray frame around a light face.
-/// (this fork, as the reference picture: a darker frame, a light rim, thicker at the top and
-/// the bottom, around the face)
+/// (this fork, as the reference picture: a darker frame, a rim a shade darker than the face,
+/// thicker at the top and the bottom, around the face; the light keys and the darker ones
+/// alike)
 fn key909(s: &mut Svg, w: f32, h: f32, fill: &str) {
     s.rect(0.0, 0.0, w, h, 2.5, "#6e6c68");
-    s.rect(1.0, 1.0, w - 2.0, h - 2.0, 2.0, "#dad8d2");
+    s.rect(1.0, 1.0, w - 2.0, h - 2.0, 2.0, rim909(fill));
     s.rect(2.0, 3.0, w - 4.0, h - 6.0, 1.5, fill);
+}
+
+/// The 909's light and darker key faces (the step keys in groups of four) and their rims.
+const KEY909_LIGHT: &str = "#f6f3ea";
+const KEY909_DARK: &str = "#e6dec5";
+fn rim909(face: &str) -> &'static str {
+    if face == KEY909_DARK {
+        "#c2bfb5"
+    } else {
+        "#dad8d2"
+    }
 }
 
 /// A 909 key's light: a small pill centered at (`cx`, `cy`), 8 x 3, no glow (as the
 /// reference picture).
-fn led909(s: &mut Svg, cx: f32, cy: f32, color: &str) {
-    s.rect(cx - 4.0, cy - 1.5, 8.0, 3.0, 1.5, color);
-    s.rect_stroke(cx - 4.0, cy - 1.5, 8.0, 3.0, 1.5, "#00000040", 0.5);
+fn led909(s: &mut Svg, cx: f32, cy: f32, color: &str, face: &str) {
+    // unlit: a shade of the key's face (as the reference picture), its edge darker
+    let (fill, edge) = if color == LED_OFF_909 {
+        (shade(face, 0.81), shade(face, 0.665))
+    } else {
+        (color.to_string(), shade(color, 0.85))
+    };
+    s.rect(cx - 4.0, cy - 1.5, 8.0, 3.0, 1.5, &fill);
+    s.rect_stroke(cx - 4.0, cy - 1.5, 8.0, 3.0, 1.5, &edge, 0.5);
 }
 
 /// The 909's header pill of group `i` (dark, its name orange) and its name pill (light).
