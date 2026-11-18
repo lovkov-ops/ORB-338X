@@ -86,6 +86,7 @@ use std::sync::Arc;
 
 use orb_engine::frame::edit::PatternShape;
 use orb_engine::frame::export::REALTIME_FRAMES;
+use orb_engine::frame::voices::VoiceMix;
 use orb_engine::frame::{Devices, Engine, LoadRefused, MixerParams};
 use orb_engine::process::ProcessState;
 use orb_engine::samples::{Retired, STARTUP_ID, Sample, SampleSet};
@@ -177,6 +178,9 @@ pub enum Command {
     /// compressor 102, PCF 114). The same as [`Command::Param`] for the controllers slot 11
     /// takes, plus the device's one extra live byte. Ignored for the mixer.
     DeviceParam { device: Device, ctrl: u8, value: u8 },
+    /// This fork (not a message of the original): the pans and effects switches of the 808's
+    /// or the 909's sounds ([`Engine::voice_mix`]).
+    VoiceMix { device: Device, mix: VoiceMix },
     /// Mixer msg 145 `{id, v}` ([`Engine::mixer_global`]): 0 the master, 1 the compressor id,
     /// 2 the PCF id.
     MixerGlobal { id: u8, value: u8 },
@@ -693,6 +697,7 @@ impl Audio {
                 value,
             } => self.target().device_param(device, ctrl, value),
             Command::MixerGlobal { id, value } => self.target().mixer_global(id, value),
+            Command::VoiceMix { device, mix } => self.target().voice_mix(device, mix),
             Command::MixerChannel {
                 channel,
                 field,

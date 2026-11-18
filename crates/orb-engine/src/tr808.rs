@@ -558,4 +558,28 @@ impl ChannelDevice for Tr808 {
         }
         cy.process(bus);
     }
+
+    /// This fork ([`crate::frame::voices`]): slot 14's voices one by one, each into a block of
+    /// its own, with the panel's instrument index: BD (both voices) 1, SD 2, LT/LC 3, MT/MC 4,
+    /// HT/HC 5, RS/CL 6, CP/MA 7, CB 8, CY 9, OH 10, CH 11.
+    fn process_voices(&mut self, out: &mut dyn FnMut(usize, &Block)) -> bool {
+        let mut t = [0.0f32; crate::frame::BLOCK];
+        let [a, b, cy] = &mut self.filter;
+        let mut one = |inst: usize, f: &mut dyn FnMut(&mut Block)| {
+            t.fill(0.0);
+            f(&mut t);
+            out(inst, &t);
+        };
+        one(1, &mut |t| a.process(t));
+        one(1, &mut |t| b.process(t));
+        one(2, &mut |t| self.dual.process(t));
+        for (v, inst) in self.pitched.iter_mut().zip([3, 4, 5]) {
+            one(inst, &mut |t| v.process(t));
+        }
+        for (v, inst) in self.simple.iter_mut().zip([6, 7, 8, 10, 11]) {
+            one(inst, &mut |t| v.process(t));
+        }
+        one(9, &mut |t| cy.process(t));
+        true
+    }
 }

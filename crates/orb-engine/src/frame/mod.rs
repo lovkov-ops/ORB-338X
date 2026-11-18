@@ -18,6 +18,7 @@
 
 pub mod edit;
 pub mod export;
+pub mod voices;
 
 #[cfg(test)]
 mod tests;
@@ -280,6 +281,12 @@ pub trait ChannelDevice: SongDevice {
     /// `+0x18DC`) becomes `samples`. The old table and the samples the voices held go into
     /// `retired`. The 303s and the placeholders have no table and do nothing.
     fn set_samples(&mut self, _samples: &Arc<SampleSet>, _retired: &mut Retired) {}
+    /// Not a slot (this fork, [`voices`]): render one block voice by voice, calling `out` with
+    /// the panel's instrument index (1 BD .. 11) and the voice's own block, in slot 14's
+    /// order. `false` (nothing rendered) for a device that cannot: the 303s, the placeholders.
+    fn process_voices(&mut self, _out: &mut dyn FnMut(usize, &Block)) -> bool {
+        false
+    }
 }
 
 /// An insert effect: the distortion, the PCF or the compressor.
@@ -299,6 +306,11 @@ pub trait InsertEffect: SongDevice {
     /// ([`Frame::stack_word`]), `prev` when it did not write there.
     fn stack_word(&self, prev: Option<i32>) -> Option<i32> {
         prev
+    }
+    /// Not a slot (this fork, [`voices::RightInserts`]): a copy of the effect with its state,
+    /// `None` for one that cannot be copied (a placeholder).
+    fn fork_clone(&self) -> Option<Box<dyn InsertEffect>> {
+        None
     }
 }
 
@@ -805,6 +817,11 @@ pub struct Frame {
     /// This fork's one set of settings for pattern and song mode ([`set_fork_shared_modes`]
     /// at the frame's making; off: the original's two sets).
     pub shared_modes: bool,
+    /// This fork's pans and effects switches of the 808's and the 909's sounds ([`voices`]);
+    /// neutral (the original's sound) until the panel sets them.
+    pub voice_mix: [voices::VoiceMix; 2],
+    /// The inserts the drum machines' right wet buses go through, made when first needed.
+    right: Option<Box<voices::RightInserts>>,
 }
 
 /// `unk_100F012C`: the right channel's float output of a render call (0x10013A3A), at the
@@ -855,6 +872,8 @@ impl Frame {
                 [1.0; 2]
             },
             shared_modes: FORK_SHARED_MODES.load(Ordering::Relaxed),
+            voice_mix: [voices::VoiceMix::default(); 2],
+            right: None,
         }
     }
 
@@ -903,6 +922,9 @@ impl Frame {
         self.devices.dist.update(&ctx);
         self.devices.pcf.update(&ctx);
         self.devices.comp.update(&ctx);
+        if let Some(r) = &mut self.right {
+            r.update(&ctx);
+        }
         // 0x100130D7: 2 * T[master] + 1e-6
         self.state.master_target =
             st(MASTER_SCALE as f64 * t[p.master as usize] as f64 + OFFSET as f64);
@@ -951,27 +973,67 @@ impl Frame {
             stack_word: None,
         };
         let bus = &mut self.bus;
+        // this fork: the split drum machines' buses (voices.rs), kept across the channels
+        let mut split = voices::SplitBuses::new();
         for (c, ch) in self.state.channels.iter_mut().enumerate() {
-            self.devices.channels[c].process(bus, &ctx);
+            let mix = match c {
+                2 | 3 if !self.voice_mix[c - 2].neutral() => Some(self.voice_mix[c - 2]),
+                _ => None,
+            };
+            let split_now = match mix {
+                Some(mix) => {
+                    split = voices::SplitBuses::new();
+                    let s = &mut split;
+                    self.devices.channels[c].process_voices(&mut |inst, v| s.add(&mix, inst, v))
+                }
+                None => false,
+            };
+            if !split_now {
+                self.devices.channels[c].process(bus, &ctx);
+            }
             // the word the audio slot leaves at its esp0 - 0x1C (the 303s leave the slot as it
             // was); the distortion (0x10010A50: no local there, calls only below its esp) leaves
             // it for the PCF after it
             if let Some(w) = self.devices.channels[c].stack_word() {
                 self.stack_word = Some(w);
             }
+            if split_now {
+                let right = self
+                    .right
+                    .get_or_insert_with(|| Box::new(voices::RightInserts::new(&self.devices)));
+                right.follow(&self.devices);
+            }
             let inserts = [
                 (ch.routing.dist, &mut self.devices.dist),
                 (ch.routing.pcf, &mut self.devices.pcf),
                 (ch.routing.comp, &mut self.devices.comp),
             ];
-            for (routed, ins) in inserts {
+            for (k, (routed, ins)) in inserts.into_iter().enumerate() {
                 if routed {
                     ctx.stack_word = self.stack_word;
-                    ins.process(bus, &ctx);
+                    let b = if split_now {
+                        &mut split.wet_l
+                    } else {
+                        &mut *bus
+                    };
+                    ins.process(b, &ctx);
                     if let Some(f) = ins.faulted() {
                         return Err(f);
                     }
                     self.stack_word = ins.stack_word(self.stack_word);
+                    if split_now && let Some(right) = &mut self.right {
+                        right.process(k, &mut split.wet_r, &ctx);
+                    }
+                }
+            }
+            // this fork: a split drum machine's sides, the wet and the dry buses summed, and its
+            // send, the wet sides' mean (the dry sounds stay out of the delay)
+            if split_now {
+                for j in 0..BLOCK {
+                    let (wl, wr) = (split.wet_l[j], split.wet_r[j]);
+                    split.wet_l[j] = st(wl as f64 + split.dry_l[j] as f64);
+                    split.wet_r[j] = st(wr as f64 + split.dry_r[j] as f64);
+                    split.dry_l[j] = st((wl as f64 + wr as f64) * 0.5);
                 }
             }
             // this fork (not the original): the drum machines' channels (808, 909) as loud as
@@ -980,19 +1042,33 @@ impl Frame {
             if c == 2 || c == 3 {
                 let g = self.drum_gain[c - 2];
                 if g != 1.0 {
-                    for x in bus.iter_mut() {
-                        *x = st(*x as f64 * g);
+                    let bufs: Vec<&mut Block> = if split_now {
+                        vec![&mut split.wet_l, &mut split.wet_r, &mut split.dry_l]
+                    } else {
+                        vec![&mut *bus]
+                    };
+                    for b in bufs {
+                        for x in b.iter_mut() {
+                            *x = st(*x as f64 * g);
+                        }
                     }
                 }
             }
+            // the channel's left and right signals and its send source: the bus for every
+            // channel the original's way
+            let (bl, br, bs): (&Block, &Block, &Block) = if split_now {
+                (&split.wet_l, &split.wet_r, &split.dry_l)
+            } else {
+                (&*bus, &*bus, &*bus)
+            };
             // 0x100135FA: the channel's peak meter
-            let v = abs_bits(bus[mi]);
+            let v = abs_bits(bl[mi]).max(abs_bits(br[mi]));
             if v > ch.peak {
                 ch.peak = v;
             }
             // 0x10013650: send += bus * sendGain
             let sg = ch.send as f64;
-            for (s, &b) in self.state.send.iter_mut().zip(bus.iter()) {
+            for (s, &b) in self.state.send.iter_mut().zip(bs.iter()) {
                 *s = st(b as f64 * sg + *s as f64);
             }
             // 0x100136B7: smoothing, n = old*0.93 + target*0.07 stored as f32; the ramp steps
@@ -1009,9 +1085,8 @@ impl Frame {
             let (mut gl, mut gr) = (old_l, old_r);
             for i in (0..BLOCK).step_by(2) {
                 for j in i..i + 2 {
-                    let b = bus[j] as f64;
-                    l[j] = st(b * gl + l[j] as f64);
-                    r[j] = st(b * gr + r[j] as f64);
+                    l[j] = st(bl[j] as f64 * gl + l[j] as f64);
+                    r[j] = st(br[j] as f64 * gr + r[j] as f64);
                 }
                 gl += dl;
                 gr += dr;

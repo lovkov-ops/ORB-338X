@@ -200,6 +200,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orb_engine::frame::voices::VoiceMix;
 
     fn song() -> Song {
         let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -246,6 +247,94 @@ mod tests {
             let (orig, loud) = (render(false), render(true));
             let ratio = peak(&loud) as f64 / peak(&orig) as f64;
             assert!((ratio - gain).abs() < 0.03, "808 {is808}: {ratio}");
+        }
+    }
+
+    /// (this fork) One drum hit of the 808 or the 909 with the drum machine's `mix`, the
+    /// distortion on (amount and shape up) and routed for it: the left and right peaks.
+    fn stereo_hit(is808: bool, inst: usize, mix: VoiceMix, dist: bool) -> (i32, i32) {
+        let tables = Arc::new(Tables::new());
+        let song = song();
+        let kit = Some(rbm::standard::builtin_samples());
+        let mut engine = Engine::new(tables, Devices::implemented(kit));
+        engine.load(&song).unwrap();
+        engine.activate(Activation::ReplacesCurrent {
+            current_playing: false,
+        });
+        engine.stop();
+        engine.set_song_mode(0);
+        let (dev, channel) = if is808 {
+            (Device::Tr808, 2)
+        } else {
+            (Device::Tr909, 3)
+        };
+        for st in 0..16u8 {
+            let mut bytes = [0u8; 12];
+            if st == 0 {
+                bytes[inst] = 1;
+            }
+            engine.step(dev, 0, st, &bytes);
+        }
+        engine.pattern_field(dev, 0, 1, 16);
+        engine.device_param(dev, 1, 0);
+        for c in 0..4u8 {
+            engine.mixer_channel(c, 0, (c == channel) as u8);
+        }
+        // the channel's pan in the middle and its distortion switch
+        engine.mixer_channel(channel, 2, 64);
+        engine.mixer_channel(channel, 4, dist as u8);
+        engine.device_param(Device::Distortion, 0, dist as u8);
+        engine.device_param(Device::Distortion, 1, 127);
+        engine.device_param(Device::Distortion, 2, 127);
+        engine.voice_mix(dev, mix);
+        engine.locate(0);
+        engine.play();
+        let mut buf = vec![0i16; 2 * REALTIME_FRAMES];
+        let (mut pl, mut pr) = (0, 0);
+        for _ in 0..DRUM_FRAMES / REALTIME_FRAMES {
+            engine.render(&mut buf, REALTIME_FRAMES);
+            for [l, r] in buf.as_chunks::<2>().0 {
+                pl = pl.max((*l as i32).abs());
+                pr = pr.max((*r as i32).abs());
+            }
+        }
+        (pl, pr)
+    }
+
+    /// (this fork) A sound panned to one side is heard on that side only; in the middle both
+    /// sides as before; with its effects off it does not go through the distortion.
+    #[test]
+    fn a_drum_sound_takes_its_own_pan_and_effects_switch() {
+        for is808 in [true, false] {
+            let (l, r) = stereo_hit(is808, 2, VoiceMix::default(), false);
+            assert!(l > 1000 && (l - r).abs() < l / 50, "808 {is808}: {l} {r}");
+            let mut left = VoiceMix::default();
+            left.pan[2] = 0;
+            let (l2, r2) = stereo_hit(is808, 2, left, false);
+            assert!(l2 > 1000 && r2 == 0, "808 {is808}: left {l2} {r2}");
+            let mut right = VoiceMix::default();
+            right.pan[2] = 127;
+            let (l3, r3) = stereo_hit(is808, 2, right, false);
+            assert!(r3 > 1000 && l3 == 0, "808 {is808}: right {l3} {r3}");
+            // the distortion changes the hit; without its effects the sound is as dry
+            let (wet, _) = stereo_hit(is808, 2, VoiceMix::default(), true);
+            let mut dry = VoiceMix::default();
+            dry.fx[2] = false;
+            let (d, _) = stereo_hit(is808, 2, dry, true);
+            assert!(
+                (wet - l).abs() > l / 20,
+                "808 {is808}: distorted {wet} vs {l}"
+            );
+            assert!((d - l).abs() < l / 50, "808 {is808}: dry {d} vs {l}");
+            // the sounds still on take the distortion on both sides
+            let mut other = VoiceMix::default();
+            other.fx[1] = false;
+            other.pan[2] = 0;
+            let (wl, wr) = stereo_hit(is808, 2, other, true);
+            assert!(
+                (wl - wet).abs() < wet / 50 && wr < wl / 20,
+                "808 {is808}: {wl} {wr}"
+            );
         }
     }
 

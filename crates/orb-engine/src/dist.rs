@@ -299,6 +299,11 @@ impl SongDevice for Distortion {
 }
 
 impl InsertEffect for Distortion {
+    /// This fork ([`crate::frame::voices::RightInserts`]): a copy with its state.
+    fn fork_clone(&self) -> Option<Box<dyn InsertEffect>> {
+        Some(Box::new(self.clone()))
+    }
+
     /// Slot 15, 0x10010A50: nothing when disabled (the bus passes unchanged and the counter
     /// stands).
     fn process(&mut self, bus: &mut Block, ctx: &BlockContext) {

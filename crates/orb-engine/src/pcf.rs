@@ -412,6 +412,11 @@ impl SongDevice for Pcf {
 }
 
 impl InsertEffect for Pcf {
+    /// This fork ([`crate::frame::voices::RightInserts`]): a copy with its state.
+    fn fork_clone(&self) -> Option<Box<dyn InsertEffect>> {
+        Some(Box::new(self.clone()))
+    }
+
     /// The quotient when the block stored one (enabled, resolution 8, 16 or 32: 0x10016792,
     /// 0x100167A0, 0x100167AE, `var_1C` at the entry `esp - 0x1C`), else `prev`.
     fn stack_word(&self, prev: Option<i32>) -> Option<i32> {

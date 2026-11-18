@@ -656,4 +656,30 @@ impl ChannelDevice for Tr909 {
         cc.process(bus);
         rc.process(bus);
     }
+
+    /// This fork ([`crate::frame::voices`]): slot 14's voices one by one, each into a block of
+    /// its own, with the panel's instrument index: BD (both voices) 1, SD 2, LT 3, MT 4, HT 5,
+    /// RS 6, CP 7, CH 8, OH 9, crash 10, ride 11.
+    fn process_voices(&mut self, out: &mut dyn FnMut(usize, &Block)) -> bool {
+        let mut t = [0.0f32; crate::frame::BLOCK];
+        let mut one = |inst: usize, f: &mut dyn FnMut(&mut Block)| {
+            t.fill(0.0);
+            f(&mut t);
+            out(inst, &t);
+        };
+        for v in &mut self.filter {
+            one(1, &mut |t| v.process(t));
+        }
+        one(2, &mut |t| self.dual.process(t));
+        let [lt, mt, ht, cc, rc] = &mut self.pitched;
+        one(3, &mut |t| lt.process(t));
+        one(4, &mut |t| mt.process(t));
+        one(5, &mut |t| ht.process(t));
+        for (v, inst) in self.simple.iter_mut().zip([6, 7, 8, 9]) {
+            one(inst, &mut |t| v.process(t));
+        }
+        one(10, &mut |t| cc.process(t));
+        one(11, &mut |t| rc.process(t));
+        true
+    }
 }

@@ -128,6 +128,16 @@ impl Engine {
         }
     }
 
+    /// This fork ([`super::voices`], not a message of the original): the pans and effects
+    /// switches of the 808's (`d` [`Device::Tr808`]) or the 909's sounds. Other devices: nothing.
+    pub fn voice_mix(&mut self, d: Device, mix: super::voices::VoiceMix) {
+        match d {
+            Device::Tr808 => self.frame.voice_mix[0] = mix,
+            Device::Tr909 => self.frame.voice_mix[1] = mix,
+            _ => {}
+        }
+    }
+
     /// Mixer msg 145 `{id, v}` (0x10015900, sender `sub_4131BC`): id 0 the live master
     /// (0x1001592C, no record hook), 1 the compressor id and 2 the PCF id (0x10015947,
     /// 0x10015989: slot 11's controllers 1 and 2, then the record hook with that controller,

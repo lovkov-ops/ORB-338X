@@ -956,6 +956,13 @@ impl Link {
         self.flush();
     }
 
+    /// This fork's pans and effects switches of the 808's or the 909's sounds (the FLIP face),
+    /// to the newest song.
+    pub fn voice_mix(&mut self, device: Device, mix: orb_engine::frame::voices::VoiceMix) {
+        self.backlog.push_back(Command::VoiceMix { device, mix });
+        self.flush();
+    }
+
     /// Sends the panel's pending events to the player.
     pub fn forward(&mut self, panel: &mut Panel) {
         let events = std::mem::take(&mut panel.events);

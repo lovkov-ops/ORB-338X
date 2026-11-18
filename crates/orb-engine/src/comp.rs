@@ -280,6 +280,11 @@ impl SongDevice for Compressor {
 }
 
 impl InsertEffect for Compressor {
+    /// This fork ([`crate::frame::voices::RightInserts`]): a copy with its state.
+    fn fork_clone(&self) -> Option<Box<dyn InsertEffect>> {
+        Some(Box::new(self.clone()))
+    }
+
     /// Slot 15 copies the release factor `+0x58` (only the ctor writes it, so always
     /// [`RELEASE`]) to its local at the entry `esp - 0x1C` when enabled (0x1000ECE9,
     /// `esp+0x8` after the 0x24-byte prologue), else leaves `prev`.
