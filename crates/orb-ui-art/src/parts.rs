@@ -360,26 +360,10 @@ fn key_303(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, border: &str, face: &str
 pub const KEY_FACE_303: &str = "#fbfbf8";
 const KEY_BORDER_303: &str = "#727274";
 const KEY_BORDER_DARK_303: &str = "#0d0e0f";
-/// A key of the chosen scale (the GENERATE menu): as if a green LED inside the key's slightly
-/// translucent plastic lit it, the face a pale green, brighter in its middle and fading to the
-/// edges.
+/// A key of the chosen scale (the GENERATE menu): its face filled with a medium green (the app
+/// paints a soft green glow around it).
 fn key_scale_303(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, border: &str) {
-    key_303(s, x, y, w, h, border, "#e6f6e8");
-    s.raw(concat!(
-        "<defs><radialGradient id=\"scale_glow\" cx=\"0.5\" cy=\"0.45\" r=\"0.6\">",
-        "<stop offset=\"0\" stop-color=\"#5fd872\" stop-opacity=\"1\"/>",
-        "<stop offset=\"0.5\" stop-color=\"#8ae498\" stop-opacity=\"0.75\"/>",
-        "<stop offset=\"1\" stop-color=\"#bdeec4\" stop-opacity=\"0.3\"/>",
-        "</radialGradient></defs>",
-    ));
-    s.rect(
-        x + 1.25,
-        y + 1.25,
-        w - 2.5,
-        h - 3.25,
-        1.3,
-        "url(#scale_glow)",
-    );
+    key_303(s, x, y, w, h, border, "#8edc9a");
 }
 
 /// A keycap: a face over a 1.8 px darker lip, with a thin outline.
