@@ -728,6 +728,14 @@ impl Panel {
         }
     }
 
+    /// Every sound's effects switch of drum machine `k` on or off (a double click on an FX key).
+    pub fn set_all_fx(&mut self, k: usize, on: bool) {
+        let sec = FLIP_FACES[k.min(1)];
+        for i in 1..12 {
+            self.toggles.insert(format!("{sec}.fx{i}"), on);
+        }
+    }
+
     /// Drum machine `k`'s sounds' pans and effects switches as its FLIP face sets them.
     pub fn voice_mix(&self, k: usize) -> VoiceMix {
         let sec = FLIP_FACES[k.min(1)];

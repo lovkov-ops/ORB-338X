@@ -212,6 +212,9 @@ pub struct App {
     /// The last press of a SOLO or MUTE button: its id, the time and whether it was lit (a
     /// second press soon after on a lit one is a double click: all of its kind go off).
     mix_press: Option<(String, f64, bool)>,
+    /// The last FX key press of a FLIP face (this fork): its id and time, for the double
+    /// click that sets every sound's effects switch of the drum machine.
+    fx_press: Option<(String, f64)>,
     /// The engine tables the pitch mode's heard notes render with (`audition.rs`), made once.
     pub(crate) audition_tables: Option<std::sync::Arc<orb_engine::tables::Tables>>,
     /// Whether the logo plays its startup animation (task-114): the panel once, from the first
@@ -297,6 +300,7 @@ impl App {
             pattern_clip: None,
             clip_text: None,
             mix_press: None,
+            fx_press: None,
             audition_tables: None,
             logo_anim: false,
             logo_start: None,
@@ -996,6 +1000,10 @@ impl App {
                             }
                             if matches!(c.name(), "solo" | "mutebtn" | "activity") {
                                 self.mix_button(c, now);
+                            } else if crate::model::FLIP_FACES.contains(&c.section.as_str())
+                                && c.name().starts_with("fx")
+                            {
+                                self.fx_button(c, now);
                             } else {
                                 self.panel.press(&c.id, now);
                             }
@@ -1051,6 +1059,24 @@ impl App {
         } else {
             self.panel.press(&c.id, now);
             self.mix_press = Some((c.id.clone(), now, lit));
+        }
+    }
+
+    /// An FX key of a FLIP face (this fork): a click switches the sound's effects; a double
+    /// click (the second click within 0.4 s) sets every sound of the drum machine as the first
+    /// click left this one, all on or all off.
+    fn fx_button(&mut self, c: &Ctl, now: f64) {
+        let double = self
+            .fx_press
+            .take()
+            .is_some_and(|(id, t)| id == c.id && now - t < 0.4);
+        if double {
+            let k = usize::from(c.section == "tr909f");
+            let on = self.panel.toggle_on(&c.id);
+            self.panel.set_all_fx(k, on);
+        } else {
+            self.panel.press(&c.id, now);
+            self.fx_press = Some((c.id.clone(), now));
         }
     }
 
