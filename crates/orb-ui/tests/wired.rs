@@ -804,8 +804,8 @@ fn the_303_step_editor_edits_the_pattern_as_the_original() {
 fn the_808_step_buttons_edit_the_selected_instrument_live() {
     let mut h = Harness::new();
     let o = layout::TR808_ORIGIN;
-    // (this fork) the step keys: 22.125 px apart from x 6, y 88..108
-    let strip = |step: usize| Pos2::new(o.0 + 6.0 + 22.125 * step as f32 + 11.0, o.1 + 98.0);
+    // (this fork) the step keys: 22 px apart, centered at 18, y 89..111
+    let strip = |step: usize| Pos2::new(o.0 + 18.0 + 22.0 * step as f32, o.1 + 100.0);
     // BD is selected at start: instrument 1. Drag over steps 1..4 from an empty step lights all.
     h.move_to(strip(0));
     h.down(Modifiers::NONE);

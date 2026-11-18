@@ -289,19 +289,19 @@ fn pattern_buttons_select_and_give_the_row_the_focus() {
 fn tr808_steps_paint_across_a_drag_and_erase_from_a_lit_step() {
     let mut h = Harness::new();
     assert_eq!(h.app.panel.inst808, 1);
-    // (this fork) steps 1-4 at x = 96 + 22.125 i, y = 368 + 10.
-    h.move_to(Pos2::new(94.0 + 11.0, 378.0));
+    // (this fork) steps 1-4 centered at x = 88 + 18 + 22 i, y = 369 + 11.
+    h.move_to(Pos2::new(106.0, 380.0));
     h.down(Modifiers::NONE);
-    h.move_to(Pos2::new(94.0 + 22.125 * 3.0 + 11.0, 378.0));
+    h.move_to(Pos2::new(106.0 + 22.0 * 3.0, 380.0));
     h.up();
     assert_eq!(
         &h.app.panel.steps808[1][..5],
         &[true, true, true, true, false]
     );
     // Starting on a lit step erases every step crossed.
-    h.move_to(Pos2::new(94.0 + 22.125 * 3.0 + 11.0, 378.0));
+    h.move_to(Pos2::new(106.0 + 22.0 * 3.0, 380.0));
     h.down(Modifiers::NONE);
-    h.move_to(Pos2::new(94.0 + 22.125 + 11.0, 378.0));
+    h.move_to(Pos2::new(106.0 + 22.0, 380.0));
     h.up();
     assert_eq!(
         &h.app.panel.steps808[1][..5],

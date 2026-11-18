@@ -1216,8 +1216,8 @@ impl App {
     fn drum_strips(&mut self, ui: &mut Ui, view: &View) {
         for is808 in [true, false] {
             let (origin, x0, y0, w, h) = if is808 {
-                // this fork's step keys: 6..360, 88..108
-                (layout::TR808_ORIGIN, 6.0, 88.0, 354.0, 20.0)
+                // this fork's step keys: 22 px cells from 7 to 359, 89..111
+                (layout::TR808_ORIGIN, 7.0, 89.0, 352.0, 22.0)
             } else {
                 // this fork's step keys: 26..362, 89..111
                 (layout::TR909_ORIGIN, 26.0, 89.0, 336.0, 22.0)

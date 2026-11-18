@@ -467,11 +467,12 @@ fn tr808(b: &mut Builder) {
             "vswitch",
             "switch_808_1",
             col808(i + 3) - 5.5,
-            UPPER808_Y + PILL808_H + 1.5,
+            // centered between the pills over and under it
+            (UPPER808_Y + PILL808_H + LEGEND808_Y) / 2.0 - 6.5,
         );
     }
     // FLIP in the AC column, in the second knobs' row (this fork; phase 2 turns the panel)
-    b.part("flip", "toggle", "flip_off", col808(0) - 6.5, 31.0);
+    b.part("flip", "toggle", "flip_off", col808(0) - 8.5, 30.5);
     b.part(
         "select_bd",
         "area",
@@ -505,7 +506,7 @@ fn tr909(b: &mut Builder) {
     }
     // FLIP under the LEVEL knob (with the lower knobs), the flam key level with the step
     // keys' bottoms, both centered in the AC column (4..26)
-    b.part("flip", "toggle", "flip909_off", 7.5, KNOB_Y_909[1] - 0.5);
+    b.part("flip", "toggle", "flip909_off", 7.5, KNOB_Y_909[1]);
     b.part(
         "flam_button",
         "toggle",

@@ -31,6 +31,8 @@ pub struct KnobDesign {
     /// The color of the value arc the app paints over the ring track.
     pub arc: &'static str,
     pub track: &'static str,
+    /// The body's dark outline (this fork, the drum machines' knobs), "" for none.
+    pub outline: &'static str,
 }
 
 pub const KNOBS: [KnobDesign; 6] = [
@@ -51,6 +53,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         pointer: pal::BLACK,
         arc: pal::RED,
         track: "#00000026",
+        outline: "",
     },
     KnobDesign {
         name: "knob_808_red",
@@ -58,16 +61,17 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.9,
+        ring_r: 5.75,
         ring_w: 0.9,
-        body_r: 4.7,
-        ptr0: 1.4,
+        body_r: 4.5,
+        ptr0: 1.0,
         ptr1: 4.0,
         ptr_w: 1.0,
         body: pal::RED,
-        pointer: pal::WHITE,
+        pointer: KNOB_INK_808,
         arc: pal::YELLOW,
-        track: "#ffffff22",
+        track: "#ffffff21",
+        outline: KNOB_INK_808,
     },
     KnobDesign {
         name: "knob_808_white",
@@ -75,33 +79,35 @@ pub const KNOBS: [KnobDesign; 6] = [
         h: 13.0,
         cx: 6.5,
         cy: 6.5,
-        ring_r: 5.9,
+        ring_r: 5.75,
         ring_w: 0.9,
-        body_r: 4.7,
-        ptr0: 1.4,
+        body_r: 4.5,
+        ptr0: 1.0,
         ptr1: 4.0,
         ptr_w: 1.0,
         body: "#e6e8ea",
-        pointer: pal::BLACK,
-        arc: pal::ORANGE,
-        track: "#ffffff22",
+        pointer: KNOB_INK_808,
+        arc: pal::YELLOW,
+        track: "#ffffff21",
+        outline: KNOB_INK_808,
     },
     KnobDesign {
         name: "knob_909",
-        w: 12.0,
-        h: 12.0,
-        cx: 6.0,
-        cy: 6.0,
-        ring_r: 5.4,
+        w: 13.0,
+        h: 13.0,
+        cx: 6.5,
+        cy: 6.5,
+        ring_r: 5.75,
         ring_w: 0.9,
-        body_r: 4.2,
+        body_r: 4.5,
         ptr0: 1.2,
-        ptr1: 3.7,
+        ptr1: 3.9,
         ptr_w: 1.0,
-        body: pal::BLACK,
-        pointer: pal::WHITE,
+        body: "#4f5050",
+        pointer: pal::ORANGE,
         arc: pal::ORANGE,
-        track: "#00000022",
+        track: "#00000021",
+        outline: "#1a1a1a",
     },
     // The mixer's and the effects' knobs.
     KnobDesign {
@@ -120,6 +126,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         pointer: pal::INK,
         arc: pal::AMBER,
         track: "#00000040",
+        outline: "",
     },
     // The 303's LFO knobs (this fork): the 909's small knob with a red arc.
     KnobDesign {
@@ -138,6 +145,7 @@ pub const KNOBS: [KnobDesign; 6] = [
         pointer: pal::WHITE,
         arc: pal::RED,
         track: "#0000002a",
+        outline: "",
     },
 ];
 
@@ -151,6 +159,10 @@ fn knobs(out: &mut Vec<Part>) {
             );
             if k.name == "knob_303" {
                 knob_body_303(s, k.cx, k.cy);
+            } else if !k.outline.is_empty() {
+                // the drum machines' knobs (this fork, as the reference picture): a dark outline
+                s.circle(k.cx, k.cy, k.body_r, k.outline);
+                s.circle(k.cx, k.cy, k.body_r - 0.6, k.body);
             } else {
                 s.circle(k.cx, k.cy, k.body_r, k.body);
                 s.circle_stroke(k.cx, k.cy, k.body_r - 0.6, "#ffffff2a", 0.5);
@@ -196,6 +208,9 @@ fn knob_cap_303(s: &mut Svg, cx: f32, cy: f32) {
         "#acafb8",
     );
 }
+
+/// The 808 knobs' outline and pointer.
+const KNOB_INK_808: &str = "#130505";
 
 /// The four colors of the 808's steps, which the app icon and the wordmark's underline reuse.
 const STEP_COLORS: [&str; 4] = [pal::RED, pal::ORANGE, pal::YELLOW, pal::WHITE];
@@ -382,14 +397,6 @@ fn keycap(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, face: &str, lip: &str) {
     s.rect_stroke(x + 0.25, y + 0.25, w - 0.5, h - 0.5, 2.2, "#00000055", 0.5);
 }
 
-/// The discreet 3D of the 303's keys and pills: a darker base, the face inset by 0.5 px on
-/// the sides and 1.5 px short at the bottom. `r` is the corner radius.
-#[allow(clippy::too_many_arguments)]
-fn key_3d(s: &mut Svg, x: f32, y: f32, w: f32, h: f32, r: f32, base: &str, face: &str) {
-    s.rect(x, y, w, h, r, base);
-    s.rect(x + 0.5, y, w - 1.0, h - 1.5, r - 0.3, face);
-}
-
 /// The mixer's routing key, 28 x 13: a face over a darker base that shows as a soft rim and a
 /// lip, an amber LED at the left and the label left-aligned after it.
 fn mixsw_body(s: &mut Svg, label_: &str, on: bool) {
@@ -517,7 +524,17 @@ fn switches(out: &mut Vec<Part>) {
             wave_glyphs(s, sx, qx, h / 2.0, on, 1.3);
         }));
     }
-    switch(out, "switch_808", 11.0, 17.0, false);
+    // the 808's conga/clave/maraca switch (this fork, as the reference picture): a black slot
+    // with a blue-gray handle at its top (0) or bottom (1)
+    for pos in 0..2 {
+        out.push(Part::new(format!("switch_808_{pos}"), 11.0, 13.0, |s| {
+            s.rect(0.0, 0.25, 11.0, 12.5, 2.0, pal::BLACK);
+            let y = if pos == 0 { 1.25 } else { 5.75 };
+            s.rect(1.0, y, 9.0, 6.0, 1.2, "#596475");
+            s.rect(1.5, y + 0.5, 8.0, 5.0, 1.0, "#6e7c91");
+            s.line(2.5, y + 1.0, 8.5, y + 1.0, "#ffffff22", 0.5);
+        }));
+    }
     switch(out, "switch_fx", 9.0, 18.0, false);
     switch(out, "switch_mode", 26.0, 19.0, true);
     // Dist, PCF and Comp routing keys of the mixer (and the master's).
@@ -705,12 +722,12 @@ fn transport_buttons(out: &mut Vec<Part>) {
         // The 909's flam button (this fork): a light key like a step key, its light red when on.
         out.push(Part::new(format!("toggle_flam_{state}"), 15.0, 16.0, |s| {
             key909(s, 15.0, 16.0, "#f6f4ec");
-            led909(s, 7.5, 8.0, if on { pal::RED } else { LED_OFF_909 });
+            led909(s, 7.5, 5.5, if on { pal::RED } else { LED_OFF_909 });
         }));
         // the 909's FLIP (this fork): the same key, lower
         out.push(Part::new(format!("flip909_{state}"), 15.0, 13.0, |s| {
             key909(s, 15.0, 13.0, "#f6f4ec");
-            led909(s, 7.5, 6.5, if on { pal::RED } else { LED_OFF_909 });
+            led909(s, 7.5, 5.5, if on { pal::RED } else { LED_OFF_909 });
         }));
     }
 }
@@ -882,29 +899,48 @@ fn steps(out: &mut Vec<Part>) {
         ("yellow", pal::YELLOW),
         ("white", pal::WHITE),
     ];
-    // the 808's step keys (this fork): a colored key with a light in it, lit red (white on the
-    // red keys) when on
+    // the 808's step keys (this fork, as the reference picture): a key in a dark frame, its
+    // upper part in its color with a round light in it, its lower part lighter, a darker lip
+    // at the top and the bottom; the light red when on
+    let lower = |name: &str| match name {
+        "red" => "#e75e5a",
+        "orange" => "#f4ac63",
+        "yellow" => "#f7da7b",
+        _ => "#f7f7f2",
+    };
+    let lip = |name: &str| match name {
+        "red" => "#b3201b",
+        "orange" => "#bd650d",
+        "yellow" => "#c1970c",
+        _ => "#acac9a",
+    };
     for (name, color) in colors {
+        let color = if name == "white" {
+            STEP808_WHITE
+        } else {
+            color
+        };
         for (state, on) in [("off", false), ("on", true)] {
             out.push(Part::new(
                 format!("step808_{name}_{state}"),
                 STEP808_W,
                 STEP808_H,
                 |s| {
-                    let (w, h) = (STEP808_W, STEP808_H);
-                    s.rect(0.0, 0.5, w, h - 0.5, 2.5, &shade(color, 0.62));
-                    s.rect(0.0, 0.0, w, h - 1.5, 2.5, color);
-                    s.rect(0.8, 0.8, w - 1.6, 4.0, 2.0, "#ffffff22");
-                    let led = match (on, name) {
-                        (false, _) => &shade(color, 0.55)[..],
-                        (true, "red") => pal::WHITE,
-                        (true, _) => pal::RED,
+                    let (x, w, h) = ((STEP808_W - STEP808_KEY_W) / 2.0, STEP808_KEY_W, STEP808_H);
+                    s.rect(x, 0.0, w, h, 2.5, "#1d1d1f");
+                    s.rect(x + 0.75, 0.75, w - 1.5, h - 1.5, 2.0, lip(name));
+                    s.rect(x + 1.0, 1.75, w - 2.0, h - 4.5, 1.5, lower(name));
+                    s.rect(x + 1.0, 1.75, w - 2.0, 8.5, 1.5, color);
+                    s.rect(x + 1.0, 8.75, w - 2.0, 1.5, 0.0, color);
+                    s.line(x + 1.0, 10.5, x + w - 1.0, 10.5, &shade(color, 0.88), 0.8);
+                    let (cx, cy) = (STEP808_W / 2.0, 5.75);
+                    let (fill, ring) = if on {
+                        ("#ff261e".to_string(), "#881612".to_string())
+                    } else {
+                        (shade(color, 0.75), shade(color, 0.45))
                     };
-                    if on {
-                        s.circle(w / 2.0, 5.5, 3.6, "#ff5a4d40");
-                    }
-                    s.circle(w / 2.0, 5.5, 2.4, led);
-                    s.circle_stroke(w / 2.0, 5.5, 2.4, "#00000059", 0.6);
+                    s.circle(cx, cy, 2.25, &fill);
+                    s.circle_stroke(cx, cy, 2.0, &ring, 0.6);
                 },
             ));
         }
@@ -926,7 +962,7 @@ fn steps(out: &mut Vec<Part>) {
                     s.g_at(0.5, 0.0);
                     key909(s, 20.0, STEP909_H, fill);
                     s.end_g();
-                    led909(s, 10.5, 5.0, led);
+                    led909(s, 10.5, 5.75, led);
                 },
             ));
         }
@@ -1490,11 +1526,19 @@ pub const PILL808_W: f32 = 22.0;
 pub const PILL808_H: f32 = 9.0;
 pub const LEGEND808_Y: f32 = 75.5;
 pub const UPPER808_Y: f32 = 46.0;
-pub const STEP808_Y: f32 = 88.0;
-pub const STEP808_W: f32 = 20.0;
-pub const STEP808_H: f32 = 20.0;
-pub const STEP808_PITCH: f32 = 22.125;
-const PILL_CREAM: &str = "#f5ecbf";
+/// The step keys (this fork, as the reference picture): 16.5 x 22 keys (in 17 px parts) 22 px
+/// apart, centered under the columns.
+pub const STEP808_Y: f32 = 89.0;
+pub const STEP808_W: f32 = 17.0;
+pub const STEP808_KEY_W: f32 = 16.5;
+pub const STEP808_H: f32 = 22.0;
+pub const STEP808_PITCH: f32 = 22.0;
+const STEP808_WHITE: &str = "#e7e7d5";
+/// The 808's face, its columns' lines and its pills (the chosen one salmon).
+const BG_808: &str = "#3a3b3e";
+const LINE_808: &str = "#8e8f92";
+const PILL_CREAM: &str = "#f7f1c2";
+const PILL_CHOSEN_808: &str = "#e76c5c";
 const PILL_INK: &str = "#2a2723";
 
 /// The center x of the 808's column `col` (0 AC .. 11 CH).
@@ -1504,7 +1548,9 @@ pub fn col808(col: usize) -> f32 {
 
 /// The left x of the 808's step key `i` (0..=15), the sixteen across the columns' width.
 pub fn step808_x(i: usize) -> f32 {
-    COL808_X0 + STEP808_PITCH * i as f32 + (STEP808_PITCH - STEP808_W) / 2.0
+    // the sixteen keys centered on the section (183)
+    let span = STEP808_PITCH * 15.0 + STEP808_W;
+    183.0 - span / 2.0 + STEP808_PITCH * i as f32
 }
 
 fn pill(s: &mut Svg, x: f32, y: f32, fill: &str, ink: &str, text_: &str) {
@@ -1514,12 +1560,12 @@ fn pill(s: &mut Svg, x: f32, y: f32, fill: &str, ink: &str, text_: &str) {
 
 fn tr808_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tr808", 366.0, 115.0, |s| {
-        face(s, 366.0, 115.0, pal::CHARCOAL);
+        face(s, 366.0, 115.0, BG_808);
         let ink = pal::INK;
         // the columns' dividers, down to the step keys
         for c in 1..12 {
             let x = COL808_X0 + COL808_W * c as f32;
-            s.line(x, 3.0, x, STEP808_Y - 2.5, "#00000059", 0.8);
+            s.line(x, 3.0, x, STEP808_Y - 2.5, LINE_808, 0.6);
         }
         for c in 0..12 {
             label(s, col808(c), 5.0, 2.8, ink, "LEVEL");
@@ -1547,21 +1593,27 @@ fn tr808_bg(out: &mut Vec<Part>) {
             pill(s, x, LEGEND808_Y, PILL_CREAM, PILL_INK, name);
         }
     }));
-    // a chosen instrument's pill: red with its name in white
+    // a chosen instrument's pill: salmon, its name dark
     for name in NAMES_808.into_iter().chain(["LC", "MC", "HC", "CL", "MA"]) {
         out.push(Part::new(
             format!("pill808_{name}_on"),
             PILL808_W,
             PILL808_H,
-            move |s| pill(s, 0.0, 0.0, pal::RED, pal::WHITE, name),
+            move |s| pill(s, 0.0, 0.0, PILL_CHOSEN_808, PILL_INK, name),
         ));
     }
-    // the 808's FLIP: a light key with a light, red when on
+    // the 808's FLIP (as the reference picture): a cream key in a dark frame, its round light
+    // gray, red when on
     for (state, on) in [("off", false), ("on", true)] {
-        out.push(Part::new(format!("flip_{state}"), 13.0, 13.0, |s| {
-            key_3d(s, 0.0, 0.0, 13.0, 13.0, 2.0, "#c4c7cb", pal::WHITE);
-            s.circle(6.5, 6.5, 2.4, if on { pal::RED } else { "#7a7e84" });
-            s.circle_stroke(6.5, 6.5, 2.4, "#00000040", 0.5);
+        out.push(Part::new(format!("flip_{state}"), 17.0, 14.0, |s| {
+            key_303(s, 0.25, 0.25, 16.5, 13.5, "#1d1d1f", STEP808_WHITE);
+            let (fill, ring) = if on {
+                ("#ff261e", "#881612")
+            } else {
+                ("#adada0", "#7a7a71")
+            };
+            s.circle(8.5, 6.5, 2.25, fill);
+            s.circle_stroke(8.5, 6.5, 2.0, ring, 0.6);
         }));
     }
     // The mod's window (no longer on the panel, this fork; the part stays for the app's code).
@@ -1613,7 +1665,7 @@ pub const KNOBS_909: [(usize, usize, bool, &str, &str); 28] = [
     (0, 2, true, "flam", "FLAM"),
 ];
 /// The 909's rows: the knobs' tops (upper, lower), the name row's top and the steps' top.
-pub const KNOB_Y_909: [f32; 2] = [29.0, 56.0];
+pub const KNOB_Y_909: [f32; 2] = [28.5, 55.5];
 pub const NAMES_Y_909: f32 = 75.0;
 pub const STEPS_Y_909: f32 = 89.0;
 /// The header pills' top and height, the name pills' height and the step keys' height.
@@ -1622,7 +1674,7 @@ const HEAD909_H: f32 = 10.0;
 const NAME909_H: f32 = 10.0;
 pub const STEP909_H: f32 = 22.0;
 /// The FLAM knob's top: under the FLAM label, over the flam key (95..111).
-const FLAM_Y_909: f32 = 80.0;
+const FLAM_Y_909: f32 = 79.75;
 
 /// The top of a 909 knob (see `KNOBS_909`).
 pub fn knob_y_909(group: usize, lower: bool) -> f32 {
@@ -1647,10 +1699,12 @@ pub fn column_909(group: usize, col: usize) -> f32 {
 const LED_OFF_909: &str = "#c2bfb5";
 
 /// A 909 key (`w` by `h`): a gray frame around a light face.
+/// (this fork, as the reference picture: a darker frame, a light rim, thicker at the top and
+/// the bottom, around the face)
 fn key909(s: &mut Svg, w: f32, h: f32, fill: &str) {
-    s.rect(0.0, 0.0, w, h, 2.5, "#8e8b83");
-    s.rect(1.0, 1.0, w - 2.0, h - 2.0, 2.0, fill);
-    s.rect(1.6, 1.4, w - 3.2, 3.0, 1.5, "#ffffff59");
+    s.rect(0.0, 0.0, w, h, 2.5, "#6e6c68");
+    s.rect(1.0, 1.0, w - 2.0, h - 2.0, 2.0, "#dad8d2");
+    s.rect(2.0, 3.0, w - 4.0, h - 6.0, 1.5, fill);
 }
 
 /// A 909 key's light: a small pill centered at (`cx`, `cy`).
@@ -1658,8 +1712,8 @@ fn led909(s: &mut Svg, cx: f32, cy: f32, color: &str) {
     if color != LED_OFF_909 {
         s.rect(cx - 4.6, cy - 2.6, 9.2, 5.2, 2.6, &format!("{color}40"));
     }
-    s.rect(cx - 3.5, cy - 1.5, 7.0, 3.0, 1.5, color);
-    s.rect_stroke(cx - 3.5, cy - 1.5, 7.0, 3.0, 1.5, "#00000040", 0.5);
+    s.rect(cx - 3.0, cy - 1.5, 6.0, 3.0, 1.5, color);
+    s.rect_stroke(cx - 3.0, cy - 1.5, 6.0, 3.0, 1.5, "#00000040", 0.5);
 }
 
 /// The 909's header pill of group `i` (dark, its name orange) and its name pill (light).
@@ -1680,7 +1734,10 @@ pub fn pill909(i: usize) -> (f32, f32) {
     (EDGES_909[i] + 0.5, EDGES_909[i + 1] - EDGES_909[i] - 1.0)
 }
 
-const HEAD909_DARK: &str = "#4a4a48";
+const HEAD909_DARK: &str = "#4f5050";
+/// The chosen instrument's name pill (and the accent's header pill) and its edge.
+const CHOSEN_909: &str = "#eb9e4e";
+const CHOSEN_EDGE_909: &str = "#a76c32";
 
 fn tr909_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_tr909", 366.0, 115.0, |s| {
@@ -1706,14 +1763,14 @@ fn tr909_bg(out: &mut Vec<Part>) {
         let (_, w) = pill909(i);
         if i == 0 {
             out.push(Part::new("head909_AC_on", w, HEAD909_H, move |s| {
-                head909(s, 0.0, 0.0, w, pal::ORANGE, PILL_INK, name)
+                head909(s, 0.0, 0.0, w, CHOSEN_909, PILL_INK, name)
             }));
         } else {
             out.push(Part::new(
                 format!("name909_{name}_on"),
                 w,
                 NAME909_H,
-                move |s| name909(s, 0.0, 0.0, w, pal::ORANGE, "#a85d14", name),
+                move |s| name909(s, 0.0, 0.0, w, CHOSEN_909, CHOSEN_EDGE_909, name),
             ));
         }
     }

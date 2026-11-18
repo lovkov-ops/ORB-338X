@@ -215,8 +215,8 @@ pub fn tr909_hit(x: f32, y: f32) -> Option<usize> {
 
 /// The TR-808 step under `x` (section pixels): 16 cells of 16 px from x 14.
 pub fn tr808_step(x: f32) -> Option<usize> {
-    // this fork: sixteen keys of 22.125 px from x 6
-    let i = ((x - 6.0) / 22.125).floor();
+    // this fork: sixteen keys 22 px apart from x 9.5, each taking the 22 px around it
+    let i = ((x - 7.0) / 22.0).floor();
     (0.0..16.0).contains(&i).then_some(i as usize)
 }
 
@@ -381,11 +381,12 @@ mod tests {
         assert_eq!(tr909_hit(362.0, 10.0), None);
         assert_eq!(tr909_hit(10.0, 50.0), None);
         assert_eq!(tr909_hit(100.0, 50.0), None);
-        // (this fork) sixteen keys of 22.125 px from x 6
-        assert_eq!(tr808_step(5.0), None);
-        assert_eq!(tr808_step(6.0), Some(0));
-        assert_eq!(tr808_step(359.0), Some(15));
-        assert_eq!(tr808_step(360.0), None);
+        // (this fork) sixteen cells of 22 px from x 7
+        assert_eq!(tr808_step(6.0), None);
+        assert_eq!(tr808_step(7.0), Some(0));
+        assert_eq!(tr808_step(29.0), Some(1));
+        assert_eq!(tr808_step(358.0), Some(15));
+        assert_eq!(tr808_step(359.0), None);
         assert_eq!(tr909_step(26.0), Some(0));
         assert_eq!(tr909_step(361.0), Some(15));
         assert_eq!(tr909_step(362.0), None);
