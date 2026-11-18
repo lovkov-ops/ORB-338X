@@ -72,9 +72,17 @@ impl App {
         }
     }
 
-    /// Drum machine `k` plays `kit` (`None`: the song's kit again). A kit that cannot be read
-    /// is shown and changes nothing.
+    /// Drum machine `k` plays `kit` (`None`: the song's kit again), a change of the song (an
+    /// `.rbsx` keeps it). A kit that cannot be read is shown and changes nothing.
     pub fn use_kit_of(&mut self, k: usize, kit: Option<Kit>) {
+        if self.kit_of(k) != kit.as_ref() {
+            self.doc.modified = true;
+        }
+        self.put_kit_of(k, kit);
+    }
+
+    /// [`App::use_kit_of`] as a song kept it: the song stays unmodified.
+    pub fn put_kit_of(&mut self, k: usize, kit: Option<Kit>) {
         self.action(|s| {
             let want = kit.clone().unwrap_or_else(|| s.doc.kit.clone());
             let samples = match s.kit_samples(&want) {

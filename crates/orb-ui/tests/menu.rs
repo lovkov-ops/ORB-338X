@@ -3399,14 +3399,16 @@ fn a_drum_machine_plays_a_kit_of_its_own() {
     assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
     assert_eq!(h.app.kit_of(1), Some(&own));
     assert_eq!(h.app.kit_of(0), None);
-    assert_eq!(h.app.doc.kit, Kit::Standard);
-    assert!(!h.app.doc.modified, "the song's kit stays");
+    assert_eq!(h.app.doc.kit, Kit::Standard, "the song's kit stays");
+    assert!(h.app.doc.modified, "an .rbsx keeps it: an edit");
     h.calls(1);
     h.app.use_kit_of(1, None);
     assert_eq!(h.app.kit_of(1), None);
     h.app.use_kit_of(0, Some(Kit::Standard));
     assert_eq!(h.app.kit_of(0), Some(&Kit::Standard));
     h.calls(1);
+    // (no unsaved-changes question for the new song)
+    h.app.doc.modified = false;
     h.app.command(Cmd::New);
     h.calls(1);
     assert_eq!(h.app.kit_of(0), None);

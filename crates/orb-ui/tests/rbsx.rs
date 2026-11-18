@@ -131,7 +131,7 @@ fn an_rbsx_keeps_the_generate_settings_and_its_song() {
     // the file is an RBS song with the OGEN chunk at its end
     let bytes = std::fs::read(&out).unwrap();
     let mut parsed = rbs::Song::parse(&bytes).unwrap();
-    assert_eq!(rbsx::split(&mut parsed), Some(kept));
+    assert_eq!(rbsx::split(&mut parsed), Some(kept.clone()));
 
     // a new app opens it: the song and the menu come back
     let mut h2 = Harness::new();
@@ -224,4 +224,38 @@ fn every_shipped_rbs_song_still_opens_with_an_empty_menu() {
         }
     }
     assert!(n > 0);
+}
+
+/// (this fork) An .rbsx keeps the drum machines' FLIP faces: which shows, the sounds' pans and
+/// effects switches and a machine's own kit; they come back with the song, and the engine
+/// takes the mix.
+#[test]
+fn an_rbsx_keeps_the_flip_faces_and_a_machines_kit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = Harness::new();
+    h.open(&song());
+    h.app.panel.press("tr909.flip", 0.0);
+    h.app.panel.press("tr909f.fx2", 0.0);
+    h.app.panel.set_knob("tr808f.pan3", 0);
+    h.app.use_kit_of(
+        0,
+        Some(orb_cli::mods::Kit::Mod(root().join("assets/Standard.rbm"))),
+    );
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+    h.calls(2);
+    assert!(h.app.doc.modified);
+    let kept = h.app.gen_state();
+    assert!(kept.flip[1] && !kept.voice_mix[1].fx[2] && kept.voice_mix[0].pan[3] == 0);
+    assert!(kept.kits[0].is_some());
+    let out = dir.path().join("flip.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    assert_eq!(h2.app.gen_state(), kept);
+    assert!(h2.app.panel.flipped(1) && !h2.app.panel.flipped(0));
+    assert!(h2.app.kit_of(0).is_some() && h2.app.kit_of(1).is_none());
+    assert!(!h2.app.doc.modified, "opening is no edit");
 }

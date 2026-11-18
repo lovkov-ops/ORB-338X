@@ -165,6 +165,8 @@ pub struct App {
     pub(crate) mod_list: Option<Result<Vec<ModEntry>, String>>,
     /// The drum machines' own kits (this fork's KIT menu, kit_menu.rs).
     pub(crate) machine_kit: [Option<orb_cli::mods::Kit>; 2],
+    /// The drum machines' sounds' mixes as the song had them last (a change is an edit).
+    pub(crate) voice_mix_seen: [orb_engine::frame::voices::VoiceMix; 2],
     /// Whether a mod file has a `Demo.rbs`, for the file last asked (the Mods menu's item).
     pub(crate) demo_cache: Option<(PathBuf, bool)>,
     /// The splash picture of the kit last shown in the 808's mod window (`App::mod_view`).
@@ -270,6 +272,7 @@ impl App {
             export: None,
             mod_list: None,
             machine_kit: [None, None],
+            voice_mix_seen: Default::default(),
             demo_cache: None,
             splash: None,
             info_open: false,
@@ -743,7 +746,13 @@ impl App {
         if let Some(link) = &mut self.link {
             // the drum machines' sounds' pans and effects switches (this fork's FLIP faces)
             for (k, dev) in [(0, Device::Tr808), (1, Device::Tr909)] {
-                link.sync_voice_mix(dev, self.panel.voice_mix(k));
+                let mix = self.panel.voice_mix(k);
+                link.sync_voice_mix(dev, mix);
+                // a pan or an effects switch moved: an edit of the song (an .rbsx keeps it)
+                if mix != self.voice_mix_seen[k] {
+                    self.voice_mix_seen[k] = mix;
+                    self.doc.modified = true;
+                }
             }
             let before = link.recorded_revision();
             link.sync(&mut self.panel);

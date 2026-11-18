@@ -565,6 +565,11 @@ impl Panel {
 
     /// Sets a knob position and sends nothing (the fork's LFO knobs, restored from an .rbsx;
     /// lfo.rs).
+    /// Sets a toggle's state without an event (a song's settings: rbsx.rs).
+    pub fn put_toggle(&mut self, id: &str, on: bool) {
+        self.toggles.insert(id.into(), on);
+    }
+
     pub fn put_knob(&mut self, id: &str, p: i32) {
         self.knobs.insert(id.into(), p.clamp(0, KNOB_MAX));
     }

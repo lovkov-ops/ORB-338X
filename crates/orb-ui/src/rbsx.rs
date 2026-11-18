@@ -25,6 +25,10 @@ use crate::lfo;
 use crate::palette::{INK, INK_DIM, SLATE_DARK, SLATE_LINE};
 use crate::random::{MOVES, PARAMS};
 use crate::scale::{KEYS, SCALES, ScaleKeys};
+use orb_engine::frame::voices::VoiceMix;
+
+/// The drum machines' names in the chunk (this fork's FLIP faces).
+const DRUMS: [&str; 2] = ["tr808", "tr909"];
 
 /// The chunk's tag.
 pub const TAG: [u8; 4] = *b"OGEN";
@@ -35,7 +39,7 @@ pub const EXTENSION: &str = "rbsx";
 
 /// What the GENERATE menu keeps of both synths (`App::gen_state`), and the LFOs' settings of
 /// their five large knobs (lfo.rs).
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GenState {
     pub scale_keys: ScaleKeys,
     /// Indexed by row (`Op`), synth, button.
@@ -50,6 +54,12 @@ pub struct GenState {
     pub mix_mute: [bool; 4],
     /// Each synth's LFOs, by knob (`lfo::PARAMS`).
     pub lfo: [[LfoState; 5]; 2],
+    /// The 808's and the 909's FLIP faces (this fork): whether each shows, its sounds' pans
+    /// and effects switches, and the drum machine's own kit (the INFO name of a mod, or
+    /// "Standard"; `None`: the song's kit).
+    pub flip: [bool; 2],
+    pub voice_mix: [VoiceMix; 2],
+    pub kits: [Option<String>; 2],
 }
 
 /// An LFO's settings: its RATE and AMOUNT knobs' values (0..=127) and its buttons.
@@ -134,6 +144,22 @@ pub fn encode(state: &GenState) -> Vec<u8> {
         lines.push(format!("mixer{n}.solo={}", state.mix_solo[c] as u8));
         lines.push(format!("mixer{n}.mute={}", state.mix_mute[c] as u8));
     }
+    // the drum machines' FLIP faces: 11 pans (0..127) and 11 effects switches, BD first
+    for (k, dev) in DRUMS.into_iter().enumerate() {
+        let m = &state.voice_mix[k];
+        let pans: Vec<String> = m.pan[1..12].iter().map(|p| p.to_string()).collect();
+        let fx: Vec<&str> = m.fx[1..12]
+            .iter()
+            .map(|&f| if f { "1" } else { "0" })
+            .collect();
+        lines.push(format!("{dev}.flip={}", state.flip[k] as u8));
+        lines.push(format!("{dev}.pan={}", pans.join(",")));
+        lines.push(format!("{dev}.fx={}", fx.join(",")));
+        lines.push(format!(
+            "{dev}.kit={}",
+            state.kits[k].as_deref().unwrap_or("")
+        ));
+    }
     let mut body = lines.join("\n").into_bytes();
     body.push(b'\n');
     // IFF chunks are an even number of bytes
@@ -210,6 +236,25 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
         let n = c + 1;
         state.mix_solo[c] = get(&format!("mixer{n}.solo")) == Some("1");
         state.mix_mute[c] = get(&format!("mixer{n}.mute")) == Some("1");
+    }
+    for (k, dev) in DRUMS.into_iter().enumerate() {
+        state.flip[k] = get(&format!("{dev}.flip")) == Some("1");
+        let m = &mut state.voice_mix[k];
+        if let Some(v) = get(&format!("{dev}.pan")) {
+            for (i, p) in v.split(',').take(11).enumerate() {
+                if let Ok(p) = p.trim().parse::<u8>() {
+                    m.pan[i + 1] = p.min(127);
+                }
+            }
+        }
+        if let Some(v) = get(&format!("{dev}.fx")) {
+            for (i, f) in v.split(',').take(11).enumerate() {
+                m.fx[i + 1] = f.trim() != "0";
+            }
+        }
+        state.kits[k] = get(&format!("{dev}.kit"))
+            .filter(|v| !v.is_empty())
+            .map(String::from);
     }
     Some(state)
 }
@@ -354,6 +399,16 @@ impl App {
             mix_solo: self.panel.solo,
             mix_mute: self.panel.mute,
             lfo,
+            flip: [self.panel.flipped(0), self.panel.flipped(1)],
+            voice_mix: [self.panel.voice_mix(0), self.panel.voice_mix(1)],
+            kits: std::array::from_fn(|k| {
+                self.kit_of(k).map(|kit| match kit {
+                    orb_cli::mods::Kit::Standard => orb_cli::mods::STANDARD.to_string(),
+                    orb_cli::mods::Kit::Mod(p) => crate::session::mod_info(p)
+                        .map(|i| i.name)
+                        .unwrap_or_default(),
+                })
+            }),
         }
     }
 
@@ -395,6 +450,25 @@ impl App {
                 self.lfo_mode[k][p] = l.mode;
             }
         }
+        // the drum machines' FLIP faces (this fork) and their own kits
+        self.voice_mix_seen = state.voice_mix;
+        for (k, sec) in crate::model::FLIP_FACES.into_iter().enumerate() {
+            let dev = ["tr808", "tr909"][k];
+            self.panel.put_toggle(&format!("{dev}.flip"), state.flip[k]);
+            let m = &state.voice_mix[k];
+            for i in 1..12 {
+                // a knob already at the value keeps its position (the middle is 500, not 504)
+                let id = format!("{sec}.pan{i}");
+                if crate::behavior::knob_send(self.panel.knob(&id)) != m.pan[i] as i32 {
+                    self.panel.put_knob(&id, to(m.pan[i]));
+                }
+                self.panel.put_toggle(&format!("{sec}.fx{i}"), m.fx[i]);
+            }
+            if let Some(name) = &state.kits[k] {
+                let kit = self.kit_for(name);
+                self.put_kit_of(k, Some(kit));
+            }
+        }
     }
 }
 
@@ -432,6 +506,11 @@ mod tests {
                 shape: lfo::Shape::SampleHold,
             },
         };
+        st.flip[1] = true;
+        st.voice_mix[0].pan[3] = 10;
+        st.voice_mix[1].fx[11] = false;
+        st.voice_mix[1].pan[1] = 127;
+        st.kits[1] = Some("PBE2".into());
         st
     }
 
@@ -457,6 +536,10 @@ mod tests {
         // (this fork) an older file has no `generated`: a done GENERATE row means it ran
         assert!(text.contains("baze1.generated=1\n"));
         assert!(text.contains("mixer2.solo=1\nmixer2.mute=0\n"));
+        // (this fork) the FLIP faces
+        assert!(text.contains("tr808.flip=0\ntr808.pan=64,64,10,64,"));
+        assert!(text.contains("tr909.flip=1\ntr909.pan=127,64,"));
+        assert!(text.contains("tr909.fx=1,1,1,1,1,1,1,1,1,1,0\ntr909.kit=PBE2\n"));
         assert!(text.contains("mixer4.solo=0\nmixer4.mute=1\n"));
         let old = text.replace("baze1.generated=1\n", "");
         assert_eq!(

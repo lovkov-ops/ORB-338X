@@ -374,7 +374,7 @@ impl App {
 
     /// The kit a song names: the standard kit, or the mod of that name in the Mods folder.
     /// A mod that is not there gives the standard kit and an error.
-    fn kit_for(&mut self, mod_name: &str) -> Kit {
+    pub(crate) fn kit_for(&mut self, mod_name: &str) -> Kit {
         if mod_name == STANDARD {
             return Kit::Standard;
         }
