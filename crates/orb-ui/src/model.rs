@@ -4,7 +4,12 @@
 
 use std::collections::HashMap;
 
+use orb_engine::frame::voices::VoiceMix;
+
 use crate::behavior::{self, KNOB_MAX};
+
+/// The drum machines' FLIP faces' sections (this fork), the 808's then the 909's.
+pub const FLIP_FACES: [&str; 2] = ["tr808f", "tr909f"];
 
 /// Ticks per bar.
 pub const BAR: i32 = 768;
@@ -377,7 +382,9 @@ impl Panel {
                     // toggle has an entry, so that the engine's value is taken: the mixer
                     // channel's distortion insert, the 303's and 909's flags.)
                     let on = (c.name() == "on" || c.name() == "mute")
-                        && (c.section.starts_with("pattern") || c.section.starts_with("mixer"));
+                        && (c.section.starts_with("pattern") || c.section.starts_with("mixer"))
+                        // the FLIP faces' FX keys (this fork): every sound's effects on
+                        || (FLIP_FACES.contains(&c.section.as_str()) && c.name().starts_with("fx"));
                     p.toggles.insert(c.id, on);
                 }
                 "hswitch" | "vswitch" => {
@@ -685,6 +692,53 @@ impl Panel {
         }
     }
 
+    // ---- the drum machines' FLIP faces (this fork) -----------------------------------------
+
+    /// Whether drum machine `k` (0 the 808, 1 the 909) shows its FLIP face.
+    pub fn flipped(&self, k: usize) -> bool {
+        self.toggles
+            .get(["tr808.flip", "tr909.flip"][k.min(1)])
+            .copied()
+            .unwrap_or(false)
+    }
+
+    /// Whether control `c` is hidden by a FLIP state: a FLIP face's controls while it is off;
+    /// while it is on, the knobs it covers (every knob of the drum machine but the 909's FLAM).
+    pub fn hidden(&self, c: &crate::layout::Ctl) -> bool {
+        match c.section.as_str() {
+            "tr808f" => !self.flipped(0),
+            "tr909f" => !self.flipped(1),
+            "tr808" => c.kind == "knob" && self.flipped(0),
+            "tr909" => c.kind == "knob" && c.name() != "flam" && self.flipped(1),
+            _ => false,
+        }
+    }
+
+    /// The background part drawn for `name`: a drum machine's FLIP face when it is on.
+    pub fn background<'a>(&self, name: &'a str) -> &'a str {
+        match name {
+            "bg_tr808" if self.flipped(0) => "bg_tr808_flip",
+            "bg_tr909" if self.flipped(1) => "bg_tr909_flip",
+            _ => name,
+        }
+    }
+
+    /// Drum machine `k`'s sounds' pans and effects switches as its FLIP face sets them.
+    pub fn voice_mix(&self, k: usize) -> VoiceMix {
+        let sec = FLIP_FACES[k.min(1)];
+        let mut m = VoiceMix::default();
+        for i in 1..12 {
+            let pan = behavior::knob_send(self.knob(&format!("{sec}.pan{i}")));
+            m.pan[i] = pan.clamp(0, 127) as u8;
+            m.fx[i] = self
+                .toggles
+                .get(&format!("{sec}.fx{i}"))
+                .copied()
+                .unwrap_or(true);
+        }
+        m
+    }
+
     // ---- toggles and presses ------------------------------------------------------------
 
     /// The on/off state of a toggle-like control.
@@ -739,8 +793,13 @@ impl Panel {
                 self.flam_button = !self.flam_button;
             }
             // FLIP (this fork): the drum machine's other face; the panel's state, no message
+            // and a sound's effects switch on that face (voice_mix)
             "tr808" | "tr909" if name == "flip" => {
                 let on = !self.toggles.get(id).copied().unwrap_or(false);
+                self.toggles.insert(id.into(), on);
+            }
+            "tr808f" | "tr909f" if name.starts_with("fx") => {
+                let on = !self.toggles.get(id).copied().unwrap_or(true);
                 self.toggles.insert(id.into(), on);
             }
             s if s.starts_with("mixer") => {
@@ -1361,6 +1420,38 @@ mod tests {
         p.playing_step303[0] = Some(15);
         assert_eq!(states(&p), "oooooooooooooooP");
         assert!(p.playing_step303[1].is_none());
+    }
+
+    /// (this fork) FLIP shows a drum machine's other face: its knobs hide (the 909's FLAM
+    /// stays) and the face's PAN knobs and FX keys show; they make the sounds' mix.
+    #[test]
+    fn flip_shows_the_pans_and_effects_switches() {
+        let mut p = Panel::new();
+        let ctl = |id: &str| {
+            crate::layout::controls()
+                .into_iter()
+                .find(|c| c.id == id)
+                .unwrap()
+        };
+        assert!(!p.flipped(0) && !p.hidden(&ctl("tr808.bd_level")));
+        assert!(p.hidden(&ctl("tr808f.pan1")));
+        assert!(p.voice_mix(0).neutral() && p.voice_mix(1).neutral());
+        p.press("tr808.flip", 0.0);
+        assert!(p.flipped(0) && p.hidden(&ctl("tr808.bd_level")));
+        assert!(!p.hidden(&ctl("tr808f.pan1")) && !p.hidden(&ctl("tr808.flip")));
+        assert_eq!(p.background("bg_tr808"), "bg_tr808_flip");
+        p.press("tr909.flip", 0.0);
+        assert!(p.hidden(&ctl("tr909.bd_tune")) && !p.hidden(&ctl("tr909.flam")));
+        p.press("tr808f.fx3", 0.0);
+        p.set_knob("tr909f.pan2", 0);
+        let (m8, m9) = (p.voice_mix(0), p.voice_mix(1));
+        assert!(!m8.fx[3] && m8.fx[2] && m8.pan[3] == 64);
+        assert!(m9.pan[2] == 0 && m9.fx[2]);
+        p.press("tr808.flip", 0.0);
+        assert!(
+            !p.flipped(0) && !p.voice_mix(0).fx[3],
+            "the mix stays without the face"
+        );
     }
 
     /// (this fork) SOLO and MUTE set the channels' enables: soloed ones play alone, muted ones

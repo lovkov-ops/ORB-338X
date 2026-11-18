@@ -738,13 +738,14 @@ fn transport_buttons(out: &mut Vec<Part>) {
         // the 909's FLIP (this fork): the same key, lower
         out.push(Part::new(format!("flip909_{state}"), 15.0, 13.0, |s| {
             key909(s, 15.0, 13.0, KEY909_LIGHT);
-            led909(
-                s,
-                7.5,
-                5.5,
-                if on { pal::RED } else { LED_OFF_909 },
-                KEY909_LIGHT,
-            );
+            let led = if on { pal::ORANGE } else { LED_OFF_909 };
+            led909(s, 7.5, 5.5, led, KEY909_LIGHT);
+        }));
+        // the 909's FX keys on its FLIP face (this fork): the same key, lit green
+        out.push(Part::new(format!("fx909_{state}"), 15.0, 13.0, |s| {
+            key909(s, 15.0, 13.0, KEY909_LIGHT);
+            let led = if on { pal::GREEN } else { LED_OFF_909 };
+            led909(s, 7.5, 5.5, led, KEY909_LIGHT);
         }));
     }
 }
@@ -1575,19 +1576,47 @@ fn pill(s: &mut Svg, x: f32, y: f32, fill: &str, ink: &str, text_: &str) {
     label(s, x + PILL808_W / 2.0, y + PILL808_H / 2.0, 3.2, ink, text_);
 }
 
-fn tr808_bg(out: &mut Vec<Part>) {
-    out.push(Part::new("bg_tr808", 366.0, 115.0, |s| {
-        face(s, 366.0, 115.0, BG_808);
-        let ink = pal::INK;
-        // the columns' dividers, down to the step keys
+/// "KIT" and a small down triangle (the kit menu, this fork's FLIP faces), centered at
+/// (`cx`, `cy`).
+fn kit_label(s: &mut Svg, cx: f32, cy: f32, ink: &str) {
+    let cap = 2.8;
+    let w = font::text_width(cap, "KIT");
+    let x0 = cx - (w + 2.6) / 2.0;
+    text(s, x0, cy, cap, Anchor::Start, ink, "KIT");
+    let tx = x0 + w + 0.6;
+    s.path(
+        &format!(
+            "M{} {} H{} L{} {} Z",
+            n(tx),
+            n(cy - 0.6),
+            n(tx + 2.0),
+            n(tx + 1.0),
+            n(cy + 0.7)
+        ),
+        ink,
+    );
+}
+
+/// The 808's face (`flip`: its FLIP face, this fork: KIT, then PAN and FX for every sound).
+fn bg_808(s: &mut Svg, flip: bool) {
+    face(s, 366.0, 115.0, BG_808);
+    let ink = pal::INK;
+    // the columns' dividers, down to the step keys
+    for c in 1..12 {
+        let x = COL808_X0 + COL808_W * c as f32;
+        s.line(x, 3.0, x, STEP808_Y - 2.5, LINE_808, 0.6);
+    }
+    label(s, col808(0), 27.7, 2.8, ink, "FLIP");
+    if flip {
+        kit_label(s, col808(0), 5.0, ink);
         for c in 1..12 {
-            let x = COL808_X0 + COL808_W * c as f32;
-            s.line(x, 3.0, x, STEP808_Y - 2.5, LINE_808, 0.6);
+            label(s, col808(c), 5.0, 2.8, ink, "PAN");
+            label(s, col808(c), 27.7, 2.8, ink, "FX");
         }
+    } else {
         for c in 0..12 {
             label(s, col808(c), 5.0, 2.8, ink, "LEVEL");
         }
-        label(s, col808(0), 27.7, 2.8, ink, "FLIP");
         for (c, t) in [
             (1, "TONE"),
             (2, "TONE"),
@@ -1601,14 +1630,21 @@ fn tr808_bg(out: &mut Vec<Part>) {
         for (c, t) in [(1, "DECAY"), (2, "SNAPPY"), (9, "DECAY"), (10, "DECAY")] {
             label(s, col808(c), 50.7, 2.8, ink, t);
         }
-        for (k, t) in ["LC", "MC", "HC", "CL", "MA"].into_iter().enumerate() {
-            let x = col808(k + 3) - PILL808_W / 2.0;
-            pill(s, x, UPPER808_Y, PILL_CREAM, PILL_INK, t);
-        }
-        for (c, name) in NAMES_808.into_iter().enumerate() {
-            let x = col808(c) - PILL808_W / 2.0;
-            pill(s, x, LEGEND808_Y, PILL_CREAM, PILL_INK, name);
-        }
+    }
+    for (k, t) in ["LC", "MC", "HC", "CL", "MA"].into_iter().enumerate() {
+        let x = col808(k + 3) - PILL808_W / 2.0;
+        pill(s, x, UPPER808_Y, PILL_CREAM, PILL_INK, t);
+    }
+    for (c, name) in NAMES_808.into_iter().enumerate() {
+        let x = col808(c) - PILL808_W / 2.0;
+        pill(s, x, LEGEND808_Y, PILL_CREAM, PILL_INK, name);
+    }
+}
+
+fn tr808_bg(out: &mut Vec<Part>) {
+    out.push(Part::new("bg_tr808", 366.0, 115.0, |s| bg_808(s, false)));
+    out.push(Part::new("bg_tr808_flip", 366.0, 115.0, |s| {
+        bg_808(s, true)
     }));
     // a chosen instrument's pill: salmon, its name dark
     for name in NAMES_808.into_iter().chain(["LC", "MC", "HC", "CL", "MA"]) {
@@ -1774,26 +1810,47 @@ const HEAD909_DARK: &str = "#4f5050";
 const CHOSEN_909: &str = "#eb9e4e";
 const CHOSEN_EDGE_909: &str = "#a76c32";
 
-fn tr909_bg(out: &mut Vec<Part>) {
-    out.push(Part::new("bg_tr909", 366.0, 115.0, |s| {
-        face(s, 366.0, 115.0, pal::CREAM);
-        let ink = pal::BLACK;
-        for (i, name) in NAMES_909.into_iter().enumerate() {
-            let (x, w) = pill909(i);
+/// The 909's face (`flip`: its FLIP face, this fork: KIT for the accent's header, then PAN
+/// and FX for every sound, in the middle of its group).
+fn bg_909(s: &mut Svg, flip: bool) {
+    face(s, 366.0, 115.0, pal::CREAM);
+    let ink = pal::BLACK;
+    for (i, name) in NAMES_909.into_iter().enumerate() {
+        let (x, w) = pill909(i);
+        if i == 0 && flip {
+            kit_label(s, x + w / 2.0, HEAD909_Y + HEAD909_H / 2.0, ink);
+        } else {
             head909(s, x, HEAD909_Y, w, HEAD909_DARK, pal::ORANGE, name);
-            if i > 0 {
-                name909(s, x, NAMES_Y_909, w, "#e6e4dd", "#b3afa5", name);
-                let x0 = EDGES_909[i];
-                s.line(x0, 17.5, x0, 70.0, "#b9b5ab", 0.8);
-            }
         }
-        for (group, col, lower, _, t) in KNOBS_909 {
-            // FLAM's label a little nearer its knob, away from FLIP over it
-            let gap = if t == "FLAM" { 3.0 } else { 3.7 };
-            let y = knob_y_909(group, lower) - gap;
-            label(s, column_909(group, col), y, 2.8, ink, t);
+        if i > 0 {
+            name909(s, x, NAMES_Y_909, w, "#e6e4dd", "#b3afa5", name);
+            let x0 = EDGES_909[i];
+            s.line(x0, 17.5, x0, 70.0, "#b9b5ab", 0.8);
         }
-        label(s, column_909(0, 2), KNOB_Y_909[1] - 3.7, 2.8, ink, "FLIP");
+    }
+    for (group, col, lower, _, t) in KNOBS_909 {
+        if flip && t != "FLAM" {
+            continue;
+        }
+        // FLAM's label a little nearer its knob, away from FLIP over it
+        let gap = if t == "FLAM" { 3.0 } else { 3.7 };
+        let y = knob_y_909(group, lower) - gap;
+        label(s, column_909(group, col), y, 2.8, ink, t);
+    }
+    label(s, column_909(0, 2), KNOB_Y_909[1] - 3.7, 2.8, ink, "FLIP");
+    if flip {
+        for g in 1..12 {
+            let x = column_909(g, 2);
+            label(s, x, KNOB_Y_909[0] - 3.7, 2.8, ink, "PAN");
+            label(s, x, KNOB_Y_909[1] - 3.7, 2.8, ink, "FX");
+        }
+    }
+}
+
+fn tr909_bg(out: &mut Vec<Part>) {
+    out.push(Part::new("bg_tr909", 366.0, 115.0, |s| bg_909(s, false)));
+    out.push(Part::new("bg_tr909_flip", 366.0, 115.0, |s| {
+        bg_909(s, true)
     }));
     // the chosen instrument (this fork): its name pill orange; the accent's header pill
     for (i, name) in NAMES_909.into_iter().enumerate() {

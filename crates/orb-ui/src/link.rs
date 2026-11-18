@@ -34,6 +34,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
+use orb_engine::frame::voices::VoiceMix;
 use orb_engine::frame::{Engine, LoadRefused, MixerParams};
 use orb_engine::samples::{STARTUP_ID, SampleSet};
 use orb_engine::seq::Event as TrackEvent;
@@ -350,6 +351,8 @@ pub fn meter_state(byte: u8) -> u8 {
 /// The panel's player link.
 pub struct Link {
     player: Player,
+    /// The drum machines' sounds' pans and effects switches the newest song has (this fork).
+    voice_mix: [VoiceMix; 2],
     controls: HashMap<String, (Device, u8)>,
     /// The value each knob has in a new empty song ([`Link::knob_default`]).
     knob_defaults: HashMap<String, u8>,
@@ -440,6 +443,7 @@ impl Link {
             loaded_at: None,
             saved: None,
             shown_gr: None,
+            voice_mix: [VoiceMix::default(); 2],
         };
         (link, audio)
     }
@@ -448,6 +452,11 @@ impl Link {
     /// `None` for an id that is not a knob, and for a drum machine's knob on a link made
     /// without samples.
     pub fn knob_default(&self, id: &str) -> Option<u8> {
+        // the FLIP faces' pans (this fork): the middle
+        let (sec, name) = id.split_once('.')?;
+        if crate::model::FLIP_FACES.contains(&sec) && name.starts_with("pan") {
+            return Some(orb_engine::frame::voices::PAN_CENTER);
+        }
         self.knob_defaults.get(id).copied()
     }
 
@@ -613,6 +622,8 @@ impl Link {
         // its start, stopped, instead of waiting as the pending song behind a playing one
         self.backlog.push_back(Command::Stop);
         self.backlog.push_back(Command::Load(engine));
+        // the new song's sounds' pans and effects switches are neutral (this fork)
+        self.voice_mix = [VoiceMix::default(); 2];
         self.recorded_at = None;
         self.saved = None;
         // Every Load queued here becomes current at once (the Stop before it), so each raises
@@ -957,10 +968,14 @@ impl Link {
     }
 
     /// This fork's pans and effects switches of the 808's or the 909's sounds (the FLIP face),
-    /// to the newest song.
-    pub fn voice_mix(&mut self, device: Device, mix: orb_engine::frame::voices::VoiceMix) {
-        self.backlog.push_back(Command::VoiceMix { device, mix });
-        self.flush();
+    /// to the newest song when they differ from what it has (a new song has them neutral).
+    pub fn sync_voice_mix(&mut self, device: Device, mix: VoiceMix) {
+        let k = usize::from(device == Device::Tr909);
+        if self.voice_mix[k] != mix {
+            self.voice_mix[k] = mix;
+            self.backlog.push_back(Command::VoiceMix { device, mix });
+            self.flush();
+        }
     }
 
     /// Sends the panel's pending events to the player.

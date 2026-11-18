@@ -1199,10 +1199,11 @@ fn the_wind_bar_and_loop_arrows_send_nothing_in_pattern_mode() {
     );
 }
 
+/// The knobs of the song's devices (not this fork's FLIP faces' pans, which the panel keeps).
 fn knob_ids() -> Vec<String> {
     layout::controls()
         .into_iter()
-        .filter(|c| c.kind == "knob")
+        .filter(|c| c.kind == "knob" && !orb_ui::model::FLIP_FACES.contains(&c.section.as_str()))
         .map(|c| c.id)
         .collect()
 }

@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use orb_engine::samples::SampleSet;
+use orb_engine::song::Device;
 
 use eframe::egui::{
     self, Color32, Image, Key, Pos2, Rect, Response, Sense, Shape, Stroke, Ui, Vec2,
@@ -696,6 +697,8 @@ impl App {
         }
 
         for (name, x, y) in layout::backgrounds() {
+            // a drum machine's FLIP face (this fork)
+            let name = self.panel.background(name);
             let (w, h) = part_size(name);
             if name == logo_anim::LOGO_PART {
                 // once per app start, from the first frame the logo is drawn
@@ -720,7 +723,10 @@ impl App {
 
         let ctls = std::mem::take(&mut self.ctls);
         for c in &ctls {
-            self.control(ui, &view, c, now);
+            // a drum machine's FLIP face shows its own controls instead of its knobs (this fork)
+            if !self.panel.hidden(c) {
+                self.control(ui, &view, c, now);
+            }
         }
         self.ctls = ctls;
         self.drum_strips(ui, &view);
@@ -732,6 +738,10 @@ impl App {
         // Send what was done, take what the engine did (the panel follows playback).
         self.note_edits();
         if let Some(link) = &mut self.link {
+            // the drum machines' sounds' pans and effects switches (this fork's FLIP faces)
+            for (k, dev) in [(0, Device::Tr808), (1, Device::Tr909)] {
+                link.sync_voice_mix(dev, self.panel.voice_mix(k));
+            }
             let before = link.recorded_revision();
             link.sync(&mut self.panel);
             // a merge of the recording changed the song's tracks: an edit
@@ -888,7 +898,7 @@ impl App {
     fn control(&mut self, ui: &mut Ui, view: &View, c: &Ctl, now: f64) {
         let rect = view.rect(c.x, c.y, c.w, c.h);
         match c.kind.as_str() {
-            "area" | "steps" => {}
+            "area" | "steps" | "kit" => {}
             "modview" => {
                 paint_part(ui, &c.part, rect);
                 self.mod_view(ui, view, c);
@@ -1315,6 +1325,8 @@ impl App {
             } else {
                 behavior::tr909_hit(sx, sy)
             };
+            // the 909's FLIP face has KIT where the accent's header is (this fork)
+            let hit = hit.filter(|&i| is808 || i != 0 || !self.panel.flipped(1));
             if let Some(i) = hit {
                 self.panel.select_instrument(is808, i);
                 // this fork: the click (not the held button) plays the drum (audition.rs)
@@ -1357,11 +1369,13 @@ impl App {
         } else {
             (format!("name909_{}_on", names[i]), 75.0)
         };
-        paint_part(
-            ui,
-            &name,
-            view.rect(o9.0 + x0 + 0.5, o9.1 + y, w - 1.0, 10.0),
-        );
+        if i != 0 || !self.panel.flipped(1) {
+            paint_part(
+                ui,
+                &name,
+                view.rect(o9.0 + x0 + 0.5, o9.1 + y, w - 1.0, 10.0),
+            );
+        }
     }
 
     /// With `--screenshot`: after a few frames (the SVGs are loaded and rasterized) save the
@@ -1397,7 +1411,7 @@ fn part_size(name: &str) -> (f32, f32) {
         "bg_transport" => (592.0, 50.0),
         logo_anim::LOGO_PART => (logo_anim::LOGO_W, logo_anim::LOGO_H),
         "bg_pattern" | "bg_mixer" => (70.0, 115.0),
-        "bg_tb303" | "bg_tr808" | "bg_tr909" => (366.0, 115.0),
+        "bg_tb303" | "bg_tr808" | "bg_tr909" | "bg_tr808_flip" | "bg_tr909_flip" => (366.0, 115.0),
         "bg_master" => (82.0, 98.0),
         "bg_pcf" => (82.0, 111.0),
         "bg_delay" | "bg_comp" => (82.0, 93.0),

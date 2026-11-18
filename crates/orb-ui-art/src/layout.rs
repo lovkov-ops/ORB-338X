@@ -213,6 +213,8 @@ pub fn layout(parts: &[Part]) -> Layout {
     tb303(&mut b, 1);
     tr808(&mut b);
     tr909(&mut b);
+    tr808_flip(&mut b);
+    tr909_flip(&mut b);
     for c in 0..4 {
         mixer(&mut b, c);
     }
@@ -493,6 +495,43 @@ fn tr808(b: &mut Builder) {
             ),
             step808_x(i),
             STEP808_Y,
+        );
+    }
+}
+
+/// The 808's FLIP face (this fork): its own section over the 808's, which the app shows
+/// instead of the 808's knobs while FLIP is on: KIT (the kit menu) in the AC column, a PAN knob
+/// and an FX key in every sound's column (pan`i`, fx`i`, the panel's instrument index).
+fn tr808_flip(b: &mut Builder) {
+    b.section("tr808f", "bg_tr808_flip", INSTR_X, 280.0);
+    b.part("kit", "kit", "sel_22x14", col808(0) - 11.0, 1.0);
+    for c in 1..12 {
+        b.knob(&format!("pan{c}"), KNOB_808_RED, col808(c) - 6.5, 9.0, 0.5);
+        b.part(
+            &format!("fx{c}"),
+            "toggle",
+            "flip_off",
+            col808(c) - 8.5,
+            30.5,
+        );
+    }
+}
+
+/// The 909's FLIP face (this fork), as the 808's: KIT for the accent's header, a PAN knob and
+/// an FX key in the middle of every sound's group.
+fn tr909_flip(b: &mut Builder) {
+    b.section("tr909f", "bg_tr909_flip", INSTR_X, 395.0);
+    b.part("kit", "kit", "sel_22x14", 4.0, 2.0);
+    let half = KNOBS[KNOB_909].w / 2.0;
+    for g in 1..12 {
+        let x = column_909(g, 2);
+        b.knob(&format!("pan{g}"), KNOB_909, x - half, KNOB_Y_909[0], 0.5);
+        b.part(
+            &format!("fx{g}"),
+            "toggle",
+            "fx909_off",
+            x - 7.5,
+            KNOB_Y_909[1],
         );
     }
 }

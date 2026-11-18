@@ -124,7 +124,8 @@ mod tests {
         // (this fork: 16 step LEDs replace the edit step display and its two arrows on each
         // 303, 380 + 2 * 13; each mixer channel's on/off button is now its green LED (MUTE),
         // and it has an amber SOLO LED, + 4; the 909's FLIP, + 1)
-        assert_eq!(c.len(), 411);
+        // (this fork's FLIP faces: KIT, 11 PAN knobs and 11 FX keys each, + 46)
+        assert_eq!(c.len(), 457);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         assert_eq!((play.x, play.y, play.w, play.h), (112.0, 21.0, 32.0, 25.0));
@@ -139,7 +140,8 @@ mod tests {
         let mut want: Vec<(String, f32, f32)> = l
             .backgrounds
             .into_iter()
-            .filter(|(n, _, _)| !n.starts_with("focus_"))
+            // the FLIP faces' backgrounds replace the drum machines' (Panel::background)
+            .filter(|(n, _, _)| !n.starts_with("focus_") && !n.ends_with("_flip"))
             .collect();
         let mut got: Vec<(String, f32, f32)> = backgrounds()
             .into_iter()
