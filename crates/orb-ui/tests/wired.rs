@@ -1369,23 +1369,44 @@ fn the_songs_automation_moves_a_knob_on_after_a_double_click() {
     assert!(seen.len() > 3, "the cutoff moved: {seen:?}");
 }
 
-/// (this fork) A double click on an FX key of a FLIP face sets every sound's effects switch
-/// of the drum machine as the first click left that key: an FX on turns all off, one off all
-/// on. A single click changes only its own sound.
+/// (this fork) A double click on an FX key of a FLIP face (the second click 0.2 to 0.4 s after
+/// the first) sets every sound's effects switch of the drum machine as the first click left
+/// that key: an FX on turns all off, one off all on. A single click changes only its own
+/// sound, and so does each of two clicks faster or slower than a double click.
 #[test]
 fn a_double_click_on_an_fx_key_sets_every_sound() {
     let mut h = Harness::new();
+    // frames of 16 ms: a click takes 3
+    let frames = |h: &mut Harness, n: usize| {
+        for _ in 0..n {
+            h.frame(vec![]);
+        }
+    };
     for (dev, k) in [("tr808", 0), ("tr909", 1)] {
         h.click(&format!("{dev}.flip"));
-        let wait = |h: &mut Harness| {
-            for _ in 0..25 {
-                h.frame(vec![]);
-            }
-        };
+        let wait = |h: &mut Harness| frames(h, 40);
         wait(&mut h);
         let fx = |i: usize| format!("{dev}f.fx{i}");
-        h.click(&fx(3));
-        h.click(&fx(3));
+        // too fast (48 ms): two clicks, the sound as it was
+        h.click(&fx(2));
+        h.click(&fx(2));
+        let m = h.app.panel.voice_mix(k);
+        assert!(m.fx[2] && m.fx[3], "{dev}: two fast clicks");
+        wait(&mut h);
+        // too slow (0.5 s)
+        h.click(&fx(2));
+        frames(&mut h, 28);
+        h.click(&fx(2));
+        let m = h.app.panel.voice_mix(k);
+        assert!(m.fx[2] && m.fx[3], "{dev}: two slow clicks");
+        wait(&mut h);
+        // 0.29 s: a double click
+        let double = |h: &mut Harness, id: &str| {
+            h.click(id);
+            frames(h, 15);
+            h.click(id);
+        };
+        double(&mut h, &fx(3));
         let m = h.app.panel.voice_mix(k);
         assert!(m.fx[1..12].iter().all(|&f| !f), "{dev}: all off");
         wait(&mut h);
@@ -1396,8 +1417,7 @@ fn a_double_click_on_an_fx_key_sets_every_sound() {
             "{dev}: one click, one sound"
         );
         wait(&mut h);
-        h.click(&fx(1));
-        h.click(&fx(1));
+        double(&mut h, &fx(1));
         let m = h.app.panel.voice_mix(k);
         assert!(m.fx[1..12].iter().all(|&f| f), "{dev}: all on");
     }

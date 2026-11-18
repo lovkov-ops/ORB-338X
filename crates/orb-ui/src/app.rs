@@ -1063,13 +1063,14 @@ impl App {
     }
 
     /// An FX key of a FLIP face (this fork): a click switches the sound's effects; a double
-    /// click (the second click within 0.4 s) sets every sound of the drum machine as the first
-    /// click left this one, all on or all off.
+    /// click (the second click 0.2 to 0.4 s after the first, `FX_DOUBLE`) sets every sound of
+    /// the drum machine as the first click left this one, all on or all off. Faster or slower,
+    /// the second click is a click of its own.
     fn fx_button(&mut self, c: &Ctl, now: f64) {
         let double = self
             .fx_press
             .take()
-            .is_some_and(|(id, t)| id == c.id && now - t < 0.4);
+            .is_some_and(|(id, t)| id == c.id && FX_DOUBLE.contains(&(now - t)));
         if double {
             let k = usize::from(c.section == "tr909f");
             let on = self.panel.toggle_on(&c.id);
@@ -1450,6 +1451,9 @@ fn pattern_button(id: &str) -> Option<(usize, u8)> {
     let b: u8 = name.strip_prefix("pattern")?.parse().ok()?;
     ((1..=4).contains(&row) && (1..=8).contains(&b)).then(|| (row - 1, b - 1))
 }
+
+/// How long after the first click on an FX key the second makes a double click (seconds).
+const FX_DOUBLE: std::ops::RangeInclusive<f64> = 0.2..=0.4;
 
 fn part_size(name: &str) -> (f32, f32) {
     match name {
