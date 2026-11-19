@@ -402,12 +402,13 @@ impl Panel {
         p
     }
 
-    /// Sends each mixer channel's enable as SOLO and MUTE make it: on unless muted, or while
-    /// any channel is soloed unless soloed itself (this fork).
+    /// Sends each mixer channel's enable as SOLO and MUTE make it (this fork): a soloed channel
+    /// plays, muted or not; while any channel is soloed the others are off; else a channel
+    /// plays unless muted. The mute is kept, so a channel's SOLO going off gives it back.
     pub fn apply_channels(&mut self) {
         let any_solo = self.solo.iter().any(|&s| s);
         for c in 0..4 {
-            let on = !self.mute[c] && (!any_solo || self.solo[c]);
+            let on = self.solo[c] || (!any_solo && !self.mute[c]);
             let id = format!("mixer{}.mute", c + 1);
             if self.toggles.get(&id).copied() != Some(on) {
                 self.toggles.insert(id.clone(), on);
@@ -1463,8 +1464,9 @@ mod tests {
         );
     }
 
-    /// (this fork) SOLO and MUTE set the channels' enables: soloed ones play alone, muted ones
-    /// never; clearing turns every one of a kind off.
+    /// (this fork) SOLO and MUTE set the channels' enables: soloed ones play alone, muted or
+    /// not, and the others as their MUTE says once no SOLO is on; clearing turns every one of a
+    /// kind off.
     #[test]
     fn solo_and_mute_set_the_channel_enables() {
         let mut p = Panel::new();
@@ -1485,9 +1487,18 @@ mod tests {
             id: "mixer1.mute".into(),
             value: 0
         }));
-        // MUTE wins over SOLO
+        // SOLO wins over MUTE: the muted channel plays while soloed
         p.press("mixer4.mutebtn", 0.0);
+        assert_eq!(plays(&p), [false, true, false, true]);
+        // its SOLO off: it is muted again, as it was
+        p.press("mixer4.solo", 0.0);
         assert_eq!(plays(&p), [false, true, false, false]);
+        p.press("mixer4.solo", 0.0);
+        assert_eq!(
+            plays(&p),
+            [false, true, false, true],
+            "soloed again: it plays"
+        );
         p.clear_channels(false);
         assert_eq!(p.solo, [false; 4]);
         assert_eq!(plays(&p), [true, true, true, false], "the mute stays");
