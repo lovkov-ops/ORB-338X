@@ -1137,14 +1137,10 @@ fn tr909(c: &mut Cuts) {
     let led = grp(m, "5.55.2")[0];
     let key = grps(m, &["5.55.0", "5.55.1"]);
     let off_led = tint(led, "#000000", 0.188);
-    c.parts.push(part(
-        "toggle_flam_on",
-        fb.x0,
-        fb.y0,
-        fb.w(),
-        fb.h(),
-        &body(&flam),
-    ));
+    // on: its LED green (this fork's wish over the mockup's red)
+    let on = format!("{}{}", body(&key), tint(led, "#53d86a", 1.0));
+    c.parts
+        .push(part("toggle_flam_on", fb.x0, fb.y0, fb.w(), fb.h(), &on));
     let off = format!("{}{off_led}", body(&key));
     c.parts
         .push(part("toggle_flam_off", fb.x0, fb.y0, fb.w(), fb.h(), &off));
