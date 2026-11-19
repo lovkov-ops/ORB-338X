@@ -13,6 +13,10 @@ use resvg::usvg::{self, Node, Paint, Transform};
 /// The two mockups, as committed.
 pub const PANEL_1: &str = include_str!("../../../assets/mockup/panel_1.svg");
 pub const PANEL_2: &str = include_str!("../../../assets/mockup/panel_2.svg");
+/// The app icon (this fork), 512 x 512.
+pub const ICON: &str = include_str!("../../../assets/mockup/icon.svg");
+/// The GENERATE menu (this fork), 143 x 100.
+pub const RANDOMIZER: &str = include_str!("../../../assets/mockup/randomizer.svg");
 
 /// A box in panel pixels: left, top, right, bottom.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -159,6 +163,16 @@ impl Mockup {
     }
 
     /// The shapes of section `sec` (a top-level group id).
+    pub fn icon() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(ICON, "mi"))
+    }
+
+    pub fn randomizer() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(RANDOMIZER, "mr"))
+    }
+
     pub fn section<'a>(&'a self, sec: &'a str) -> impl Iterator<Item = &'a Shape> + 'a {
         self.shapes.iter().filter(move |s| s.sec == sec)
     }

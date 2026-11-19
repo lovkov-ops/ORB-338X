@@ -146,8 +146,55 @@ pub fn cuts() -> &'static Cuts {
         tr808(&mut c);
         tr909(&mut c);
         mixer_and_effects(&mut c);
+        app_icon(&mut c);
+        generate_symbols(&mut c);
         c
     })
+}
+
+/// The app icon (this fork): the user's drawing (`assets/mockup/icon.svg`, 512 x 512) on a
+/// tile inset like a macOS icon's, 52 x 52 at (6, 6) with corners of 12, in the 64 x 64 part.
+fn app_icon(c: &mut Cuts) {
+    let all: Vec<&Shape> = Mockup::icon().shapes.iter().collect();
+    let body = format!(
+        "<defs><clipPath id=\"app-icon-tile\">\
+         <rect x=\"6\" y=\"6\" width=\"52\" height=\"52\" rx=\"12\"/></clipPath></defs>\
+         <g clip-path=\"url(#app-icon-tile)\">\
+         <g transform=\"matrix(0.1015625 0 0 0.1015625 6 6)\">{}</g></g>",
+        body(&all)
+    );
+    c.parts.push(part("app_icon", 0.0, 0.0, 64.0, 64.0, &body));
+}
+
+/// The GENERATE menu's button symbols (this fork), from `assets/mockup/randomizer.svg`: the
+/// white ones of the ALTER row, made pure white for the app to tint. Each is the 17 x 17 box
+/// around the middle of its button (the left column, from 4 to 88.5, in five), in the menu's
+/// order there: up, down, accent, slide, note.
+pub const GENERATE_SYMBOLS: [&str; 5] = [
+    "gen_sym_up",
+    "gen_sym_down",
+    "gen_sym_accent",
+    "gen_sym_slide",
+    "gen_sym_note",
+];
+
+fn generate_symbols(c: &mut Cuts) {
+    let (y0, y1) = (37.5, 54.5);
+    let cell = (88.5 - 4.0) / 5.0;
+    let m = Mockup::randomizer();
+    for (i, name) in GENERATE_SYMBOLS.into_iter().enumerate() {
+        let x = 4.0 + cell * i as f32;
+        let v: Vec<&Shape> = m
+            .shapes
+            .iter()
+            .filter(|s| s.hex().as_deref() == Some("#e9edf2"))
+            .filter(|s| (x..x + cell).contains(&s.bbox.cx()) && (y0..y1).contains(&s.bbox.cy()))
+            .collect();
+        assert!(!v.is_empty(), "randomizer.svg has no symbol {name}");
+        let cx = x + cell / 2.0;
+        let white = recolor(&v, &[("#e9edf2", "#ffffff")]);
+        c.parts.push(part(name, cx - 8.5, y0, 17.0, 17.0, &white));
+    }
 }
 
 /// Replaces the generated parts by the cut ones of the same name (and adds new ones).
@@ -645,8 +692,9 @@ const FLAGS_303: [(usize, &str, &str); 5] = [
 
 /// The 303's chosen waveform and its LFOs' tempo sync, lit (this fork: light cyan).
 const CYAN: &str = "#b0f6ff";
-/// The face of a 303 key of the chosen scale (this fork: between green and cyan).
-const SCALE_KEY: &str = "#6ee6c4";
+/// A 303 key of the chosen scale (this fork, from `assets/mockup/303.svg`): the light cyan
+/// face and the darker cyan border.
+const SCALE_KEY: [(&str, &str); 2] = [("#fbfbf8", CYAN), ("#c4c7cb", "#4fbfcb")];
 
 /// The 303's knobs, left to right.
 const KNOBS_303: [&str; 6] = ["tune", "cutoff", "reso", "envmod", "decay", "accent"];
@@ -858,7 +906,7 @@ fn tb303(c: &mut Cuts, k: usize) {
             &pressed,
         ));
         if scale {
-            let lit = recolor(&key, &[("#fbfbf8", SCALE_KEY)]);
+            let lit = recolor(&key, &SCALE_KEY);
             c.parts.push(part(
                 &format!("{name}_scale"),
                 b.x0,

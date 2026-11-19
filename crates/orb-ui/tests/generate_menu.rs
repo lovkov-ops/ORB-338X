@@ -4,7 +4,9 @@
 use eframe::egui::{self, Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
 use eframe::egui::{MouseWheelSource, MouseWheelUnit, TouchPhase};
 use orb_ui::app::App;
-use orb_ui::generate::{self, ACTIONS, BOTTOM_W, CELL_H, COL_W, Field, LIST_ROWS, Op, ROW_COUNT};
+use orb_ui::generate::{
+    self, ACTIONS, BOTTOM_W, BOTTOM_X, CELL_H, COL_W, Field, LIST_ROWS, MENU_H, MENU_W, Op,
+};
 use orb_ui::layout::{self, PANEL_H, PANEL_W};
 use orb_ui::model::Panel;
 use orb_ui::scale::{KEYS, SCALES};
@@ -143,14 +145,16 @@ fn escape_and_a_click_outside_close_the_menu_and_a_click_inside_does_not() {
 }
 
 #[test]
-fn the_menu_is_under_its_button_inside_the_panel_with_the_left_column_twice_as_wide() {
-    // (this fork) five rows: SCALE | KEY, GENERATE, ALTER, SHIFT, RESET .. UNDO REDO
+fn the_menu_is_under_its_button_inside_the_panel_as_the_drawing() {
+    // (this fork) five rows: SCALE | KEY, GENERATE, ALTER, SHIFT, RESET .. UNDO REDO, in the
+    // drawing's 143 x 100 (assets/mockup/randomizer.svg) with margins of 4
     assert_eq!(ACTIONS, ["GENERATE", "ALTER", "SHIFT"]);
-    assert_eq!(COL_W[0], 2.0 * COL_W[1]);
+    assert_eq!((MENU_W, MENU_H), (143.0, 100.0));
+    assert_eq!(COL_W[0] + COL_W[1] + 8.0, MENU_W);
     let h = Harness::new();
     for synth in 0..2 {
         let (x, y, w, h_) = h.app.generate_rect(synth).unwrap();
-        assert_eq!((w, h_), (COL_W[0] + COL_W[1], CELL_H * ROW_COUNT as f32));
+        assert_eq!((w, h_), (MENU_W, MENU_H));
         let b = button(synth);
         assert!(y > b.y, "the menu is under the button");
         assert!(x >= 0.0 && y >= 0.0 && x + w <= PANEL_W && y + h_ <= PANEL_H);
@@ -514,7 +518,7 @@ fn reset_puts_the_menu_back_as_it_starts_and_keeps_the_pattern() {
 
     let r = h.app.reset_rect(0).unwrap();
     let (mx, my, _, mh) = h.app.generate_rect(0).unwrap();
-    assert_eq!((r.0, r.2), (mx, BOTTOM_W));
+    assert_eq!((r.0, r.2), (mx + BOTTOM_X[0], BOTTOM_W[0]));
     assert_eq!(r.1 + r.3, my + mh);
     h.click_at(center(r));
     assert_eq!(h.app.scale_keys().get(0).scale, None);

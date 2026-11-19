@@ -21,8 +21,11 @@ FLIP faces): `crates/orb-ui-art/src/mockup.rs` reads it, `cuts.rs` cuts every co
 out of it as that control's part (a state the mockup does not show is the shown one recolored)
 and puts the control where the mockup has it; a section's background is what is left of the
 section. `ui-art mockup 1|2 [PNG]` lists the mockup's shapes. The logo stays the generated
-one (the mockup's is the same). The rest of this file describes the generated set the cuts
-replace.
+one (the mockup's is the same). Three more drawings of the user's: `assets/mockup/icon.svg` is
+`app_icon` (on a 52 x 52 tile with rounded corners), `303.svg` gives the colors of the 303's keys
+of the chosen scale (`key_*_scale`), and `randomizer.svg` is the GENERATE menu's look (its
+symbols are the `gen_sym_*` parts; the app draws the rest, `crates/orb-ui/src/generate.rs`). The
+rest of this file describes the generated set the cuts replace.
 
 **The look since task-115** (the mockup session of 2026-10-29; docs/ui_spec.md section 19 has the
 numbers). The flat look keeps its palette; the small controls got a discreet 3D: keycaps for the

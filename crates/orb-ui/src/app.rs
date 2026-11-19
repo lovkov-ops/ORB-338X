@@ -1022,7 +1022,7 @@ impl App {
                     Some(k) if self.generate_open == Some(k) => "btn_rndm_on".to_string(),
                     _ => self.panel.part_name(c, down, now),
                 };
-                // the 303's keys of the chosen scale (generate.rs): lit green-cyan, no glow
+                // the 303's keys of the chosen scale (generate.rs): lit light cyan, no glow
                 if generate::glows(&self.scale_keys, &c.id)
                     && let Some(key) = name.strip_suffix("_rest")
                 {

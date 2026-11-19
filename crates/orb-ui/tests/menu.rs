@@ -2082,6 +2082,16 @@ fn the_about_window_opens_centered_and_closes() {
         shapes.contains(text) && shapes.contains(who),
         "the fork's credit is drawn"
     );
+    // (this fork) the GUI's credit under it
+    let (text, who, url) = orb_ui::about::GUI_CREDIT;
+    assert_eq!(
+        (text, who, url),
+        ("GUI made by", "https://minikod.rs", "https://minikod.rs")
+    );
+    assert!(
+        shapes.contains(text) && shapes.contains(who),
+        "the GUI's credit is drawn"
+    );
     for (label, text, _) in orb_ui::about::LINKS {
         assert!(shapes.contains(label), "{label} is drawn");
         assert!(shapes.contains(text), "{text} is drawn");

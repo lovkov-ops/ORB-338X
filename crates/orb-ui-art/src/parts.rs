@@ -236,7 +236,8 @@ const STEP_COLORS: [&str; 4] = [pal::RED, pal::ORANGE, pal::YELLOW, pal::WHITE];
 
 /// The app icon (task-115): the 303's saw running into a square wave in orange over four
 /// step keys in the 808's colors, on a slate tile; 64 x 64 with the tile inset like a
-/// macOS icon's. This fork adds a white x over the square wave's last low line.
+/// macOS icon's. This fork adds a white x over the square wave's last low line. This fork's
+/// own icon (`cuts::app_icon`, the user's drawing) replaces it.
 fn app_icon(out: &mut Vec<Part>) {
     out.push(Part::new("app_icon", 64.0, 64.0, |s| {
         s.rect(6.0, 6.0, 52.0, 52.0, 12.0, pal::SLATE_DARK);

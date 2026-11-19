@@ -2,19 +2,20 @@
 //! the random note generator. A press of the button opens its synth's menu under it and a
 //! second press closes it; Escape and a click outside close it too.
 //!
-//! The menu (this fork's second design) is a black table with rounded corners and white lines
-//! between the cells, five rows of one height. A wide left column holds the choices, a narrow
-//! right column what they are for. Every choice reads in one of three colors: gray while it
+//! The menu (this fork's third design, the user's `assets/mockup/randomizer.svg`, 143 x 100) is
+//! a black table with rounded corners and gray lines under the first four rows. A wide left
+//! column holds the choices, a narrow right column what they are for; the last row, under the
+//! lines, holds RESET, UNDO and REDO. Every choice reads in one of three colors: gray while it
 //! cannot be used yet, white when it can, green once chosen or done (the text only, on the
-//! menu's black), so the menu
-//! shows the next step by itself:
+//! menu's black), so the menu shows the next step by itself:
 //!
 //! 1. SCALE | KEY: a press opens the field's list under it (the mouse wheel or the slider scroll
 //!    it); a press on an item chooses it. SCALE first, then KEY; BAZE 2 is offered only what fits
-//!    BAZE 1 (`scale.rs`). The 303's keys of the chosen scale are lit green-cyan.
-//! 2. Five buttons, DOWN (down arrow), UP (up arrow), ACCENT (+), SLIDE (underline) and NOTE (a
-//!    note), usable once the scale and key are chosen; then GENERATE, usable once a button is
-//!    chosen: it writes the chosen fields of the synth's pattern anew in the scale (`random.rs`).
+//!    BAZE 1 (`scale.rs`). The 303's keys of the chosen scale are lit light cyan.
+//! 2. Five buttons, UP (up arrow), DOWN (down arrow), ACCENT (>), SLIDE (a slash) and NOTE (a note;
+//!    the symbols are the art's `gen_sym_*` parts, tinted), usable once the scale and key are
+//!    chosen; then GENERATE, usable once a button is chosen: it writes the chosen fields of the
+//!    synth's pattern anew in the scale (`random.rs`).
 //! 3. The same five buttons and ALTER, usable once GENERATE has run: it moves the chosen fields of
 //!    the steps to other steps along one random chain (`random::alter`).
 //! 4. Five buttons, -2, -1, ?, +1 and +2 (one at a time) and SHIFT, usable once GENERATE has run:
@@ -41,33 +42,54 @@ use crate::scale::{self, KEYS, SCALES, ScaleKeys};
 pub const ACTIONS: [&str; 3] = ["GENERATE", "ALTER", "SHIFT"];
 /// The rows: SCALE/KEY, the three actions' rows, and RESET/UNDO/REDO.
 pub const ROW_COUNT: usize = 5;
+/// The menu's size in panel pixels.
+pub const MENU_W: f32 = 143.0;
+pub const MENU_H: f32 = 100.0;
+/// The top and the height of each row, from the menu's top (the text sits in the middle; the
+/// lines are at the bottoms of the first four rows, and the last row is lower down).
+pub const ROW_Y: [f32; ROW_COUNT] = [3.5, 20.5, 37.5, 54.5, 76.0];
+pub const ROW_H: [f32; ROW_COUNT] = [17.0, 17.0, 17.0, 17.0, 24.0];
+/// Where the left column (the scale, the five buttons) and the right one (the key note, the
+/// actions) start, from the menu's left, and their widths, the menu's margins of 4 left out.
+pub const COL_X: [f32; 2] = [4.0, 88.5];
+pub const COL_W: [f32; 2] = [84.5, 50.5];
+/// The last row's buttons: RESET, UNDO, REDO, where each starts and its width.
+pub const BOTTOM_X: [f32; 3] = [4.0, 71.5, 105.5];
+pub const BOTTOM_W: [f32; 3] = [33.0, 34.0, 34.0];
+/// The slot (left to right) of each of GENERATE's and ALTER's buttons, by `random::PARAMS`
+/// (DOWN, UP, ...): the drawing has UP first.
+pub const SLOT: [usize; 5] = [1, 0, 2, 3, 4];
+/// The size of the words and of SHIFT's steps, and the space added between letters.
+const TEXT_SIZE: f32 = 7.0;
+const STEP_SIZE: f32 = 8.0;
+const TRACKING: f32 = 0.35;
+/// How far apart the two drawings of a word are (they make it bold).
+const BOLD: f32 = 0.3;
 /// The last row's buttons.
 pub const RESET: &str = "RESET";
 pub const UNDO: &str = "UNDO";
 pub const REDO: &str = "REDO";
 /// The widths of the left column (the scale, the five buttons) and the right one (the key
 /// note, the actions) in panel pixels, and of the last row's three buttons.
-pub const COL_W: [f32; 2] = [96.0, 48.0];
-pub const BOTTOM_W: f32 = 36.0;
 /// The menu's corner radius in panel pixels.
-const CORNER: f32 = 4.0;
+const CORNER: f32 = 4.5;
 /// The undo steps kept per synth.
 const UNDO_DEPTH: usize = 64;
-/// The height of every row (and of a list's item) in panel pixels.
+/// The height of a list's item in panel pixels.
 pub const CELL_H: f32 = 14.0;
-/// How far short of the menu's edges the lines between the cells stop, in panel pixels.
-const LINE_INSET: f32 = 3.0;
+/// How far short of the menu's edges the lines stop, in panel pixels.
+const LINE_INSET: f32 = 4.0;
 /// The space between the button's bottom edge and the menu, in panel pixels.
 const GAP: f32 = 2.0;
 /// The items a list shows at once, and the width of its slider (panel pixels).
 pub const LIST_ROWS: usize = 5;
 const SLIDER_W: f32 = 5.0;
-/// The red of the step displays (the digits of STEPS and EDIT STEP, `LCD_ON` of orb-ui-art).
-pub const RED: Color32 = Color32::from_rgb(0xff, 0x3b, 0x2f);
-/// A chosen scale or key note (the panel's `GREEN`).
-pub const GREEN: Color32 = Color32::from_rgb(0x53, 0xd8, 0x6a);
-/// The lines between the cells (this fork: gray, quieter than the white they were).
-const LINE: Color32 = Color32::from_gray(0x6e);
+/// RESET's red (the drawing's).
+pub const RED: Color32 = Color32::from_rgb(0xe2, 0x41, 0x3b);
+/// A chosen or done choice (the drawing's green).
+pub const GREEN: Color32 = Color32::from_rgb(0x4a, 0xcf, 0x62);
+/// The lines between the rows and the columns.
+const LINE: Color32 = Color32::from_gray(0x5a);
 const FILL: Color32 = Color32::BLACK;
 /// A field that cannot be used yet.
 const OFF: Color32 = Color32::from_gray(0x55);
@@ -211,20 +233,19 @@ impl App {
 
     /// The panel rectangle of RESET: the last row's left button.
     pub fn reset_rect(&self, synth: usize) -> Option<(f32, f32, f32, f32)> {
+        self.bottom_rect(synth, 0)
+    }
+
+    /// The panel rectangle of the last row's button `i` (RESET, UNDO, REDO).
+    fn bottom_rect(&self, synth: usize, i: usize) -> Option<(f32, f32, f32, f32)> {
         let (x, y, ..) = self.generate_rect(synth)?;
-        Some((x, y + CELL_H * (ROW_COUNT - 1) as f32, BOTTOM_W, CELL_H))
+        let last = ROW_COUNT - 1;
+        Some((x + BOTTOM_X[i], y + ROW_Y[last], BOTTOM_W[i], ROW_H[last]))
     }
 
     /// The panel rectangle of UNDO (`redo` false) or REDO: the last row's right buttons.
     pub fn undo_rect(&self, synth: usize, redo: bool) -> Option<(f32, f32, f32, f32)> {
-        let (x, y, w, _) = self.generate_rect(synth)?;
-        let n = if redo { 1.0 } else { 2.0 };
-        Some((
-            x + w - n * BOTTOM_W,
-            y + CELL_H * (ROW_COUNT - 1) as f32,
-            BOTTOM_W,
-            CELL_H,
-        ))
+        self.bottom_rect(synth, if redo { 2 } else { 1 })
     }
 
     /// Restarts the random numbers from `seed` (tests).
@@ -325,10 +346,12 @@ impl App {
     /// The panel rectangle of a row's action (the right column).
     pub fn op_label_rect(&self, synth: usize, op: Op) -> Option<(f32, f32, f32, f32)> {
         let (x, y, ..) = self.generate_rect(synth)?;
-        Some((x + COL_W[0], y + CELL_H * op.row() as f32, COL_W[1], CELL_H))
+        let r = op.row();
+        Some((x + COL_X[1], y + ROW_Y[r], COL_W[1], ROW_H[r]))
     }
 
-    /// The panel rectangle of a row's button `param` (the left column split in five).
+    /// The panel rectangle of a row's button `param` (the left column split in five; GENERATE's
+    /// and ALTER's in the order of `SLOT`).
     pub fn op_button_rect(
         &self,
         synth: usize,
@@ -337,8 +360,9 @@ impl App {
     ) -> Option<(f32, f32, f32, f32)> {
         let (x, y, ..) = self.generate_rect(synth)?;
         let w = COL_W[0] / random::PARAMS.len() as f32;
-        let y = y + CELL_H * op.row() as f32;
-        Some((x + w * param as f32, y, w, CELL_H))
+        let slot = if op == Op::Move { param } else { SLOT[param] };
+        let r = op.row();
+        Some((x + COL_X[0] + w * slot as f32, y + ROW_Y[r], w, ROW_H[r]))
     }
 
     /// The synth whose menu is open, if any.
@@ -366,17 +390,15 @@ impl App {
     /// The menu's panel rectangle (x, y, w, h): under the button, the right edges aligned.
     pub fn generate_rect(&self, synth: usize) -> Option<(f32, f32, f32, f32)> {
         let (bx, by, bw, bh) = self.generate_button(synth)?;
-        let w: f32 = COL_W.iter().sum();
-        let h = CELL_H * ROW_COUNT as f32;
-        Some((bx + bw - w, by + bh + GAP, w, h))
+        Some((bx + bw - MENU_W, by + bh + GAP, MENU_W, MENU_H))
     }
 
     /// The panel rectangle of row 1's scale field (the left column) or key field (the right).
     pub fn field_rect(&self, synth: usize, field: Field) -> Option<(f32, f32, f32, f32)> {
         let (x, y, ..) = self.generate_rect(synth)?;
         Some(match field {
-            Field::Scale => (x, y, COL_W[0], CELL_H),
-            Field::Key => (x + COL_W[0], y, COL_W[1], CELL_H),
+            Field::Scale => (x + COL_X[0], y + ROW_Y[0], COL_W[0], ROW_H[0]),
+            Field::Key => (x + COL_X[1], y + ROW_Y[0], COL_W[1], ROW_H[0]),
         })
     }
 
@@ -635,42 +657,54 @@ fn slider_track(lr: Rect, n: usize, slider_w: f32) -> (Rect, f32) {
     (track, thumb_h)
 }
 
-/// The table: the black fill with rounded corners, and the white lines between the cells
-/// (stopping short of the edges): the columns' line down to the last row, the lines between
-/// the rows, and in the last row the lines right of RESET and between UNDO and REDO.
+/// The table: the black fill with rounded corners and the gray lines (stopping short of the
+/// edges): under each of the first four rows, and the columns' line down to the last of them.
 fn paint_table(ui: &Ui, r: Rect, scale: f32) {
     let p = ui.painter();
-    p.rect_filled(r, CornerRadius::same((CORNER * scale) as u8), FILL);
-    let stroke = Stroke::new((0.6 * scale).max(1.0), LINE);
-    let inset = LINE_INSET * scale;
-    let ch = CELL_H * scale;
-    let last = r.min.y + ch * (ROW_COUNT - 1) as f32;
-    let vline = |x: f32, y0: f32, y1: f32| {
-        p.line_segment([Pos2::new(x, y0 + inset), Pos2::new(x, y1 - inset)], stroke);
-    };
-    vline(r.min.x + COL_W[0] * scale, r.min.y, last);
-    for j in 1..ROW_COUNT {
-        let y = r.min.y + ch * j as f32;
-        p.line_segment(
-            [Pos2::new(r.min.x + inset, y), Pos2::new(r.max.x - inset, y)],
-            stroke,
-        );
+    p.rect_filled(r, CornerRadius::same((CORNER * scale).round() as u8), FILL);
+    let stroke = Stroke::new(scale.max(1.0), LINE);
+    let at = |x: f32, y: f32| Pos2::new(r.min.x + x * scale, r.min.y + y * scale);
+    let last = ROW_Y[ROW_COUNT - 2] + ROW_H[ROW_COUNT - 2];
+    for j in 0..ROW_COUNT - 1 {
+        let y = ROW_Y[j] + ROW_H[j];
+        p.line_segment([at(LINE_INSET, y), at(MENU_W - LINE_INSET, y)], stroke);
     }
-    let bw = BOTTOM_W * scale;
-    vline(r.min.x + bw, last, r.max.y);
-    vline(r.max.x - 2.0 * bw, last, r.max.y);
-    vline(r.max.x - bw, last, r.max.y);
+    p.line_segment([at(COL_X[1], LINE_INSET), at(COL_X[1], last)], stroke);
+}
+
+/// `text` in `color`, its letters spaced as the drawing's, centered on `c`.
+fn paint_text(ui: &Ui, c: Pos2, text: &str, size: f32, color: Color32, scale: f32) {
+    let mut job = egui::text::LayoutJob::default();
+    let tracking = TRACKING * scale;
+    job.append(
+        text,
+        0.0,
+        egui::TextFormat {
+            font_id: FontId::proportional(size * scale),
+            color,
+            extra_letter_spacing: tracking,
+            ..Default::default()
+        },
+    );
+    let galley = ui.painter().layout_job(job);
+    // the last letter's spacing is not part of the word
+    let size = galley.size() - Vec2::new(tracking, 0.0);
+    // bold as the drawing's: drawn twice, a hair apart
+    let bold = BOLD * scale;
+    let at = c - (size + Vec2::new(bold, 0.0)) / 2.0;
+    ui.painter().galley(at, galley.clone(), color);
+    ui.painter()
+        .galley(at + Vec2::new(bold, 0.0), galley, color);
 }
 
 /// A cell with a word: an action, RESET, UNDO or REDO, in its color (green when done) on the
 /// black of the menu.
 fn paint_text_cell(ui: &Ui, (r, text, color, _): (Rect, &str, Color32, bool), scale: f32) {
-    ui.painter()
-        .text(r.center(), Align2::CENTER_CENTER, text, font(scale), color);
+    paint_text(ui, r.center(), text, TEXT_SIZE, color, scale);
 }
 
 fn font(scale: f32) -> FontId {
-    FontId::proportional(CELL_H * 0.5 * scale)
+    FontId::proportional(TEXT_SIZE * scale)
 }
 
 /// Row 1's scale and key note: the choice in green, else the field's name, white
@@ -683,8 +717,7 @@ fn paint_fields(ui: &Ui, sk: &ScaleKeys, synth: usize, sf: Rect, kf: Rect, scale
             Some(t) => (t, GREEN),
             None => (name, if usable { INK } else { OFF }),
         };
-        ui.painter()
-            .text(r.center(), Align2::CENTER_CENTER, t, font(scale), color);
+        paint_text(ui, r.center(), t, TEXT_SIZE, color, scale);
     };
     field(
         sf,
@@ -752,69 +785,25 @@ fn paint_list(ui: &Ui, sk: &ScaleKeys, l: &List, r: Rect, hover: Option<Pos2>, s
 }
 
 /// A row's five buttons (GENERATE, ALTER, SHIFT): (rect, on, ink of the symbol). A chosen button
-/// is green (the symbol only); thin lines part the buttons, stopping short of the row's edges.
+/// is green (the symbol only). GENERATE's and ALTER's symbols are the art's `gen_sym_*` parts
+/// (white, tinted with the ink), 17 x 17 around the button's middle; SHIFT's steps are text.
 fn paint_op_buttons(ui: &Ui, op: Op, buttons: &[(Rect, bool, Color32); 5], scale: f32) {
-    let p = ui.painter();
-    let inset = LINE_INSET * scale;
-    let line = Stroke::new((0.6 * scale).max(1.0), LINE);
-    for (r, ..) in &buttons[1..] {
-        p.line_segment(
-            [
-                Pos2::new(r.min.x, r.min.y + inset),
-                Pos2::new(r.min.x, r.max.y - inset),
-            ],
-            line,
-        );
-    }
     for (param, &(r, _, ink)) in buttons.iter().enumerate() {
         if op == Op::Move {
-            // MOVE's steps as text, bold: drawn twice, a hair apart
-            let f = FontId::proportional(CELL_H * 0.6 * scale);
-            for dx in [0.0, 0.35 * scale] {
-                let at = r.center() + Vec2::new(dx, 0.0);
-                p.text(
-                    at,
-                    Align2::CENTER_CENTER,
-                    random::MOVES[param],
-                    f.clone(),
-                    ink,
-                );
-            }
+            paint_text(ui, r.center(), random::MOVES[param], STEP_SIZE, ink, scale);
         } else {
-            paint_symbol(ui, param, r.center(), CELL_H * 0.27 * scale, ink, scale);
+            let name = SYMBOLS[SLOT[param]];
+            let at = Rect::from_center_size(r.center(), Vec2::splat(17.0 * scale));
+            crate::app::paint_part_tinted(ui, name, at, ink);
         }
     }
 }
 
-/// A RANDOM or ALTER button's symbol, bold: half its height is `s` around `c`.
-fn paint_symbol(ui: &Ui, param: usize, c: Pos2, s: f32, ink: Color32, scale: f32) {
-    let p = ui.painter();
-    let bold = Stroke::new(1.4 * scale, ink);
-    let at = |dx: f32, dy: f32| Pos2::new(c.x + dx * s, c.y + dy * s);
-    let line = |a: Pos2, b: Pos2| {
-        p.line_segment([a, b], bold);
-    };
-    match param {
-        random::DOWN => {
-            line(at(0.0, -1.0), at(0.0, 1.0));
-            line(at(-0.7, 0.3), at(0.0, 1.0));
-            line(at(0.7, 0.3), at(0.0, 1.0));
-        }
-        random::UP => {
-            line(at(0.0, 1.0), at(0.0, -1.0));
-            line(at(-0.7, -0.3), at(0.0, -1.0));
-            line(at(0.7, -0.3), at(0.0, -1.0));
-        }
-        random::ACCENT => {
-            line(at(-0.9, 0.0), at(0.9, 0.0));
-            line(at(0.0, -0.9), at(0.0, 0.9));
-        }
-        random::SLIDE => line(at(-1.0, 0.9), at(1.0, 0.9)),
-        _ => {
-            // an eighth note: the head, the stem and the flag
-            p.circle_filled(at(-0.35, 0.65), 0.42 * s, ink);
-            line(at(0.05, 0.6), at(0.05, -1.0));
-            line(at(0.05, -1.0), at(0.75, -0.35));
-        }
-    }
-}
+/// The parts of GENERATE's and ALTER's symbols, by slot (orb-ui-art's `GENERATE_SYMBOLS`).
+pub const SYMBOLS: [&str; 5] = [
+    "gen_sym_up",
+    "gen_sym_down",
+    "gen_sym_accent",
+    "gen_sym_slide",
+    "gen_sym_note",
+];
