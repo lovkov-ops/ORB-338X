@@ -643,6 +643,11 @@ const FLAGS_303: [(usize, &str, &str); 5] = [
     (115, "note_pause", "note_led"),
 ];
 
+/// The 303's chosen waveform and its LFOs' tempo sync, lit (this fork: light cyan).
+const CYAN: &str = "#6fe9ff";
+/// The face of a 303 key of the chosen scale (this fork: between green and cyan).
+const SCALE_KEY: &str = "#6ee6c4";
+
 /// The 303's knobs, left to right.
 const KNOBS_303: [&str; 6] = ["tune", "cutoff", "reso", "envmod", "decay", "accent"];
 
@@ -662,13 +667,14 @@ fn tb303(c: &mut Cuts, k: usize) {
         let saw = grp(m, &sub(67, 4))[0];
         let square = grp(m, &sub(67, 5))[0];
         let b = bbox(&frame);
-        let (lit, dim) = ("#fbfbf8", "#68696b");
-        let w0 = format!("{}{}{}", body(&frame), saw.svg(), square.svg());
+        // the chosen one light cyan (this fork's wish over the mockup's white)
+        let (white, dim) = ("#fbfbf8", "#68696b");
+        let w0 = format!("{}{}{}", body(&frame), swap(saw, white, CYAN), square.svg());
         let w1 = format!(
             "{}{}{}",
             body(&frame),
-            swap(saw, lit, dim),
-            swap(square, dim, lit)
+            swap(saw, white, dim),
+            swap(square, dim, CYAN)
         );
         c.parts
             .push(part("switch_wave_0", b.x0, b.y0, b.w(), b.h(), &w0));
@@ -721,7 +727,7 @@ fn tb303(c: &mut Cuts, k: usize) {
             for sync in [false, true] {
                 for hold in [false, true] {
                     let n = if sync {
-                        body(&note)
+                        recolor(&note, &[("#3593ff", CYAN)])
                     } else {
                         recolor(&note, &[("#3593ff", "#34557f")])
                     };
@@ -850,7 +856,7 @@ fn tb303(c: &mut Cuts, k: usize) {
             &pressed,
         ));
         if scale {
-            let lit = recolor(&key, &[("#fbfbf8", "#8edc9a")]);
+            let lit = recolor(&key, &[("#fbfbf8", SCALE_KEY)]);
             c.parts.push(part(
                 &format!("{name}_scale"),
                 b.x0,
@@ -1377,12 +1383,11 @@ fn mixer_and_effects(c: &mut Cuts) {
         ));
     }
     // the header meter: 8 wide, its segments in the well's frame
+    // (the mockup draws the segments bottom first)
     let segs = segments(m, "10.9", 0);
-    let mut segs_up = segs.clone();
-    segs_up.reverse();
     let hb = bbox(&segs);
     let head_box = Bx::new(hb.x0, hb.y0, 8.0, hb.h().ceil());
-    meter(c, "meter_8x12", head_box, None, &segs_up);
+    meter(c, "meter_8x12", head_box, None, &segs);
     for ch in 0..4 {
         let g = 10 + ch;
         let at = |i: usize| format!("{g}.{i}");

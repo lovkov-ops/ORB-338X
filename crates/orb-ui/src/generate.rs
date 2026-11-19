@@ -11,7 +11,7 @@
 //!
 //! 1. SCALE | KEY: a press opens the field's list under it (the mouse wheel or the slider scroll
 //!    it); a press on an item chooses it. SCALE first, then KEY; BAZE 2 is offered only what fits
-//!    BAZE 1 (`scale.rs`). The 303's keys of the chosen scale glow green.
+//!    BAZE 1 (`scale.rs`). The 303's keys of the chosen scale are lit green-cyan.
 //! 2. Five buttons, DOWN (down arrow), UP (up arrow), ACCENT (+), SLIDE (underline) and NOTE (a
 //!    note), usable once the scale and key are chosen; then GENERATE, usable once a button is
 //!    chosen: it writes the chosen fields of the synth's pattern anew in the scale (`random.rs`).
@@ -64,7 +64,7 @@ pub const LIST_ROWS: usize = 5;
 const SLIDER_W: f32 = 5.0;
 /// The red of the step displays (the digits of STEPS and EDIT STEP, `LCD_ON` of orb-ui-art).
 pub const RED: Color32 = Color32::from_rgb(0xff, 0x3b, 0x2f);
-/// A chosen scale or key note, and the glow of the scale's keys (the panel's `GREEN`).
+/// A chosen scale or key note (the panel's `GREEN`).
 pub const GREEN: Color32 = Color32::from_rgb(0x53, 0xd8, 0x6a);
 /// The lines between the cells (this fork: gray, quieter than the white they were).
 const LINE: Color32 = Color32::from_gray(0x6e);
@@ -140,19 +140,6 @@ pub fn glows(sk: &ScaleKeys, id: &str) -> bool {
         return false;
     };
     sk.get(synth).mask().is_some_and(|m| scale::key_in(m, n))
-}
-
-/// The soft green glow around a key of the chosen scale (this fork), painted under the key;
-/// the key itself is lit from inside (its `_scale` part).
-pub fn paint_glow(ui: &Ui, key: Rect, scale: f32) {
-    let p = ui.painter();
-    for (grow, alpha) in [(3.0, 28), (1.6, 60)] {
-        p.rect_filled(
-            key.expand(grow * scale),
-            CornerRadius::same((2.5 * scale) as u8),
-            Color32::from_rgba_unmultiplied(GREEN.r(), GREEN.g(), GREEN.b(), alpha),
-        );
-    }
 }
 
 /// The items of a list: the indexes into `SCALES` or `KEYS`.
