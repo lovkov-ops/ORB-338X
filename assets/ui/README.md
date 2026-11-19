@@ -22,7 +22,8 @@ out of it as that control's part (a state the mockup does not show is the shown 
 and puts the control where the mockup has it; a section's background is what is left of the
 section. `ui-art mockup 1|2 [PNG]` lists the mockup's shapes. The logo stays the generated
 one (the mockup's is the same). Three more drawings of the user's: `assets/mockup/icon.svg` is
-`app_icon` (on a 52 x 52 tile with rounded corners), `303.svg` gives the colors of the 303's keys
+`app_icon` (on a 52 x 52 tile with rounded corners), `303_left.svg` and `303_right.svg` are the
+303's dark panels left and right of its keys (in `bg_tb303`), `303.svg` gives the colors of the 303's keys
 of the chosen scale (`key_*_scale`), and `randomizer.svg` is the GENERATE menu's look (its
 symbols are the `gen_sym_*` parts; the app draws the rest, `crates/orb-ui/src/generate.rs`). The
 rest of this file describes the generated set the cuts replace.

@@ -2076,7 +2076,7 @@ fn the_about_window_opens_centered_and_closes() {
     );
     // the fork's credit first
     let (text, who, _) = orb_ui::about::FORK_CREDIT;
-    assert_eq!(text, "Xtended features injected by");
+    assert_eq!(text, "Xtended features:");
     assert_eq!(who, "lovkov-ops");
     assert!(
         shapes.contains(text) && shapes.contains(who),
@@ -2086,7 +2086,7 @@ fn the_about_window_opens_centered_and_closes() {
     let (text, who, url) = orb_ui::about::GUI_CREDIT;
     assert_eq!(
         (text, who, url),
-        ("GUI made by", "https://minikod.rs", "https://minikod.rs")
+        ("GUI:", "https://minikod.rs", "https://minikod.rs")
     );
     assert!(
         shapes.contains(text) && shapes.contains(who),

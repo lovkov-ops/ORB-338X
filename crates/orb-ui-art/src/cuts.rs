@@ -10,7 +10,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::mockup::{Bx, Mockup, Shape};
+use crate::mockup::{self, Bx, Mockup, Shape};
 use crate::svg::Part;
 
 /// The shapes of group `chain` (`"1.21"`) of mockup `m`.
@@ -100,6 +100,8 @@ pub struct Cuts {
     taken: HashSet<(u8, usize)>,
     /// Controls placed by the nearest of the mockup's centers: section, kind, the centers.
     near: Vec<Near>,
+    /// The mockup's shapes drawn otherwise in the backgrounds (mockup, index): their SVG.
+    swaps: HashMap<(u8, usize), String>,
 }
 
 impl Cuts {
@@ -109,11 +111,24 @@ impl Cuts {
             places: HashMap::new(),
             taken: HashSet::new(),
             near: Vec::new(),
+            swaps: HashMap::new(),
         }
     }
 
     fn take(&mut self, v: &[&Shape]) {
         self.taken.extend(v.iter().map(|s| (s.doc, s.index)));
+    }
+
+    /// Draws `svg` in the backgrounds in place of the shapes `v` (at the first one's depth).
+    fn replace(&mut self, v: &[&Shape], svg: &str) {
+        for (i, s) in v.iter().enumerate() {
+            let with = if i == 0 {
+                svg.to_string()
+            } else {
+                String::new()
+            };
+            self.swaps.insert((s.doc, s.index), with);
+        }
     }
 
     fn place(&mut self, id: &str, x: f32, y: f32) {
@@ -123,12 +138,15 @@ impl Cuts {
     /// The background `name` of section `sec` at its panel box `b`: the section's shapes no
     /// control took.
     fn background(&mut self, m: &Mockup, sec: &str, name: &str, b: Bx) {
-        let v: Vec<&Shape> = m
+        let svg: String = m
             .section(sec)
             .filter(|s| !self.taken.contains(&(s.doc, s.index)))
+            .map(|s| match self.swaps.get(&(s.doc, s.index)) {
+                Some(with) => with.clone(),
+                None => s.svg(),
+            })
             .collect();
-        self.parts
-            .push(part(name, b.x0, b.y0, b.w(), b.h(), &body(&v)));
+        self.parts.push(part(name, b.x0, b.y0, b.w(), b.h(), &svg));
     }
 }
 
@@ -690,7 +708,7 @@ const FLAGS_303: [(usize, &str, &str); 5] = [
     (115, "note_pause", "note_led"),
 ];
 
-/// The 303's chosen waveform and its LFOs' tempo sync, lit (this fork: light cyan).
+/// The 303's chosen waveform, lit (this fork: light cyan).
 const CYAN: &str = "#b0f6ff";
 /// A 303 key of the chosen scale (this fork, from `assets/mockup/303.svg`): the light cyan
 /// face and the darker cyan border.
@@ -774,17 +792,17 @@ fn tb303(c: &mut Cuts, k: usize) {
             let dx = b.x0 - bbox(&grp(m, &at(mode + 3))).x0;
             for sync in [false, true] {
                 for hold in [false, true] {
+                    // the mockup's colors: the note blue when lit, dim blue when not; the
+                    // sine yellow
                     let n = if sync {
-                        recolor(&note, &[("#3593ff", CYAN)])
+                        body(&note)
                     } else {
                         recolor(&note, &[("#3593ff", "#34557f")])
                     };
-                    // the sine light red, as bright as the cyan (this fork's wish over the
-                    // mockup's yellow)
                     let w = if hold {
                         moved(&random, dx, 0.0)
                     } else {
-                        recolor(&sine, &[("#ffb000", "#ff9a94")])
+                        body(&sine)
                     };
                     let name = format!("lfo_mode_{}{}", sync as u8, hold as u8);
                     let svg = format!("{}{n}{w}", body(&frame));
@@ -949,6 +967,19 @@ fn tb303(c: &mut Cuts, k: usize) {
     c.take(&grp(m, &at(109)));
 
     if first {
+        // the dark panels left (PITCH, CLEAR) and right (EDIT STEP .. NOTE) of the keys: the
+        // user's drawings (assets/mockup/303_left.svg, 303_right.svg) at the mockup's corners
+        for (chains, svg, prefix) in [
+            (["2.30", "2.31"], mockup::TB303_LEFT, "ml"),
+            (["2.44", "2.45"], mockup::TB303_RIGHT, "mn"),
+        ] {
+            let old = grps(m, &chains);
+            let b = bbox(&old);
+            let new = Mockup::parse(svg, prefix);
+            let all: Vec<&Shape> = new.shapes.iter().collect();
+            let at = format!("translate({} {})", b.x0, b.y0);
+            c.replace(&old, &format!(r#"<g transform="{at}">{}</g>"#, body(&all)));
+        }
         c.background(m, "_303-a", "bg_tb303", Bx::new(90.0, 50.0, 366.0, 115.0));
     }
 }

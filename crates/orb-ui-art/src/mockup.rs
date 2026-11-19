@@ -15,6 +15,9 @@ pub const PANEL_1: &str = include_str!("../../../assets/mockup/panel_1.svg");
 pub const PANEL_2: &str = include_str!("../../../assets/mockup/panel_2.svg");
 /// The app icon (this fork), 512 x 512.
 pub const ICON: &str = include_str!("../../../assets/mockup/icon.svg");
+/// The 303's dark panels left and right of its keys (this fork), 34 x 58 and 112 x 58.
+pub const TB303_LEFT: &str = include_str!("../../../assets/mockup/303_left.svg");
+pub const TB303_RIGHT: &str = include_str!("../../../assets/mockup/303_right.svg");
 /// The GENERATE menu (this fork), 143 x 100.
 pub const RANDOMIZER: &str = include_str!("../../../assets/mockup/randomizer.svg");
 

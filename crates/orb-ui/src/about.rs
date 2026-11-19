@@ -32,17 +32,16 @@ pub const NAME: &str = "OpenRB-338x";
 pub const CREATOR_URL: &str = "https://github.com/pingw33n";
 /// Where the latest release of this fork is downloaded.
 pub const DOWNLOAD_URL: &str = "https://github.com/lovkov-ops/OpenRB-338x/releases/latest";
-/// The credit of this fork, the first line under the wordmark: the text, then the fork's
+/// The credit of this fork, the first line under the wordmark: the label, then the fork's
 /// author linked to the fork.
 pub const FORK_CREDIT: (&str, &str, &str) = (
-    "Xtended features injected by",
+    "Xtended features:",
     "lovkov-ops",
     "https://github.com/lovkov-ops/OpenRB-338x",
 );
-/// The credit of the panel's look (this fork), the line under the fork's credit: the text,
+/// The credit of the panel's look (this fork), the line under the fork's credit: the label,
 /// then the designer's page as a link.
-pub const GUI_CREDIT: (&str, &str, &str) =
-    ("GUI made by", "https://minikod.rs", "https://minikod.rs");
+pub const GUI_CREDIT: (&str, &str, &str) = ("GUI:", "https://minikod.rs", "https://minikod.rs");
 /// The user's public collections, shown under the project page as `label url` (task-138).
 /// The user's song collection.
 pub const SONGS_URL: &str = "https://github.com/pingw33n/rb-songs";
@@ -141,20 +140,12 @@ impl App {
                 let line = |ui: &mut egui::Ui, y: f32, f: &dyn Fn(&mut egui::Ui)| {
                     line_at(ui, TEXT_X, y, f);
                 };
-                // the fork's credit and the GUI's first, then the links, the version last
-                for (y, (text, who, url)) in [(104.0, FORK_CREDIT), (126.0, GUI_CREDIT)] {
-                    line(ui, y, &|ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 4.0;
-                            ui.label(RichText::new(text).color(INK_DIM));
-                            ui.hyperlink_to(who, url);
-                        });
-                    });
-                }
-                for (i, (label, text, url)) in LINKS.into_iter().enumerate() {
-                    // the label and the link each in a rect of their own, so the links start at
-                    // exactly the same x whatever the width of the label
-                    let y = 148.0 + 22.0 * i as f32;
+                // the fork's credit and the GUI's first, then the links, the version last,
+                // all as label and link: each in a rect of its own, so the links start at
+                // exactly the same x whatever the width of the label
+                let rows = [FORK_CREDIT, GUI_CREDIT].into_iter().chain(LINKS);
+                for (i, (label, text, url)) in rows.enumerate() {
+                    let y = 104.0 + 22.0 * i as f32;
                     line(ui, y, &|ui| {
                         ui.label(RichText::new(label).color(INK_DIM));
                     });
@@ -162,7 +153,7 @@ impl App {
                         ui.hyperlink_to(text, url);
                     });
                 }
-                line(ui, 148.0 + 22.0 * LINKS.len() as f32, &|ui| {
+                line(ui, 104.0 + 22.0 * (2 + LINKS.len()) as f32, &|ui| {
                     ui.label(RichText::new(format!("Version {VERSION}")).color(INK_DIM));
                 });
             });
