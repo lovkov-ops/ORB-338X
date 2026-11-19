@@ -644,7 +644,7 @@ const FLAGS_303: [(usize, &str, &str); 5] = [
 ];
 
 /// The 303's chosen waveform and its LFOs' tempo sync, lit (this fork: light cyan).
-const CYAN: &str = "#6fe9ff";
+const CYAN: &str = "#b0f6ff";
 /// The face of a 303 key of the chosen scale (this fork: between green and cyan).
 const SCALE_KEY: &str = "#6ee6c4";
 
@@ -731,10 +731,11 @@ fn tb303(c: &mut Cuts, k: usize) {
                     } else {
                         recolor(&note, &[("#3593ff", "#34557f")])
                     };
+                    // the sine red (this fork's wish over the mockup's yellow)
                     let w = if hold {
                         moved(&random, dx, 0.0)
                     } else {
-                        body(&sine)
+                        recolor(&sine, &[("#ffb000", "#e2413b")])
                     };
                     let name = format!("lfo_mode_{}{}", sync as u8, hold as u8);
                     let svg = format!("{}{n}{w}", body(&frame));
