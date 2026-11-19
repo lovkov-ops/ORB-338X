@@ -731,11 +731,12 @@ fn tb303(c: &mut Cuts, k: usize) {
                     } else {
                         recolor(&note, &[("#3593ff", "#34557f")])
                     };
-                    // the sine red (this fork's wish over the mockup's yellow)
+                    // the sine light red, as bright as the cyan (this fork's wish over the
+                    // mockup's yellow)
                     let w = if hold {
                         moved(&random, dx, 0.0)
                     } else {
-                        recolor(&sine, &[("#ffb000", "#e2413b")])
+                        recolor(&sine, &[("#ffb000", "#ff9a94")])
                     };
                     let name = format!("lfo_mode_{}{}", sync as u8, hold as u8);
                     let svg = format!("{}{n}{w}", body(&frame));
