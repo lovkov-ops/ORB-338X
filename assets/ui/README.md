@@ -41,7 +41,7 @@ All art is our own work, drawn in code, released under the repository's license 
 see `Cargo.toml`). It contains no Propellerhead or Roland artwork, logo or mark and no copy of the
 original's bitmaps: the original's screenshots were used for layout only (`docs/ui_spec.md`
 places the controls). Visible texts are generic: the sections carry no product names, the
-effect blocks are PCF, DELAY, DIST and COMP, and the logo is the wordmark "OpenRB-338x" (the
+effect blocks are PCF, DELAY, DIST and COMP, and the logo is the wordmark "ORB-338X" (the
 project's name, task-068). File names keep the spec's short names (`tb303`, `tr808`, `tr909`) because they are
 code identifiers, not art. The labels are vector paths of a built-in stroke font
 (`src/font.rs`), so the SVGs hold no `<text>` and need no font file.
@@ -105,7 +105,7 @@ are spread with six equal gaps between the column (46) and the GENERATE label
 (`knob_x_303`) (task-115; the original placement is in
 docs/ui_spec.md section 19).
 
-The logo is this fork's wordmark `OpenRB-338x` (`OpenRB-` ink, `338` orange, `x` white, from
+The logo is this fork's wordmark `ORB-338X` (`OpenRB-` ink, `338` orange, `x` white, from
 x = 5), its underline of four segments in the 808's step colors
 (red, orange, yellow, white; 1.5 px high at y 28, 1.5 px apart, together as long as the wordmark,
 to the outer edge of the x's stroke) and the subtitle `BASS LINE

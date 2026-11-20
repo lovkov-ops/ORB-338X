@@ -1194,97 +1194,34 @@ fn transport_bg(out: &mut Vec<Part>) {
 }
 
 /// The size of the logo parts, and of the logo's click area (`layout::on_logo` of orb-ui).
-pub const LOGO_W: f32 = 134.0;
-pub const LOGO_H: f32 = 48.0;
-/// Where the logo sits on the panel (the transport section is at x = 16, the logo at 451 in it).
-/// This fork moved it 7 px left of the original's 474, so the wider wordmark OpenRB-338x ends
-/// about 10 px before the transport's right edge (608).
-pub const LOGO_X: f32 = 467.0;
-pub const LOGO_Y: f32 = 1.0;
+/// This fork: the ORB-338X logo of the user's top bar (`assets/mockup/top_bar.svg`, cut by
+/// `cuts::logo`): the wordmark, its subtitle and its icon, on the box `LOGO_BOX` of the
+/// transport section.
+pub const LOGO_W: f32 = 116.0;
+pub const LOGO_H: f32 = 31.0;
+/// The logo's box in the transport section (the top bar's coordinates): left, top.
+pub const LOGO_BOX: (f32, f32) = (466.0, 8.0);
+/// Where the logo sits on the panel (the transport section is at x = 16).
+pub const LOGO_X: f32 = 16.0 + LOGO_BOX.0;
+pub const LOGO_Y: f32 = LOGO_BOX.1;
 /// The pieces of the logo, each on the whole `LOGO_W` x `LOGO_H` canvas: every piece is placed
-/// at (0, 0) of the logo, so an animation only offsets or fades a piece. In the order the
-/// startup animation shows them (logo_anim.rs of orb-ui): OpenRB-, 338, the four underline
-/// segments left to right, the x, the subtitle.
-pub const LOGO_PIECES: [&str; 8] = [
-    "logo_openrb",
-    "logo_338",
-    "logo_line_0",
-    "logo_line_1",
-    "logo_line_2",
-    "logo_line_3",
+/// at (0, 0) of the logo, so an animation only fades a piece. In the order the startup
+/// animation shows them (logo_anim.rs of orb-ui): the letters of ORB-338X, the subtitle, the
+/// icon.
+pub const LOGO_PIECES: [&str; 10] = [
+    "logo_o",
+    "logo_r",
+    "logo_b",
+    "logo_dash",
+    "logo_3a",
+    "logo_3b",
+    "logo_8",
     "logo_x",
     "logo_sub",
+    "logo_icon",
 ];
-
-/// The left edge of the wordmark, its underline and its subtitle in the logo part.
-pub const LOGO_TEXT_X: f32 = 5.0;
-/// The wordmark's cap height.
-pub const LOGO_CAP: f32 = 12.5;
-/// The wordmark's vertical center: the descender of its `p` clear of the underline (y 28).
-pub const LOGO_TEXT_Y: f32 = 16.0;
-/// The space between the underline's four segments.
-const LOGO_LINE_GAP: f32 = 1.5;
-
-/// Where the wordmark's `x` starts in the logo part, and its center (the startup animation
-/// flashes it there).
-pub fn logo_x_pos() -> (f32, f32) {
-    let cap = LOGO_CAP;
-    let x_338 = LOGO_TEXT_X + font::text_width(cap, "OpenRB-") + font::gap(cap);
-    let x_x = x_338 + font::text_width(cap, "338") + font::gap(cap);
-    (x_x, x_x + font::text_width(cap, "x") / 2.0)
-}
-
-/// The wordmark of this fork, `OpenRB-338x`: the whole, and its pieces (`LOGO_PIECES`) for
-/// task-114. `OpenRB-` is INK, `338` ORANGE and the `x` WHITE. The underline is four segments
-/// in the 808's step colors, from the wordmark's left edge to the outer edge of the x's stroke.
-fn logo(out: &mut Vec<Part>) {
-    let cap = LOGO_CAP;
-    let x0 = LOGO_TEXT_X;
-    let x_338 = x0 + font::text_width(cap, "OpenRB-") + font::gap(cap);
-    let (x_x, _) = logo_x_pos();
-    // the x's round stroke ends half a stroke past its box: the underline goes there too
-    let word_w = x_x + font::text_width(cap, "x") + font::stroke(cap) / 2.0 - x0;
-    let seg_w = (word_w - 3.0 * LOGO_LINE_GAP) / 4.0;
-    let y = LOGO_TEXT_Y;
-    let openrb = |s: &mut Svg| text(s, x0, y, cap, Anchor::Start, pal::INK, "OpenRB-");
-    let n338 = |s: &mut Svg| text(s, x_338, y, cap, Anchor::Start, pal::ORANGE, "338");
-    let x = |s: &mut Svg| text(s, x_x, y, cap, Anchor::Start, pal::WHITE, "x");
-    let line = |s: &mut Svg, i: usize| {
-        let x = x0 + (seg_w + LOGO_LINE_GAP) * i as f32;
-        s.rect(x, 28.0, seg_w, 1.5, 0.75, STEP_COLORS[i]);
-    };
-    let sub = |s: &mut Svg| {
-        let y = 37.0;
-        text(
-            s,
-            x0,
-            y,
-            3.4,
-            Anchor::Start,
-            pal::INK_DIM,
-            "BASS LINE AND DRUM MACHINE",
-        );
-    };
-    // the whole is the pieces in `LOGO_PIECES` order
-    out.push(Part::new("logo", LOGO_W, LOGO_H, |s| {
-        openrb(s);
-        n338(s);
-        for i in 0..4 {
-            line(s, i);
-        }
-        x(s);
-        sub(s);
-    }));
-    out.push(Part::new("logo_openrb", LOGO_W, LOGO_H, openrb));
-    out.push(Part::new("logo_338", LOGO_W, LOGO_H, n338));
-    for i in 0..4 {
-        out.push(Part::new(format!("logo_line_{i}"), LOGO_W, LOGO_H, |s| {
-            line(s, i)
-        }));
-    }
-    out.push(Part::new("logo_x", LOGO_W, LOGO_H, x));
-    out.push(Part::new("logo_sub", LOGO_W, LOGO_H, sub));
-}
+/// The icon's box in the logo part: left, top, size (the top bar's 555, 13, 24).
+pub const LOGO_ICON: (f32, f32, f32) = (555.0 - LOGO_BOX.0, 13.0 - LOGO_BOX.1, 24.0);
 
 fn pattern_bg(out: &mut Vec<Part>) {
     out.push(Part::new("bg_pattern", 70.0, 115.0, |s| {
@@ -1975,7 +1912,6 @@ pub fn all_parts() -> Vec<Part> {
     let mut v = Vec::new();
     wood(&mut v);
     transport_bg(&mut v);
-    logo(&mut v);
     pattern_bg(&mut v);
     tb303_bg(&mut v);
     tr808_bg(&mut v);

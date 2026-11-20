@@ -1,18 +1,16 @@
-//! The startup animation of the wordmark OpenRB-338x (task-114, redone for this fork): the
-//! pieces appear one after another, each fading in:
+//! The startup animation of the logo ORB-338X (task-114, redone for this fork with the user's
+//! top bar logo): the pieces appear one after another, each fading in:
 //!
-//! - `OpenRB-` over [`OPENRB_S`], from 0;
-//! - `338` over [`N338_S`], right after it;
-//! - the four underline segments, red, orange, yellow, white, each over [`SEG_FADE_S`], from
-//!   [`SEG_START_S`] on, [`SEG_STEP_S`] apart;
-//! - last the `x`, above the white segment, over [`X_FADE_S`] from [`X_START_S`], with a soft
-//!   flash: a glow around it that rises with it and dies away by [`FLASH_END_S`];
-//! - the subtitle fades in over [`SUB_START_S`]..[`SUB_END_S`];
-//! - in the About window the icon also fades in over [`ICON_FADE_S`].
+//! - the letters O, R, B, -, 3, 3, 8, X, each over [`LETTER_FADE_S`], [`LETTER_STEP_S`] apart from
+//!   0;
+//! - the subtitle, whole, over [`SUB_FADE_S`] from [`SUB_START_S`];
+//! - last the icon, over [`ICON_FADE_S`] from [`ICON_START_S`], with a soft flash: a glow around it
+//!   that rises with it and dies away by [`END_S`].
 //!
-//! It plays once per app start on the panel and at every open of the About window. The final
-//! frame is the whole `logo` part itself, so it equals the static wordmark exactly. The pieces
-//! are the `LOGO_PIECES` of orb-ui-art, each on the whole logo canvas.
+//! The whole animation lasts as long as the startup sound ([`END_S`], 82 688 frames at
+//! 44.1 kHz). It plays once per app start on the panel and at every open of the About window.
+//! The final frame is the whole `logo` part itself, so it equals the static logo exactly. The
+//! pieces are the `LOGO_PIECES` of orb-ui-art, each on the whole logo canvas.
 //!
 //! Developer option: `ORB_LOGO_T=SECONDS` freezes the animation at that time (for screenshots
 //! of a moment); it applies to the panel and to the About window alike.
@@ -21,44 +19,47 @@ use eframe::egui::{self, Color32, Rect, Ui};
 
 use crate::app;
 
-/// `OpenRB-`'s fade, from 0, and `338`'s, right after it.
-pub const OPENRB_S: f32 = 0.35;
-pub const N338_S: f32 = 0.35;
-/// The first underline segment's start, the step to the next, and each one's fade.
-pub const SEG_START_S: f32 = 0.75;
-pub const SEG_STEP_S: f32 = 0.20;
-pub const SEG_FADE_S: f32 = 0.25;
-/// The x: its start (after the white segment), its fade, and the end of its flash.
-pub const X_START_S: f32 = 1.65;
-pub const X_FADE_S: f32 = 0.15;
-pub const FLASH_END_S: f32 = 2.25;
-/// The subtitle's fade.
-pub const SUB_START_S: f32 = 1.9;
-pub const SUB_END_S: f32 = 2.3;
-/// The About icon's fade, from 0.
-pub const ICON_FADE_S: f32 = 0.6;
-/// The end of the whole animation.
-pub const END_S: f32 = SUB_END_S;
+/// The letters' pieces, in the order they appear.
+pub const LETTERS: [&str; 8] = [
+    "logo_o",
+    "logo_r",
+    "logo_b",
+    "logo_dash",
+    "logo_3a",
+    "logo_3b",
+    "logo_8",
+    "logo_x",
+];
+/// Each letter's start after the one before it, and its fade.
+pub const LETTER_STEP_S: f32 = 0.11;
+pub const LETTER_FADE_S: f32 = 0.12;
+/// The subtitle's start (after the X is in) and its fade.
+pub const SUB_START_S: f32 = 0.95;
+pub const SUB_FADE_S: f32 = 0.25;
+/// The icon's start (after the subtitle is in) and its fade; its flash dies away by [`END_S`].
+pub const ICON_START_S: f32 = 1.25;
+pub const ICON_FADE_S: f32 = 0.15;
+/// The end of the whole animation: the startup sound's length (`startup::sample`, a test checks
+/// it).
+pub const END_S: f32 = 82_688.0 / 44_100.0;
 
 /// The whole logo part and its size (a test checks them against orb-ui-art's).
 pub const LOGO_PART: &str = "logo";
-pub const LOGO_W: f32 = 134.0;
-pub const LOGO_H: f32 = 48.0;
-/// The center of the x in the logo part, where it flashes (orb-ui-art's `logo_x_pos`; a test
-/// checks it): in Inter (this fork), the middle of the x-height over the baseline at 22.25.
-pub const X_CENTER: (f32, f32) = (124.745_8, 17.6);
+pub const LOGO_W: f32 = 116.0;
+pub const LOGO_H: f32 = 31.0;
+/// The center of the icon in the logo part, where it flashes, and its size (orb-ui-art's
+/// `LOGO_ICON`; a test checks it).
+pub const ICON_CENTER: (f32, f32) = (101.0, 17.0);
+pub const ICON_SIZE: f32 = 24.0;
 
-/// The animation's state at one moment: each piece's opacity, and the x's flash (0 to 1).
+/// The animation's state at one moment: each piece's opacity, and the icon's flash (0 to 1).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Frame {
-    pub openrb: f32,
-    pub n338: f32,
-    /// The underline segments' opacities, left to right.
-    pub seg: [f32; 4],
-    pub x: f32,
-    pub flash: f32,
+    /// The letters' opacities, in [`LETTERS`] order.
+    pub letters: [f32; 8],
     pub sub: f32,
     pub icon: f32,
+    pub flash: f32,
 }
 
 /// 0 before `t0`, 1 after `t0 + d`, linear between.
@@ -69,26 +70,23 @@ fn ramp(t: f32, t0: f32, d: f32) -> f32 {
 impl Frame {
     /// The state `t` seconds after the start.
     pub fn at(t: f32) -> Self {
-        let mut seg = [0.0; 4];
-        for (i, a) in seg.iter_mut().enumerate() {
-            *a = ramp(t, SEG_START_S + SEG_STEP_S * i as f32, SEG_FADE_S);
+        let mut letters = [0.0; 8];
+        for (i, a) in letters.iter_mut().enumerate() {
+            *a = ramp(t, LETTER_STEP_S * i as f32, LETTER_FADE_S);
         }
-        // the flash rises with the x and fades out after it, eased so it stays soft
-        let peak = X_START_S + X_FADE_S;
+        // the flash rises with the icon and fades out after it, eased so it stays soft
+        let peak = ICON_START_S + ICON_FADE_S;
         let flash = if t < peak {
-            ramp(t, X_START_S, X_FADE_S)
+            ramp(t, ICON_START_S, ICON_FADE_S)
         } else {
-            let k = 1.0 - ramp(t, peak, FLASH_END_S - peak);
+            let k = 1.0 - ramp(t, peak, END_S - peak);
             k * k
         };
         Self {
-            openrb: ramp(t, 0.0, OPENRB_S),
-            n338: ramp(t, OPENRB_S, N338_S),
-            seg,
-            x: ramp(t, X_START_S, X_FADE_S),
+            letters,
+            sub: ramp(t, SUB_START_S, SUB_FADE_S),
+            icon: ramp(t, ICON_START_S, ICON_FADE_S),
             flash,
-            sub: ramp(t, SUB_START_S, SUB_END_S - SUB_START_S),
-            icon: ramp(t, 0.0, ICON_FADE_S),
         }
     }
 }
@@ -130,24 +128,23 @@ pub fn paint_logo(ui: &mut Ui, rect: Rect, t: Option<f32>) {
     }
     let k = rect.width() / LOGO_W;
     let f = Frame::at(t);
-    paint_piece(ui, "logo_openrb", rect, f.openrb);
-    paint_piece(ui, "logo_338", rect, f.n338);
-    for (i, a) in f.seg.iter().enumerate() {
-        paint_piece(ui, &format!("logo_line_{i}"), rect, *a);
+    for (name, a) in LETTERS.iter().zip(f.letters) {
+        paint_piece(ui, name, rect, a);
     }
+    paint_piece(ui, "logo_sub", rect, f.sub);
     if f.flash > 0.0 {
-        // a soft glow behind the x, and the x itself a little larger and fainter over it
-        let c = rect.min + egui::vec2(X_CENTER.0, X_CENTER.1) * k;
+        // a soft glow behind the icon, and the icon itself a little larger and fainter over it
+        let c = rect.min + egui::vec2(ICON_CENTER.0, ICON_CENTER.1) * k;
         let p = ui.painter();
-        for (r, a) in [(11.0, 0.10), (7.0, 0.16), (4.5, 0.22)] {
+        let r0 = ICON_SIZE / 2.0;
+        for (r, a) in [(r0 + 7.0, 0.08), (r0 + 4.0, 0.13), (r0 + 1.5, 0.18)] {
             p.circle_filled(c, r * k, Color32::WHITE.gamma_multiply(a * f.flash));
         }
-        let grow = 1.0 + 0.18 * f.flash;
+        let grow = 1.0 + 0.12 * f.flash;
         let big = Rect::from_min_size(c + (rect.min - c) * grow, rect.size() * grow);
-        paint_piece(ui, "logo_x", big, 0.5 * f.flash);
+        paint_piece(ui, "logo_icon", big, 0.5 * f.flash);
     }
-    paint_piece(ui, "logo_x", rect, f.x);
-    paint_piece(ui, "logo_sub", rect, f.sub);
+    paint_piece(ui, "logo_icon", rect, f.icon);
 }
 
 #[cfg(test)]
@@ -158,26 +155,20 @@ mod tests {
         (a - b).abs() < 1e-4
     }
 
-    /// The flash's center is the x's center, as the art lays the wordmark out.
+    /// The pieces and the icon's place are the art's, and the animation lasts as long as the
+    /// startup sound.
     #[test]
-    fn the_flash_is_on_the_x() {
-        let (_, cx) = orb_ui_art::parts::logo_x_pos();
-        assert!((X_CENTER.0 - cx).abs() < 0.001, "{} vs {cx}", X_CENTER.0);
+    fn the_pieces_are_the_arts() {
+        use orb_ui_art::parts::{LOGO_ICON, LOGO_PIECES};
         assert_eq!(orb_ui_art::parts::LOGO_W, LOGO_W);
         assert_eq!(orb_ui_art::parts::LOGO_H, LOGO_H);
-        assert_eq!(
-            orb_ui_art::parts::LOGO_PIECES,
-            [
-                "logo_openrb",
-                "logo_338",
-                "logo_line_0",
-                "logo_line_1",
-                "logo_line_2",
-                "logo_line_3",
-                "logo_x",
-                "logo_sub"
-            ]
-        );
+        assert_eq!(LOGO_PIECES[..8], LETTERS);
+        assert_eq!(LOGO_PIECES[8..], ["logo_sub", "logo_icon"]);
+        let (x, y, size) = LOGO_ICON;
+        assert_eq!((x + size / 2.0, y + size / 2.0), ICON_CENTER);
+        assert_eq!(size, ICON_SIZE);
+        let sound = crate::startup::sample();
+        assert!(close(END_S, sound.frames() as f32 / 44_100.0));
     }
 
     /// Runs the panel for a few frames at egui times from `t0` (so the SVGs are loaded) and
@@ -240,61 +231,57 @@ mod tests {
     #[test]
     fn the_start() {
         let f = Frame::at(0.0);
-        assert_eq!((f.openrb, f.n338, f.x, f.flash), (0.0, 0.0, 0.0, 0.0));
-        assert_eq!(f.seg, [0.0; 4]);
-        assert_eq!((f.sub, f.icon), (0.0, 0.0));
+        assert_eq!(f.letters, [0.0; 8]);
+        assert_eq!((f.sub, f.icon, f.flash), (0.0, 0.0, 0.0));
     }
 
-    /// OpenRB-, then 338, then the segments red to white, then the x: each starts when the one
-    /// before it is in.
+    /// O, R, B, -, 3, 3, 8, X one after another, then the subtitle, then the icon: each
+    /// starts when the one before it is (nearly) in.
     #[test]
     fn the_pieces_come_in_order() {
-        assert!(close(Frame::at(0.175).openrb, 0.5));
-        assert_eq!(Frame::at(0.35).n338, 0.0);
-        assert!(close(Frame::at(0.35).openrb, 1.0));
-        assert!(close(Frame::at(0.525).n338, 0.5));
-        assert_eq!(Frame::at(0.75).seg[0], 0.0);
-        assert!(close(Frame::at(0.875).seg[0], 0.5));
-        assert!(close(Frame::at(1.075).seg[1], 0.5));
-        assert!(close(Frame::at(1.275).seg[2], 0.5));
-        assert!(close(Frame::at(1.475).seg[3], 0.5));
-        assert!(close(Frame::at(1.6).seg[3], 1.0));
-        assert_eq!(Frame::at(1.6).x, 0.0);
-        assert!(close(Frame::at(1.725).x, 0.5));
-        assert!(close(Frame::at(1.8).x, 1.0));
+        for i in 0..8 {
+            let t0 = LETTER_STEP_S * i as f32;
+            assert_eq!(Frame::at(t0).letters[i], 0.0, "{i}");
+            assert!(
+                close(Frame::at(t0 + LETTER_FADE_S / 2.0).letters[i], 0.5),
+                "{i}"
+            );
+            if i > 0 {
+                assert!(Frame::at(t0).letters[i - 1] > 0.9, "{i}");
+            }
+        }
+        let x_in = LETTER_STEP_S * 7.0 + LETTER_FADE_S;
+        assert!(x_in <= SUB_START_S);
+        assert_eq!(Frame::at(SUB_START_S).sub, 0.0);
+        assert!(close(Frame::at(SUB_START_S + SUB_FADE_S / 2.0).sub, 0.5));
+        const { assert!(SUB_START_S + SUB_FADE_S <= ICON_START_S) };
+        assert_eq!(Frame::at(ICON_START_S).icon, 0.0);
+        assert!(close(Frame::at(ICON_START_S + ICON_FADE_S).icon, 1.0));
     }
 
-    /// The x's flash rises with it, is full when the x is in, and dies away softly after.
+    /// The icon's flash rises with it, is full when the icon is in, and dies away softly by
+    /// the end.
     #[test]
-    fn the_x_flashes_softly() {
-        assert_eq!(Frame::at(1.6).flash, 0.0);
-        assert!(close(Frame::at(1.725).flash, 0.5));
-        assert!(close(Frame::at(1.8).flash, 1.0));
-        let a = Frame::at(1.9).flash;
-        let b = Frame::at(2.1).flash;
+    fn the_icon_flashes_softly() {
+        let peak = ICON_START_S + ICON_FADE_S;
+        assert_eq!(Frame::at(ICON_START_S).flash, 0.0);
+        assert!(close(
+            Frame::at(ICON_START_S + ICON_FADE_S / 2.0).flash,
+            0.5
+        ));
+        assert!(close(Frame::at(peak).flash, 1.0));
+        let a = Frame::at(peak + 0.1).flash;
+        let b = Frame::at(peak + 0.3).flash;
         assert!(a < 1.0 && b < a && b > 0.0, "{a} {b}");
-        assert_eq!(Frame::at(FLASH_END_S).flash, 0.0);
-    }
-
-    #[test]
-    fn the_subtitle_and_the_icon_fade() {
-        assert_eq!(Frame::at(1.9).sub, 0.0);
-        assert!(close(Frame::at(2.1).sub, 0.5));
-        assert!(close(Frame::at(2.3).sub, 1.0));
-        assert!(close(Frame::at(0.3).icon, 0.5));
-        assert!(close(Frame::at(0.6).icon, 1.0));
+        assert_eq!(Frame::at(END_S).flash, 0.0);
     }
 
     /// At the end every piece is in its final state, and nothing changes after it.
     #[test]
     fn the_final_state() {
         let end = Frame::at(END_S);
-        assert_eq!(
-            (end.openrb, end.n338, end.x, end.flash),
-            (1.0, 1.0, 1.0, 0.0)
-        );
-        assert_eq!(end.seg, [1.0; 4]);
-        assert_eq!((end.sub, end.icon), (1.0, 1.0));
+        assert_eq!(end.letters, [1.0; 8]);
+        assert_eq!((end.sub, end.icon, end.flash), (1.0, 1.0, 0.0));
         assert_eq!(Frame::at(10.0), end);
         // the clock: over (the whole part is painted) at END_S, none without a start
         assert_eq!(time_now(5.0, None), None);

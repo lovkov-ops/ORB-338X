@@ -63,7 +63,7 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
         ("wood", 0.0, 0.0),
         ("wood", 608.0, 0.0),
         ("bg_transport", 16.0, 0.0),
-        ("logo", 467.0, 1.0),
+        ("logo", 482.0, 8.0),
     ];
     for r in 0..4 {
         let y = 50.0 + 115.0 * r as f32;
@@ -103,10 +103,10 @@ pub fn row_at(x: f32, y: f32) -> Option<usize> {
 
 /// Whether a panel point is on the logo, the hit rectangle of `sub_42A799`
 /// (`sub_479B06(458, 1, 608, 49)` in transport coordinates, clipped to the transport: panel x
-/// 474..607, y 1..48; docs/ui_spec.md section 3), moved with this fork's logo 7 px left:
-/// panel x 467..600.
+/// 474..607, y 1..48; docs/ui_spec.md section 3); this fork: the ORB-338X logo's own box
+/// (orb-ui-art's `LOGO_X`, `LOGO_Y`, `LOGO_W`, `LOGO_H`), panel x 482..597, y 8..38.
 pub fn on_logo(x: f32, y: f32) -> bool {
-    (467.0..601.0).contains(&x) && (1.0..49.0).contains(&y)
+    (482.0..598.0).contains(&x) && (8.0..39.0).contains(&y)
 }
 
 /// The origins of the drum machine sections (panel pixels), for pointer math.
@@ -162,12 +162,12 @@ mod tests {
 
     #[test]
     fn the_logo() {
-        assert!(on_logo(467.0, 1.0) && on_logo(600.9, 48.9));
-        assert!(!on_logo(466.9, 10.0) && !on_logo(601.0, 10.0));
-        assert!(!on_logo(500.0, 0.9) && !on_logo(500.0, 49.0));
+        assert!(on_logo(482.0, 8.0) && on_logo(597.9, 38.9));
+        assert!(!on_logo(481.9, 20.0) && !on_logo(598.0, 20.0));
+        assert!(!on_logo(500.0, 7.9) && !on_logo(500.0, 39.0));
         // the logo part covers exactly the click area
         use orb_ui_art::parts::{LOGO_H, LOGO_W, LOGO_X, LOGO_Y};
-        assert_eq!((LOGO_X, LOGO_Y), (467.0, 1.0));
+        assert_eq!((LOGO_X, LOGO_Y), (482.0, 8.0));
         assert!(on_logo(LOGO_X, LOGO_Y) && on_logo(LOGO_X + LOGO_W - 0.1, LOGO_Y + LOGO_H - 0.1));
         assert!(!on_logo(LOGO_X + LOGO_W, LOGO_Y) && !on_logo(LOGO_X, LOGO_Y + LOGO_H));
     }

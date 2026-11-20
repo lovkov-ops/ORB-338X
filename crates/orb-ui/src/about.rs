@@ -1,22 +1,20 @@
-//! Help > About (task-102, laid out in task-115): the icon, the wordmark, the version and the
-//! project link in a small centered window. The version string is computed by `build.rs`
-//! (`crate::version`).
+//! Help > About (task-102, laid out in task-115): the logo (this fork: the ORB-338X logo with
+//! its icon, as on the panel), the version and the project link in a small centered window. The
+//! version string is computed by `build.rs` (`crate::version`).
 
 use eframe::egui::{self, Context, Key, Modifiers, RichText};
 
-use crate::app::{self, App};
+use crate::app::App;
 use crate::logo_anim::{self, LOGO_H, LOGO_W};
 use crate::palette::INK_DIM;
 
-/// The wordmark part of the panel (`logo_anim::LOGO_PART`) is shown at this scale.
-const LOGO_SCALE: f32 = 2.0;
-/// The app icon part and the size it is shown at.
-pub const ICON_PART: &str = "app_icon";
-const ICON_SIZE: f32 = 64.0;
+/// The logo part of the panel (`logo_anim::LOGO_PART`) is shown at this scale, its letters'
+/// left edge (2 points into the part) over the lines' x.
+const LOGO_SCALE: f32 = 2.5;
+const LOGO_AT: (f32, f32) = (TEXT_X - 2.0 * LOGO_SCALE, 16.0);
 /// The content area below the title bar and the x of the version and the links. This fork
-/// sets the text in Inter, wider than egui's own font: the lines start under the icon (its x,
-/// 18) instead of under the wordmark, and the window is 470 wide, so the longest line
-/// ("Song collection: <link>") fits with room to spare.
+/// sets the text in Inter, wider than egui's own font, and the window is 470 wide, so the
+/// longest line ("Song collection: <link>") fits with room to spare.
 const CONTENT_W: f32 = 470.0;
 /// The width of the label column of the collection lines (the links start at TEXT_X + this).
 const LABEL_W: f32 = 120.0;
@@ -26,18 +24,18 @@ const CONTENT_H: f32 = 266.0;
 const TEXT_X: f32 = 18.0;
 
 /// The name of the app.
-pub const NAME: &str = "OpenRB-338x";
+pub const NAME: &str = "ORB-338X";
 /// The page of the original project's creator (this fork's About names them under its own
 /// credit).
 pub const CREATOR_URL: &str = "https://github.com/pingw33n";
 /// Where the latest release of this fork is downloaded.
-pub const DOWNLOAD_URL: &str = "https://github.com/lovkov-ops/OpenRB-338x/releases/latest";
+pub const DOWNLOAD_URL: &str = "https://github.com/lovkov-ops/ORB-338X/releases/latest";
 /// The credit of this fork, the first line under the wordmark: the label, then the fork's
 /// author linked to the fork.
 pub const FORK_CREDIT: (&str, &str, &str) = (
     "Xtended features:",
     "lovkov-ops",
-    "https://github.com/lovkov-ops/OpenRB-338x",
+    "https://github.com/lovkov-ops/ORB-338X",
 );
 /// The credit of the panel's look (this fork), the line under the fork's credit: the label,
 /// then the designer's page as a link.
@@ -56,7 +54,7 @@ pub const COLLECTIONS: [(&str, &str); 2] = [
 /// of this fork's latest release (its long address shown as words), the original creator, the
 /// collections.
 pub const LINKS: [(&str, &str, &str); 4] = [
-    ("Download:", "OpenRB-338x latest release", DOWNLOAD_URL),
+    ("Download:", "ORB-338X latest release", DOWNLOAD_URL),
     ("Original creator:", CREATOR_URL, CREATOR_URL),
     (COLLECTIONS[0].0, COLLECTIONS[0].1, COLLECTIONS[0].1),
     (COLLECTIONS[1].0, COLLECTIONS[1].1, COLLECTIONS[1].1),
@@ -123,16 +121,10 @@ impl App {
                 let (rect, _) =
                     ui.allocate_exact_size(egui::vec2(CONTENT_W, CONTENT_H), egui::Sense::hover());
                 let at = |x: f32, y: f32| rect.min + egui::vec2(x, y);
-                // the icon fades in with the logo's animation (task-114)
-                let icon_a = t.map_or(1.0, |t| logo_anim::Frame::at(t).icon);
-                app::paint_part_tinted(
-                    ui,
-                    ICON_PART,
-                    egui::Rect::from_min_size(at(18.0, 18.0), egui::vec2(ICON_SIZE, ICON_SIZE)),
-                    egui::Color32::WHITE.gamma_multiply(icon_a),
-                );
+                // the logo, its icon in it, animated as on the panel (task-114)
                 let logo_size = egui::vec2(LOGO_W, LOGO_H) * LOGO_SCALE;
-                logo_anim::paint_logo(ui, egui::Rect::from_min_size(at(92.0, 14.0), logo_size), t);
+                let logo_rect = egui::Rect::from_min_size(at(LOGO_AT.0, LOGO_AT.1), logo_size);
+                logo_anim::paint_logo(ui, logo_rect, t);
                 let line_at = |ui: &mut egui::Ui, x: f32, y: f32, f: &dyn Fn(&mut egui::Ui)| {
                     let r = egui::Rect::from_min_size(at(x, y), egui::vec2(CONTENT_W - x, 18.0));
                     ui.scope_builder(egui::UiBuilder::new().max_rect(r), f);

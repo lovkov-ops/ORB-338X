@@ -2055,7 +2055,7 @@ fn the_about_window_opens_centered_and_closes() {
     let r = rect(&h).expect("the window is drawn");
     let off = (r.center() - screen.center()).abs();
     assert!(off.x < 3.0 && off.y < 3.0, "centered: {r:?} in {screen:?}");
-    assert!(shapes.contains("OpenRB-338x"), "the name is drawn");
+    assert!(shapes.contains("ORB-338X"), "the name is drawn");
     assert!(
         shapes.contains(orb_ui::about::VERSION),
         "the version is drawn"
@@ -2064,7 +2064,7 @@ fn the_about_window_opens_centered_and_closes() {
     assert_eq!(orb_ui::about::CREATOR_URL, "https://github.com/pingw33n");
     assert_eq!(
         orb_ui::about::DOWNLOAD_URL,
-        "https://github.com/lovkov-ops/OpenRB-338x/releases/latest"
+        "https://github.com/lovkov-ops/ORB-338X/releases/latest"
     );
     assert_eq!(
         orb_ui::about::SONGS_URL,
@@ -2098,12 +2098,8 @@ fn the_about_window_opens_centered_and_closes() {
     }
     assert_eq!(orb_ui::about::COLLECTIONS[0].0, "Song collection:");
     assert_eq!(orb_ui::about::COLLECTIONS[1].0, "Mod collection:");
-    // the icon and the wordmark: two more images than without the window
-    assert_eq!(
-        images(&shapes),
-        before + 2,
-        "the icon and the logo are drawn"
-    );
+    // the logo, its icon in it (this fork): one more image than without the window
+    assert_eq!(images(&shapes), before + 1, "the logo is drawn");
     // the version is `YYYY.MMDD.HHMM (<git>)` (task-133)
     let v = orb_ui::about::VERSION;
     let b = v.as_bytes();
@@ -2391,11 +2387,11 @@ fn the_startup_sound_plays_only_when_the_kit_changes() {
 fn the_window_title_is_the_app_name_the_song_and_the_modified_mark() {
     let mut h = Harness::new();
     h.frame(vec![]);
-    assert_eq!(h.app.title, "OpenRB-338x - Untitled");
+    assert_eq!(h.app.title, "ORB-338X - Untitled");
     h.app.panel.set_knob("tb303_1.cutoff", 900);
     h.frame(vec![]);
     assert!(h.app.doc.modified);
-    assert_eq!(h.app.title, "OpenRB-338x - Untitled *");
+    assert_eq!(h.app.title, "ORB-338X - Untitled *");
 }
 
 /// A ReBirth 1.x song (a MIDI file, docs/song_load.md section 12) whose import gives the mixer

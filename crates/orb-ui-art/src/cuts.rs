@@ -498,11 +498,12 @@ fn top_bar(c: &mut Cuts) {
     c.take(&sign);
     c.place("transport.loop", b.x0, b.y0);
 
-    // the logo: the mockup's is the generated one (parts.rs, whose pieces the startup animation
-    // moves), so it stays; its shapes are left out of the background
+    // the old logo's shapes are left out of the background: the ORB-338X logo is drawn over
+    // it (`logo`)
     for g in 13..=20 {
         c.take(&grp(m, &format!("1.{g}")));
     }
+    logo(c);
 
     c.background(
         m,
@@ -515,6 +516,44 @@ fn top_bar(c: &mut Cuts) {
     let wood = grp(m, "0.1");
     c.parts
         .push(part("wood", 0.0, 0.0, 16.0, 510.0, &body(&wood)));
+}
+
+/// The ORB-338X logo (this fork), from the user's top bar (`Mockup::top_bar`, in the transport
+/// section's coordinates): each piece of `parts::LOGO_PIECES` on the logo's box, and `logo`,
+/// all of them. The icon's stripes are clipped to its rounded tile, as in the drawing.
+fn logo(c: &mut Cuts) {
+    use crate::parts::{LOGO_BOX, LOGO_H, LOGO_PIECES, LOGO_W};
+    let m = Mockup::top_bar();
+    let groups = [
+        "0.13.1.0.0",
+        "0.13.1.0.1",
+        "0.13.1.0.2",
+        "0.13.1.0.3",
+        "0.13.1.1",
+        "0.13.1.2",
+        "0.13.1.3",
+        "0.13.1.4",
+        "0.13.0",
+        "0.14",
+    ];
+    let mut whole = String::new();
+    for (name, g) in LOGO_PIECES.iter().zip(groups) {
+        let shapes = grp(m, g);
+        assert!(!shapes.is_empty(), "the top bar's group {g}");
+        let mut b = body(&shapes);
+        if *name == "logo_icon" {
+            b = format!(
+                "<defs><clipPath id=\"logo-icon-tile\">\
+                 <rect x=\"555\" y=\"13\" width=\"24\" height=\"24\" rx=\"3\"/></clipPath></defs>\
+                 <g clip-path=\"url(#logo-icon-tile)\">{b}</g>"
+            );
+        }
+        whole.push_str(&b);
+        c.parts
+            .push(part(name, LOGO_BOX.0, LOGO_BOX.1, LOGO_W, LOGO_H, &b));
+    }
+    c.parts
+        .push(part("logo", LOGO_BOX.0, LOGO_BOX.1, LOGO_W, LOGO_H, &whole));
 }
 
 /// The shapes `v` with shape `i`'s plain fill painted `cols[i]` (`""` keeps it).
