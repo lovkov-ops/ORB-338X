@@ -39,9 +39,9 @@ pub fn log_dir() -> Option<PathBuf> {
 }
 
 /// [`log_dir`] for the system `os` (`std::env::consts::OS`) and an environment lookup:
-/// - macOS: `~/Library/Logs/OpenRB-338x`;
-/// - Windows: `%LOCALAPPDATA%\OpenRB-338x\logs`;
-/// - others: `$XDG_STATE_HOME/OpenRB-338x` or `~/.local/state/OpenRB-338x`.
+/// - macOS: `~/Library/Logs/ORB-338X`;
+/// - Windows: `%LOCALAPPDATA%\ORB-338X\logs`;
+/// - others: `$XDG_STATE_HOME/ORB-338X` or `~/.local/state/ORB-338X`.
 ///
 /// An empty variable counts as unset.
 pub fn platform_dir(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
@@ -50,11 +50,11 @@ pub fn platform_dir(os: &str, env: impl Fn(&str) -> Option<OsString>) -> Option<
         return Some(p);
     }
     match os {
-        "macos" => get("HOME").map(|h| h.join("Library/Logs/OpenRB-338x")),
-        "windows" => get("LOCALAPPDATA").map(|l| l.join("OpenRB-338x").join("logs")),
+        "macos" => get("HOME").map(|h| h.join("Library/Logs/ORB-338X")),
+        "windows" => get("LOCALAPPDATA").map(|l| l.join("ORB-338X").join("logs")),
         _ => get("XDG_STATE_HOME")
             .or_else(|| get("HOME").map(|h| h.join(".local/state")))
-            .map(|s| s.join("OpenRB-338x")),
+            .map(|s| s.join("ORB-338X")),
     }
 }
 
@@ -75,7 +75,7 @@ pub struct Panic<'a> {
 pub fn report(p: &Panic) -> String {
     let [y, mo, d, h, mi, s] = utc(p.secs);
     let mut r = String::new();
-    let _ = writeln!(r, "OpenRB-338x crash log");
+    let _ = writeln!(r, "ORB-338X crash log");
     let _ = writeln!(
         r,
         "time:     {y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{s:02} UTC"
@@ -190,7 +190,7 @@ pub fn box_text(message: &str, location: Option<&str>, log: &Result<PathBuf, Str
         Err(e) => format!("The crash log could not be saved: {e}."),
     };
     format!(
-        "OpenRB-338x stopped because of an internal error. {saved}\n\n{message}{at}\n\n\
+        "ORB-338X stopped because of an internal error. {saved}\n\n{message}{at}\n\n\
          Unsaved changes were lost."
     )
 }
@@ -223,7 +223,7 @@ pub fn install(version: &'static str) {
             // This one waits, but not for ever: if it is the main thread, the box of a
             // thread may need it (macOS runs the box on the main queue).
             std::thread::sleep(WAIT);
-            say("OpenRB-338x: a second panic; the first one did not end the process in time");
+            say("ORB-338X: a second panic; the first one did not end the process in time");
             std::process::exit(EXIT_CODE);
         }
         let _ = std::panic::catch_unwind(AssertUnwindSafe(|| handle(version, info)));
@@ -266,15 +266,13 @@ fn handle(version: &str, info: &PanicHookInfo) {
         None => Err("no log folder".to_string()),
     };
     match &log {
-        Ok(p) => say(&format!("OpenRB-338x: crash log saved to {}", p.display())),
-        Err(e) => say(&format!(
-            "OpenRB-338x: the crash log could not be saved: {e}"
-        )),
+        Ok(p) => say(&format!("ORB-338X: crash log saved to {}", p.display())),
+        Err(e) => say(&format!("ORB-338X: the crash log could not be saved: {e}")),
     }
     if !no_dialog() {
         let _ = rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
-            .set_title("OpenRB-338x")
+            .set_title("ORB-338X")
             .set_description(box_text(&message, location.as_deref(), &log))
             .set_buttons(rfd::MessageButtons::Ok)
             .show();
@@ -394,25 +392,25 @@ mod tests {
         let home = env(&[("HOME", "/h")]);
         assert_eq!(
             platform_dir("macos", home),
-            Some("/h/Library/Logs/OpenRB-338x".into())
+            Some("/h/Library/Logs/ORB-338X".into())
         );
         let win = env(&[("LOCALAPPDATA", "C:\\L"), ("HOME", "/h")]);
         assert_eq!(
             platform_dir("windows", win),
-            Some(PathBuf::from("C:\\L").join("OpenRB-338x").join("logs"))
+            Some(PathBuf::from("C:\\L").join("ORB-338X").join("logs"))
         );
         assert_eq!(
             platform_dir("linux", env(&[("HOME", "/h")])),
-            Some("/h/.local/state/OpenRB-338x".into())
+            Some("/h/.local/state/ORB-338X".into())
         );
         assert_eq!(
             platform_dir("linux", env(&[("HOME", "/h"), ("XDG_STATE_HOME", "/x")])),
-            Some("/x/OpenRB-338x".into())
+            Some("/x/ORB-338X".into())
         );
         // empty counts as unset; the override wins everywhere
         assert_eq!(
             platform_dir("linux", env(&[("HOME", "/h"), ("XDG_STATE_HOME", "")])),
-            Some("/h/.local/state/OpenRB-338x".into())
+            Some("/h/.local/state/ORB-338X".into())
         );
         assert_eq!(
             platform_dir("macos", env(&[("HOME", "/h"), ("ORB_UI_LOG_DIR", "/t")])),
@@ -424,7 +422,7 @@ mod tests {
     #[test]
     fn the_box_names_the_log_and_the_lost_work() {
         let t = box_text("boom", Some("a.rs:1:2"), &Ok("/l/crash.log".into()));
-        assert!(t.starts_with("OpenRB-338x stopped because of an internal error."));
+        assert!(t.starts_with("ORB-338X stopped because of an internal error."));
         assert!(t.contains("A crash log was saved to /l/crash.log."));
         assert!(t.contains("boom (a.rs:1:2)"));
         assert!(t.contains("Unsaved changes were lost."));

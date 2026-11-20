@@ -69,7 +69,7 @@ enum Cmd {
         /// instead of failing; the original offers the same as "Standard".
         #[arg(long)]
         standard_kit: bool,
-        /// The original's sound, bit for bit: without OpenRB-338x's louder drum machines.
+        /// The original's sound, bit for bit: without ORB-338X's louder drum machines.
         #[arg(long)]
         original: bool,
     },

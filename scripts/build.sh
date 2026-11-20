@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the dist-profile binaries of orb (the CLI) and OpenRB-338x (orb-ui) for one target triple and
+# Builds the dist-profile binaries of orb (the CLI) and ORB-338X (orb-ui) for one target triple and
 # copies them to dist/<target>/bin/ (task-108). scripts/package.sh packs them.
 #
 #   scripts/build.sh TARGET
@@ -77,7 +77,7 @@ build_docker() {
         "$image" scripts/build.sh "$target"
     # the success line is only true when the files are on the host
     local b
-    for b in orb OpenRB-338x; do
+    for b in orb ORB-338X; do
         [ -f "$bin_dir/$b" ] || {
             echo "docker build finished but $bin_dir/$b is missing" >&2
             exit 1
@@ -138,7 +138,7 @@ case $os in
 esac
 
 mkdir -p "$bin_dir"
-for b in orb OpenRB-338x; do
+for b in orb ORB-338X; do
     cp "$target_dir/$target/$profile/$b$exe" "$bin_dir/$b$exe"
 done
 echo "built $target -> $bin_dir"

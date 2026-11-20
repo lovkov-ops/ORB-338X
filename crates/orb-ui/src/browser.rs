@@ -789,7 +789,7 @@ impl Browser {
                                 "ReBirth song: the original's format, without the GENERATE \
                                  and LFO settings"
                             } else {
-                                "OpenRB-338x song: keeps the GENERATE and LFO settings too"
+                                "ORB-338X song: keeps the GENERATE and LFO settings too"
                             });
                             self.hits.push((format!("button:{label}"), r.rect));
                             if r.clicked() && !on {

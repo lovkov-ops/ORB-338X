@@ -2,7 +2,7 @@
 
 - `ui/`: the panel's SVG art set (`crates/orb-ui-art`).
 - `app_icon.ico`: the Windows icon (the `app_icon` part at 16 to 256 px), made by
-  `cargo run --release -p orb-ui-art --bin ui-art -- ico` and embedded in `OpenRB-338.exe` by
+  `cargo run --release -p orb-ui-art --bin ui-art -- ico` and embedded in `ORB-338X.exe` by
   `crates/orb-ui/build.rs` (task-111).
 - `fonts/`: Inter Medium (the windows' text, `crates/orb-ui/src/fonts.rs`) and Inter SemiBold
   (the panel's labels and the logo, drawn as outlines by `crates/orb-ui-art/src/font.rs`), from
@@ -12,9 +12,9 @@
   of the standard kit's own: 16-bit PCM, 44100 Hz, stereo averaged to mono.
 - `Standard.rbm`: the standard mod, orb's built-in kit (task-067, docs/rbm.md section 13).
 - `readme/`: the README's pictures (CI ignores this folder, `.github/workflows/ci.yml`):
-  - `logo.svg`: the README's logo, the OpenRB-338x wordmark: `ui/logo.svg` on the panel's
+  - `logo.svg`: the README's logo, the ORB-338X wordmark: `ui/logo.svg` on the panel's
     slate (#3b4656) with rounded corners.
-  - `screenshot.png`: the README's screenshot of OpenRB-338x on macOS (2026-11-14, step LEDs and LFO row, `--demo
+  - `screenshot.png`: the README's screenshot of ORB-338X on macOS (2026-11-14, step LEDs and LFO row, `--demo
     --size 624x510 --ppp 2`).
 
 ## Standard.rbm
@@ -24,7 +24,7 @@ A recrypted ReBirth mod named "Standard ReBirth": the 46 built-in drum samples o
 panel JPEG resources and its splash, resource 903). It is Propellerhead's material, committed by
 the user's decision of 2026-10-27 as the one exception to the rule that nothing of the original
 is in the repository. `crates/rbm/src/standard.rs` embeds it (`include_bytes!`): `orb render`,
-`orb compare`, `orb play` and OpenRB-338 take the built-in kit from it and need no file of the
+`orb compare`, `orb play` and ORB-338X take the built-in kit from it and need no file of the
 original.
 
 Made with:

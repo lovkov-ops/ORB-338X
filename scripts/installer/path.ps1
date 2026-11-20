@@ -1,4 +1,4 @@
-# Adds or removes one folder in the user's PATH (HKCU\Environment\Path) for the OpenRB-338x
+# Adds or removes one folder in the user's PATH (HKCU\Environment\Path) for the ORB-338X
 # installer and uninstaller (task-111).
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File path.ps1 add|remove DIR

@@ -7,7 +7,7 @@
 //! or Export, and of the last mod; task-144), `startup_sound` (a bool) and the table
 //! `preferred_mods` (an INFO name to the file name preferred among mods that share it,
 //! task-151), so it can be edited by hand. Where it lives: `$ORB_UI_CONFIG` if set; else
-//! `OpenRB-338x/ui.toml` in the platform's configuration folder (`$XDG_CONFIG_HOME`, or
+//! `ORB-338X/ui.toml` in the platform's configuration folder (`$XDG_CONFIG_HOME`, or
 //! `~/.config` on Linux, `~/Library/Application Support` on macOS, `%APPDATA%` on Windows).
 //! Reading never fails: a missing or damaged file gives the defaults (a damaged file stays as
 //! it is until the next save), a key of the wrong type is skipped and the others kept, and
@@ -105,25 +105,36 @@ pub fn default_file() -> Option<PathBuf> {
     } else {
         home().map(|h| h.join(".config"))
     };
-    base.map(|b| b.join("OpenRB-338x").join("ui.toml"))
+    base.map(|b| b.join("ORB-338X").join("ui.toml"))
 }
 
-/// The program was named OpenRB-338 before this fork named it OpenRB-338x: a settings file at
-/// the default place of the new name that does not exist yet starts as a copy of the one at
-/// the old name's place (`OpenRB-338/ui.toml` next to `OpenRB-338x/`), so nothing is lost.
-/// The old file stays. Nothing happens for `$ORB_UI_CONFIG`'s file or when there is no old one.
+/// The program was named OpenRB-338, then OpenRB-338x (this fork), then ORB-338X: a settings
+/// file at the default place of the new name that does not exist yet starts as a copy of the
+/// newest one at an old name's place (`OpenRB-338x/ui.toml`, else `OpenRB-338/ui.toml`, next to
+/// `ORB-338X/`), so nothing is lost. The old files stay. Nothing happens for `$ORB_UI_CONFIG`'s
+/// file or when there is no old one.
 pub fn carry_over(file: &Path) -> bool {
     let (Some(dir), Some(name)) = (file.parent(), file.file_name()) else {
         return false;
     };
-    if file.exists() || dir.file_name().is_none_or(|n| n != "OpenRB-338x") {
-        return false;
-    }
-    let Some(old) = dir.parent().map(|b| b.join("OpenRB-338").join(name)) else {
+    let Some(base) = dir.parent() else {
         return false;
     };
-    old.is_file() && std::fs::create_dir_all(dir).is_ok() && std::fs::copy(&old, file).is_ok()
+    if file.exists() || dir.file_name().is_none_or(|n| n != "ORB-338X") {
+        return false;
+    }
+    let Some(old) = OLD_NAMES
+        .iter()
+        .map(|n| base.join(n).join(name))
+        .find(|p| p.is_file())
+    else {
+        return false;
+    };
+    std::fs::create_dir_all(dir).is_ok() && std::fs::copy(&old, file).is_ok()
 }
+
+/// The program's earlier names, newest first ([`carry_over`]).
+const OLD_NAMES: [&str; 2] = ["OpenRB-338x", "OpenRB-338"];
 
 /// What the file holds, in the file's order.
 #[derive(Serialize)]

@@ -23,7 +23,7 @@ pub const CUT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key:
 pub const PASTE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::V);
 
 /// The first line of a pattern's text.
-const HEADER: &str = "OpenRB-338x pattern 1";
+const HEADER: &str = "ORB-338X pattern 1";
 
 /// The steps of a pattern, by machine.
 #[derive(Clone, Debug, PartialEq)]

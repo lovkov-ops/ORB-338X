@@ -13,7 +13,7 @@ fn p(s: &str) -> PathBuf {
 #[test]
 fn the_settings_round_trip_through_toml() {
     let d = tempfile::tempdir().unwrap();
-    let file = d.path().join("OpenRB-338x").join("ui.toml");
+    let file = d.path().join("ORB-338X").join("ui.toml");
     let mut s = Settings::load_from(&file);
     assert!(s.startup_sound);
     s.songs_dir = Some(p("/songs"));
@@ -206,23 +206,20 @@ fn orb_ui_config_names_the_settings_file() {
     unsafe { std::env::set_var("ORB_UI_CONFIG", "") };
     assert_ne!(orb_ui::settings::default_file(), Some(PathBuf::new()));
     unsafe { std::env::remove_var("ORB_UI_CONFIG") };
-    // Without the variable the file is OpenRB-338x/ui.toml (there is none when no home is known).
+    // Without the variable the file is ORB-338X/ui.toml (there is none when no home is known).
     if let Some(default) = orb_ui::settings::default_file() {
         assert_eq!(default.file_name().unwrap(), "ui.toml");
-        assert_eq!(
-            default.parent().unwrap().file_name().unwrap(),
-            "OpenRB-338x"
-        );
+        assert_eq!(default.parent().unwrap().file_name().unwrap(), "ORB-338X");
     }
 }
 
-/// The fork renamed the program OpenRB-338x: the settings of the old name carry over once.
+/// The fork renamed the program ORB-338X: the settings of the old name carry over once.
 #[test]
 fn the_old_names_settings_carry_over_to_the_new_name_once() {
     use orb_ui::settings::carry_over;
     let base = tempfile::tempdir().unwrap();
     let old = base.path().join("OpenRB-338").join("ui.toml");
-    let new = base.path().join("OpenRB-338x").join("ui.toml");
+    let new = base.path().join("ORB-338X").join("ui.toml");
     // no old file: nothing to carry
     assert!(!carry_over(&new));
     assert!(!new.exists());
@@ -243,4 +240,19 @@ fn the_old_names_settings_carry_over_to_the_new_name_once() {
     );
     // a file elsewhere ($ORB_UI_CONFIG) is not touched
     assert!(!carry_over(&base.path().join("mine.toml")));
+}
+
+/// ORB-338X's settings come from OpenRB-338x's when there are both older names' files.
+#[test]
+fn the_newest_old_names_settings_carry_over() {
+    use orb_ui::settings::carry_over;
+    let base = tempfile::tempdir().unwrap();
+    for (name, text) in [("OpenRB-338", "a = 1\n"), ("OpenRB-338x", "a = 2\n")] {
+        let old = base.path().join(name).join("ui.toml");
+        std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+        std::fs::write(&old, text).unwrap();
+    }
+    let new = base.path().join("ORB-338X").join("ui.toml");
+    assert!(carry_over(&new));
+    assert_eq!(std::fs::read_to_string(&new).unwrap(), "a = 2\n");
 }
