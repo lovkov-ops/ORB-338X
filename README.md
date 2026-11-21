@@ -24,6 +24,9 @@ extra features for the two bass synths. Everything the original does, it does to
 
 ## New in ORB-338X
 
+- **A new name, logo and icon:** ORB-338X (formerly OpenRB-338x). At start the logo's letters
+  come in one by one, then its subtitle, then the icon with a soft flash, as long as the
+  startup sound. Settings carry over from the old name on the first start.
 - **GENERATE menu** on each bass synth (the RNDM button in the step editor):
   - **SCALE AND KEY:** 37 scales and every key. The keys of the chosen scale glow green, and
     the second synth is offered only the scales that fit the first one.
