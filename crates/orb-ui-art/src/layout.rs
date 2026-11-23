@@ -593,24 +593,31 @@ fn mixer(b: &mut Builder, c: usize) {
         58.0,
         HEADER_METER_Y,
     );
-    // Pan and the delay send side by side under the header (labels at 52.5), then the fader
-    // under PAN and the three routing keys stacked under DELAY, centered on the fader.
+    // PAN and the fader on the left; on the right (this fork) a small knob per effects slot
+    // under its label, then the EQ (the background's until the EQ works). cuts.rs puts them
+    // where the user's panel has them. The slots hold DELAY, DIST, PCF and COMP: DELAY's knob
+    // is the send, DIST's, PCF's and COMP's are on above 0.
     b.pan("pan", KNOB_22, 8.0, 26.0, 0.5);
-    b.knob("delay", KNOB_22, 40.0, 26.0, [0.0, 0.25, 0.1, 0.0][c]);
     b.fader("level", 11.5, 58.0, [0.7, 0.7, 0.8, 0.75][c]);
-    b.part("dist", "toggle", "mixsw_dist_off", 37.0, 62.0);
-    b.part(
-        "pcf",
-        "radio",
-        if c == 1 {
-            "mixsw_pcf_on"
-        } else {
-            "mixsw_pcf_off"
-        },
-        37.0,
-        78.0,
-    );
-    b.part("comp", "radio", "mixsw_comp_off", 37.0, 94.0);
+    let pcf = if c == 1 { 1.0 } else { 0.0 };
+    for (k, (id, v)) in [
+        ("delay", [0.0, 0.25, 0.1, 0.0][c]),
+        ("dist", 0.0),
+        ("pcf", pcf),
+        ("comp", 0.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        b.part(
+            &format!("label{}", k + 1),
+            "label",
+            &format!("mixlbl_{id}"),
+            31.0,
+            34.0,
+        );
+        b.knob(id, KNOB_LFO, 36.0, 26.0 + 22.0 * k as f32, v);
+    }
 }
 
 fn master(b: &mut Builder) {
@@ -638,28 +645,12 @@ fn fx_header(b: &mut Builder, on: bool, level: u8) {
     );
 }
 
-/// The effects under the master (this fork's order, top to bottom): DELAY (148..241), DIST
-/// (..306), PCF (..417) and COMP (..510).
+/// The effects slots under the master (this fork), 90 px each: DELAY (150..240), DIST (..330),
+/// PCF (..420) and COMP (..510). Each title opens the effect menu.
 fn effects(b: &mut Builder) {
-    b.section("pcf", "bg_pcf", 526.0, 306.0);
-    fx_header(b, true, 4);
-    b.display("pattern", 10.0, 23.0, 18.0, 2, "25");
-    b.part("pattern_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
-    b.part("pattern_down", "repeat", "arrow_dec_rest", 29.0, 31.0);
-    // level with the pattern arrows (22..40)
-    b.part("mode", "vswitch", "switch_fx_1", 49.0, 22.0);
-    for (x, id, v) in [
-        (4.0, "freq", 0.6),
-        (23.0, "q", 0.3),
-        (42.0, "amt", 0.5),
-        (61.0, "dec", 0.4),
-    ] {
-        b.fader(id, x, 46.0, v);
-    }
-
-    // The knobs are centered in the two halves (x 21 and 62).
-    b.section("delay", "bg_delay", 526.0, 148.0);
+    b.section("delay", "bg_delay", 526.0, 150.0);
     fx_header(b, false, 0);
+    b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     b.display("steps", 9.0, 23.0, 19.0, 2, " 3");
     b.part("steps_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
     b.part("steps_down", "repeat", "arrow_dec_rest", 29.0, 31.0);
@@ -667,13 +658,32 @@ fn effects(b: &mut Builder) {
     b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
     b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
 
-    b.section("dist", "bg_dist", 526.0, 241.0);
+    b.section("dist", "bg_dist", 526.0, 240.0);
     fx_header(b, false, 0);
+    b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     b.knob("amount", KNOB_FX, 10.0, 27.0, 0.4);
     b.knob("shape", KNOB_FX, 51.0, 27.0, 0.5);
 
-    b.section("comp", "bg_comp", 526.0, 417.0);
+    b.section("pcf", "bg_pcf", 526.0, 330.0);
+    fx_header(b, true, 4);
+    b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
+    b.display("pattern", 10.0, 23.0, 18.0, 2, "25");
+    b.part("pattern_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
+    b.part("pattern_down", "repeat", "arrow_dec_rest", 29.0, 31.0);
+    b.part("mode", "vswitch", "switch_fx_1", 49.0, 22.0);
+    // this fork: small knobs in place of the sliders
+    for (x, id, v) in [
+        (4.0, "freq", 0.6),
+        (23.0, "q", 0.3),
+        (42.0, "amt", 0.5),
+        (61.0, "dec", 0.4),
+    ] {
+        b.knob(id, KNOB_LFO, x, 60.0, v);
+    }
+
+    b.section("comp", "bg_comp", 526.0, 420.0);
     fx_header(b, true, 3);
+    b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     for i in 0..9 {
         // Demo: a little reduction (LEDs left of the middle), the rest dark.
         let state = match i {

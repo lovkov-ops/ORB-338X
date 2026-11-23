@@ -916,6 +916,14 @@ impl App {
                 let r = self.hit(ui, c, rect);
                 self.kit_menu(&r, usize::from(c.section == "tr909f"));
             }
+            // an effects slot's title (this fork): the menu of the effects a slot can hold;
+            // until the slots are free (step 2b) each slot keeps its own
+            "fxmenu" => {
+                let r = self.hit(ui, c, rect);
+                fx_menu(&r, &c.section);
+            }
+            // a mixer knob's label (this fork): the effect of its slot
+            "label" => paint_part(ui, &c.part, rect),
             "modview" => {
                 paint_part(ui, &c.part, rect);
                 self.mod_view(ui, view, c);
@@ -1446,10 +1454,9 @@ fn part_size(name: &str) -> (f32, f32) {
         logo_anim::LOGO_PART => (logo_anim::LOGO_W, logo_anim::LOGO_H),
         "bg_pattern" | "bg_mixer" => (70.0, 115.0),
         "bg_tb303" | "bg_tr808" | "bg_tr909" | "bg_tr808_flip" | "bg_tr909_flip" => (366.0, 115.0),
-        "bg_master" => (82.0, 98.0),
-        "bg_pcf" => (82.0, 111.0),
-        "bg_delay" | "bg_comp" => (82.0, 93.0),
-        "bg_dist" => (82.0, 65.0),
+        "bg_master" => (82.0, 100.0),
+        // this fork: the four effects slots, 90 px each
+        "bg_delay" | "bg_dist" | "bg_pcf" | "bg_comp" => (82.0, 90.0),
         _ => panic!("no size for background {name}"),
     }
 }
@@ -1534,4 +1541,31 @@ fn save_png(path: &PathBuf, image: &egui::ColorImage) -> Result<(), image::Image
         raw.extend_from_slice(&p.to_array());
     }
     image::save_buffer(path, &raw, w as u32, h as u32, image::ColorType::Rgba8)
+}
+
+/// The effects a slot can hold (this fork), as an effects slot's title menu lists them.
+const FX_NAMES: [(&str, &str); 8] = [
+    ("rvrb", "RVRB (reverb)"),
+    ("delay", "DELAY"),
+    ("dist", "DIST (distortion)"),
+    ("pcf", "PCF (pattern filter)"),
+    ("cho", "CHO (chorus)"),
+    ("fla", "FLA (flanger)"),
+    ("pha", "PHA (phaser)"),
+    ("comp", "COMP (compressor)"),
+];
+
+/// An effects slot's title menu (this fork): every effect, the slot's own checked. The others
+/// are greyed out until the slots are free (step 2b of docs/fork_effects.md).
+fn fx_menu(r: &egui::Response, slot: &str) {
+    egui::Popup::menu(r).show(|ui| {
+        for (kind, name) in FX_NAMES {
+            let own = kind == slot;
+            ui.add_enabled_ui(own, |ui| {
+                if ui.selectable_label(own, name).clicked() {
+                    ui.close();
+                }
+            });
+        }
+    });
 }

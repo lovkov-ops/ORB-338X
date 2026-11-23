@@ -1458,6 +1458,12 @@ fn fader(c: &mut Cuts, m: &Mockup, id: &str, track: &str, handle: &str, parts: b
     c.place(id, x, y);
 }
 
+/// The effects a slot can hold (this fork), as part names and as the mixer's knob labels.
+pub const FX_KINDS: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
+const FX_LABELS: [&str; 8] = ["RVRB", "DELAY", "DIST", "PCF", "CHO", "FLA", "PHA", "COMP"];
+/// The width of a mixer knob's label part.
+pub const MIX_LABEL_W: f32 = 20.0;
+
 /// The mixer channels, the master and the four effects.
 fn mixer_and_effects(c: &mut Cuts) {
     let m = Mockup::panel_1();
@@ -1531,35 +1537,75 @@ fn mixer_and_effects(c: &mut Cuts) {
     let hb = bbox(&segs);
     let head_box = Bx::new(hb.x0, hb.y0, 8.0, hb.h().ceil());
     meter(c, "meter_8x12", head_box, None, &segs);
+    // the fader's parts as mockup 1 draws them
+    fader(c, m, "mixer1.level", "10.12", "10.13", true);
+    // the channels as the user's panel with the effects rack draws them (`Mockup::panel_fx`):
+    // PAN, the fader, a small knob per effects slot under its label, the EQ (its knobs are
+    // the background's until the EQ works)
+    let mf = Mockup::panel_fx();
+    for (k, kind) in FX_KINDS.iter().enumerate() {
+        c.parts
+            .push(Part::new(format!("mixlbl_{kind}"), MIX_LABEL_W, 4.0, |s| {
+                crate::font::label(s, MIX_LABEL_W / 2.0, 2.0, 3.0, "#9aa7b8", FX_LABELS[k]);
+            }));
+    }
+    // the groups of each channel (channel 2's are numbered otherwise): the LEDs, the meter,
+    // PAN, the fader and its handle, the slots' knobs and their labels
+    struct Ch {
+        leds: [usize; 2],
+        meter: usize,
+        pan: usize,
+        knobs: [(usize, usize); 4],
+    }
+    let one = Ch {
+        leds: [19, 20],
+        meter: 23,
+        pan: 24,
+        knobs: [(3, 2), (5, 4), (7, 6), (13, 8)],
+    };
+    let two = Ch {
+        leds: [4, 5],
+        meter: 8,
+        pan: 9,
+        knobs: [(11, 10), (13, 12), (15, 14), (21, 16)],
+    };
     for ch in 0..4 {
-        let g = 10 + ch;
+        let g = 12 + ch;
         let at = |i: usize| format!("{g}.{i}");
         let sec = format!("mixer{}", ch + 1);
-        for (i, id) in [(4, "activity"), (5, "solo")] {
-            let v = grp(m, &at(i));
+        let n = if ch == 1 { &two } else { &one };
+        for (i, id) in [(n.leds[0], "activity"), (n.leds[1], "solo")] {
+            let v = grp(mf, &at(i));
             let (cx, cy) = center(&[v[1]]);
             c.take(&v);
             c.place(&format!("{sec}.{id}"), cx - 7.0, cy - 7.0);
         }
-        let mv = grp(m, &at(9));
+        let mv = grp(mf, &at(n.meter));
         c.take(&mv);
         let mb = bbox(&mv);
         c.place(&format!("{sec}.meter"), mb.x0, mb.y0);
-        let first = ch == 0;
-        let (px, py) = knob22(c, m, &at(10), None);
+        let (px, py) = knob22(c, mf, &at(n.pan), None);
         c.place(&format!("{sec}.pan"), px - 11.0, py - 11.0);
-        let (dx, dy) = knob22(c, m, &at(11), None);
-        c.place(&format!("{sec}.delay"), dx - 11.0, dy - 11.0);
-        fader(c, m, &format!("{sec}.level"), &at(12), &at(13), first);
-        for (i, id) in [(14, "dist"), (15, "pcf"), (16, "comp")] {
-            let v = grp(m, &at(i));
-            let b = bbox(&v);
+        fader(c, mf, &format!("{sec}.level"), &at(25), &at(26), false);
+        // the slots' knobs (the default kinds: DELAY's send, DIST, PCF, COMP) and their labels
+        for (slot, &(knob_g, label_g)) in n.knobs.iter().enumerate() {
+            let v = grp(mf, &at(knob_g));
+            let kb = bbox(&grp(mf, &format!("{g}.{knob_g}.1")));
             c.take(&v);
-            c.place(&format!("{sec}.{id}"), b.x0, b.y0);
+            let id = ["delay", "dist", "pcf", "comp"][slot];
+            c.place(&format!("{sec}.{id}"), kb.cx() - 6.0, kb.cy() - 6.0);
+            let lv = grp(mf, &at(label_g));
+            let lb = bbox(&lv);
+            c.take(&lv);
+            c.place(
+                &format!("{sec}.label{}", slot + 1),
+                kb.cx() - MIX_LABEL_W / 2.0,
+                lb.cy() - 2.0,
+            );
         }
     }
     c.background(
-        m,
+        mf,
         "mix-303-a",
         "bg_mixer",
         Bx::new(456.0, 50.0, 70.0, 115.0),
@@ -1571,7 +1617,6 @@ fn mixer_and_effects(c: &mut Cuts) {
     let mlb = bbox(&ml);
     let well = grp(m, "14.14.0");
     meter(c, "meter_15x56", mlb, Some(&well), &segments(m, "14.14", 1));
-    let mf = Mockup::panel_fx();
     for (g, id) in [("16.14", "meter_l"), ("16.15", "meter_r")] {
         let v = grp(mf, g);
         let b = bbox(&v);
@@ -1601,32 +1646,40 @@ fn mixer_and_effects(c: &mut Cuts) {
     let ab = bbox(&grp(mf, "16.20.1"));
     c.take(&amt);
     c.place("master.limit_amt", ab.cx() - 6.0, ab.cy() - 6.0);
-    c.background(mf, "master", "bg_master", Bx::new(526.0, 50.0, 82.0, 98.0));
+    c.background(mf, "master", "bg_master", Bx::new(526.0, 50.0, 82.0, 100.0));
 
-    // the effects: the header LED and meter, then each one's controls
+    // the effects slots, 82 x 90 each under the master (this fork: the user's panel with the
+    // effects rack, `Mockup::panel_fx`): the header LED and meter, the title (the menu), then
+    // each one's controls. The generated parts (the switch, the GR LEDs) are mockup 1's.
     let header = |c: &mut Cuts, fx: &str, ledg: &str, meterg: &str| {
-        let v = grp(m, ledg);
+        let v = grp(mf, ledg);
         let (cx, cy) = center(&[v[1]]);
         c.take(&v);
         c.place(&format!("{fx}.on"), cx - 7.0, cy - 7.0);
-        let mv = grp(m, meterg);
+        let mv = grp(mf, meterg);
         let mb = bbox(&mv);
         c.take(&mv);
         c.place(&format!("{fx}.meter"), mb.x0, mb.y0);
     };
     let arrows = |c: &mut Cuts, fx: &str, g: &str, id: &str| {
         for (k, dir) in [(1, "up"), (3, "down")] {
-            let key = grp(m, &format!("{g}.{k}"));
+            let key = grp(mf, &format!("{g}.{k}"));
             let b = bbox(&key);
             c.take(&key);
-            c.take(&grp(m, &format!("{g}.{}", k + 1)));
+            c.take(&grp(mf, &format!("{g}.{}", k + 1)));
             c.place(&format!("{fx}.{id}_{dir}"), b.x0, b.y0);
         }
     };
     let digits_of = |g: &str, n: usize| -> Vec<&Shape> {
         (0..7 * n)
-            .map(|i| grp(m, &format!("{g}.2.{i}"))[0])
+            .map(|i| grp(mf, &format!("{g}.2.{i}"))[0])
             .collect()
+    };
+    let small_knob = |c: &mut Cuts, g: &str, id: &str| {
+        let v = grp(mf, g);
+        let kb = bbox(&grp(mf, &format!("{g}.1")));
+        c.take(&v);
+        c.place(id, kb.cx() - 6.0, kb.cy() - 6.0);
     };
     // a vertical switch: the handle up (0, the delay's) or down (1, the PCF's)
     let sw = grp(m, "15.15");
@@ -1646,50 +1699,71 @@ fn mixer_and_effects(c: &mut Cuts) {
     let sw1 = format!("{}{}", body(&slot), moved(&handle, 0.0, down - up));
     c.parts
         .push(part("switch_fx_1", swb.x0, swb.y0, swb.w(), swb.h(), &sw1));
+    // the knob_fx design, as mockup 1's delay PAN draws it
+    knob22(c, m, "15.16", Some("knob_fx"));
+    // the title's hit area (the effect menu), over the title and its arrow
+    c.parts.push(Part::new("hit_fx_title", 36.0, 15.0, |_| {}));
+    let title = |c: &mut Cuts, fx: &str, y0: f32| c.place(&format!("{fx}.menu"), 549.0, y0 + 2.0);
 
-    // delay
-    header(c, "delay", "15.12", "15.13");
-    let d = digits_of("15.5", 2);
+    // delay (slot 1, 150..240)
+    header(c, "delay", "17.12", "17.13");
+    title(c, "delay", 150.0);
+    let d = digits_of("17.5", 2);
     c.take(&d);
     let (x, y) = display_at(&d[..7], 19.0, 2);
     c.place("delay.steps", x, y);
-    arrows(c, "delay", "15.14", "steps");
-    c.take(&sw);
-    c.place("delay.triplet", swb.x0, swb.y0);
-    let (px, py) = knob22(c, m, "15.16", Some("knob_fx"));
+    arrows(c, "delay", "17.14", "steps");
+    let v = grp(mf, "17.15");
+    let b = bbox(&v);
+    c.take(&v);
+    c.place("delay.triplet", b.x0, b.y0);
+    let (px, py) = knob22(c, mf, "17.16", None);
     c.place("delay.pan", px - 11.0, py - 11.0);
-    let (fx, fy) = knob22(c, m, "15.17", None);
+    let (fx, fy) = knob22(c, mf, "17.17", None);
     c.place("delay.feedback", fx - 11.0, fy - 11.0);
-    c.background(m, "delay", "bg_delay", Bx::new(526.0, 148.0, 82.0, 93.0));
-    // dist
-    header(c, "dist", "16.7", "16.8");
-    for (g, id) in [("16.9", "amount"), ("16.10", "shape")] {
-        let (x, y) = knob22(c, m, g, None);
+    c.background(mf, "delay", "bg_delay", Bx::new(526.0, 150.0, 82.0, 90.0));
+    // dist (slot 2, 240..330): its kinds' LEDs stay the background's, the classic one lit
+    header(c, "dist", "19.23", "19.24");
+    title(c, "dist", 240.0);
+    for (g, id) in [("19.25", "amount"), ("19.26", "shape")] {
+        let (x, y) = knob22(c, mf, g, None);
         c.place(&format!("dist.{id}"), x - 11.0, y - 11.0);
     }
-    c.background(m, "dist", "bg_dist", Bx::new(526.0, 241.0, 82.0, 65.0));
-    // pcf
-    header(c, "pcf", "17.14", "17.15");
-    let d = digits_of("17.5", 2);
+    let classic = bbox(&grp(mf, "19.6"));
+    let lit = moved(
+        &lit_led,
+        classic.x0 - lit_b.x0 - 1.95,
+        classic.y0 - lit_b.y0 - 2.32,
+    );
+    c.background_with(
+        mf,
+        "dist",
+        "bg_dist",
+        Bx::new(526.0, 240.0, 82.0, 90.0),
+        &lit,
+    );
+    // pcf (slot 3, 330..420): its sliders are small knobs
+    header(c, "pcf", "20.14", "20.15");
+    title(c, "pcf", 330.0);
+    let d = digits_of("20.5", 2);
     c.take(&d);
     let (x, y) = display_at(&d[..7], 18.0, 2);
     c.place("pcf.pattern", x, y);
-    arrows(c, "pcf", "17.16", "pattern");
-    let v = grp(m, "17.17");
+    arrows(c, "pcf", "20.16", "pattern");
+    let v = grp(mf, "20.17");
     let b = bbox(&v);
     c.take(&v);
     c.place("pcf.mode", b.x0, b.y0);
     for (i, id) in ["freq", "q", "amt", "dec"].into_iter().enumerate() {
-        let t = format!("17.{}", 18 + 2 * i);
-        let h = format!("17.{}", 19 + 2 * i);
-        fader(c, m, &format!("pcf.{id}"), &t, &h, false);
+        small_knob(c, &format!("20.{}", 18 + i), &format!("pcf.{id}"));
     }
-    c.background(m, "pcf", "bg_pcf", Bx::new(526.0, 306.0, 82.0, 111.0));
-    // comp: the gain-reduction LEDs (well and light)
-    header(c, "comp", "18.12", "18.13");
+    c.background(mf, "pcf", "bg_pcf", Bx::new(526.0, 330.0, 82.0, 90.0));
+    // comp (slot 4, 420..510): the gain-reduction LEDs (well and light)
+    header(c, "comp", "24.14", "24.15");
+    title(c, "comp", 420.0);
     for i in 0..9 {
-        let well = grp(m, &format!("18.14.{}", 2 * i));
-        let light = grp(m, &format!("18.14.{}", 2 * i + 1));
+        let well = grp(mf, &format!("24.16.{}", 2 * i));
+        let light = grp(mf, &format!("24.16.{}", 2 * i + 1));
         let wb = bbox(&well);
         let (x, y) = (wb.x0 - 0.5, wb.y0 - 0.5);
         if i == 0 {
@@ -1712,9 +1786,9 @@ fn mixer_and_effects(c: &mut Cuts) {
         c.take(&light);
         c.place(&format!("comp.gr{}", i + 1), x, y);
     }
-    for (g, id) in [("18.15", "ratio"), ("18.16", "threshold")] {
-        let (x, y) = knob22(c, m, g, None);
+    for (g, id) in [("24.17", "ratio"), ("24.18", "threshold")] {
+        let (x, y) = knob22(c, mf, g, None);
         c.place(&format!("comp.{id}"), x - 11.0, y - 11.0);
     }
-    c.background(m, "comp", "bg_comp", Bx::new(526.0, 417.0, 82.0, 93.0));
+    c.background(mf, "comp", "bg_comp", Bx::new(526.0, 420.0, 82.0, 90.0));
 }

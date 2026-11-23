@@ -124,7 +124,8 @@ pub fn check_parts(parts: &[Part]) -> Vec<String> {
                             px.height()
                         ));
                     }
-                    if visible(&px) == 0 {
+                    // a hit area (this fork's `hit_*`, an effects slot's title) draws nothing
+                    if visible(&px) == 0 && !p.name.starts_with("hit_") {
                         problems.push(format!("{} at {scale}x: nothing drawn", p.name));
                     }
                 }

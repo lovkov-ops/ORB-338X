@@ -1132,7 +1132,8 @@ fn the_panel_takes_the_distortion_insert_and_the_section_switch_from_the_song() 
     h.open(&dist);
     for (c, ch) in src.mixer.channels.iter().enumerate() {
         let id = format!("mixer{}.dist", c + 1);
-        assert_eq!(h.app.panel.toggle_on(&id), ch.dist != 0, "{id}");
+        // this fork: a knob, on above 0
+        assert_eq!(h.app.panel.knob_on(&id), ch.dist != 0, "{id}");
         assert_eq!(h.app.panel.value(&id), Some(ch.dist), "{id}");
     }
 

@@ -84,11 +84,11 @@ Place each at its section origin (panel pixels).
 | `bg_tr808` | 366 x 115 | (90, 280) | drum machine A |
 | `bg_tr909` | 366 x 115 | (90, 395) | drum machine B |
 | `bg_mixer` | 70 x 115 | (456, 50 + 115 c) | mixer channel c = 0..3 |
-| `bg_master` | 82 x 98 | (526, 50) | master |
-| `bg_pcf` | 82 x 111 | (526, 148) | PCF |
-| `bg_delay` | 82 x 93 | (526, 259) | delay |
-| `bg_dist` | 82 x 65 | (526, 352) | distortion |
-| `bg_comp` | 82 x 93 | (526, 417) | compressor |
+| `bg_master` | 82 x 100 | (526, 50) | master |
+| `bg_delay` | 82 x 90 | (526, 150) | effects slot 1: delay |
+| `bg_dist` | 82 x 90 | (526, 240) | effects slot 2: distortion |
+| `bg_pcf` | 82 x 90 | (526, 330) | effects slot 3: PCF |
+| `bg_comp` | 82 x 90 | (526, 420) | effects slot 4: compressor |
 
 Control positions in `layout.tsv` are already absolute. The drum legend rows are in the
 backgrounds (808: 12 cells of 22 px at (10, 71); 909: the 12 instrument chips of the top row at

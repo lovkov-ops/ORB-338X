@@ -320,6 +320,14 @@ impl Default for Panel {
 }
 
 /// `c` for a section name like `mixer3` -> 2.
+/// This fork: a mixer channel's DIST, PCF or COMP knob (on above 0, in place of the original's
+/// keys): the channel (0..4) and the effect.
+pub fn mixer_insert(id: &str) -> Option<(usize, &str)> {
+    let (sec, name) = id.split_once('.')?;
+    let c = index_of(sec, "mixer").filter(|&c| c < 4)?;
+    matches!(name, "dist" | "pcf" | "comp").then_some((c, name))
+}
+
 fn index_of(section: &str, prefix: &str) -> Option<usize> {
     section
         .strip_prefix(prefix)?
@@ -363,8 +371,10 @@ impl Panel {
         for c in crate::layout::controls() {
             match c.kind.as_str() {
                 "knob" => {
+                    // (this fork: the mixer's DIST, PCF and COMP knobs start off)
                     let v = match c.name() {
                         "shuffle" | "delay" | "limit_amt" => 0,
+                        _ if mixer_insert(&c.id).is_some() => 0,
                         _ => 500,
                     };
                     p.knobs.insert(c.id, v);
@@ -399,6 +409,8 @@ impl Panel {
         for c in 1..=4 {
             p.toggles.insert(format!("mixer{c}.mute"), true);
         }
+        // the mixer's PCF and COMP knobs (this fork) as pcf_id and comp_id choose
+        p.sync_insert_knobs();
         p
     }
 
@@ -473,11 +485,12 @@ impl Panel {
             p.steps909[1][i] = v;
         }
         p.pcf_id = 2;
+        p.sync_insert_knobs();
         p.toggles.insert("pcf.on".into(), true);
         p.toggles.insert("comp.on".into(), true);
         p.toggles.insert("delay.on".into(), true);
         p.toggles.insert("transport.record".into(), false);
-        p.toggles.insert("mixer1.dist".into(), true);
+        p.put_knob("mixer1.dist", KNOB_MAX);
         p.set_knob("mixer2.delay", 300);
         p.set_knob("transport.shuffle", 300);
         p.set_knob("tb303_1.cutoff", 350);
@@ -526,6 +539,13 @@ impl Panel {
     /// The value the engine holds for the control `id` (the one the panel would send, 0..=127;
     /// a toggle 0 or 1): what a saved song stores. `None` for an id that is not a controller.
     pub fn value(&self, id: &str) -> Option<u8> {
+        // the mixer's DIST knob holds the original's key, 0 or 1; PCF's and COMP's are the
+        // mixer's choice of channel (pcf_id, comp_id), no controller of their own
+        match mixer_insert(id) {
+            Some((_, "dist")) => return Some(u8::from(self.knob_on(id))),
+            Some(_) => return None,
+            None => {}
+        }
         if let Some(&p) = self.knobs.get(id)
             && behavior::is_tune(id)
         {
@@ -585,10 +605,75 @@ impl Panel {
             }
             return;
         }
+        if let Some((c, name)) = mixer_insert(id) {
+            let was = self.knob_on(id);
+            self.knobs.insert(id.into(), p);
+            let on = self.knob_on(id);
+            if on != was {
+                self.insert_on(c, name, on);
+            }
+            return;
+        }
         let old = self.knobs.insert(id.into(), p).unwrap_or(-1);
         let changed = old < 0 || behavior::knob_send(old) != behavior::knob_send(p);
         if changed {
             self.set_event(id, behavior::knob_send(p));
+        }
+    }
+
+    /// Whether a knob is above 0 (the mixer's DIST, PCF and COMP knobs: on).
+    pub fn knob_on(&self, id: &str) -> bool {
+        self.knobs
+            .get(id)
+            .is_some_and(|&p| behavior::knob_send(p) > 0)
+    }
+
+    /// A mixer channel's DIST, PCF or COMP knob turned on or off (this fork): DIST sends the
+    /// original's key, PCF and COMP choose the channel the effect is on (one at a time: the
+    /// other channels' knobs go back to 0).
+    fn insert_on(&mut self, c: usize, name: &str, on: bool) {
+        let (id, me, now) = match name {
+            "dist" => {
+                self.set_event(&format!("mixer{}.dist", c + 1), on as i32);
+                return;
+            }
+            "pcf" => ("mixer.pcf_id", c as u8 + 1, self.pcf_id),
+            _ => ("mixer.comp_id", c as u8 + 2, self.comp_id),
+        };
+        let new = match (on, now == me) {
+            (true, _) => me,
+            (false, true) => 0,
+            (false, false) => now,
+        };
+        if new != now {
+            if name == "pcf" {
+                self.pcf_id = new;
+            } else {
+                self.comp_id = new;
+            }
+            self.set_event(id, new as i32);
+        }
+        self.sync_insert_knobs();
+    }
+
+    /// The mixer's PCF and COMP knobs as `pcf_id` and `comp_id` choose: the chosen channel's
+    /// knob on (at the top if it was at 0), the others at 0.
+    fn sync_insert_knobs(&mut self) {
+        for c in 0..4 {
+            for (name, chosen) in [
+                ("pcf", self.pcf_id as usize == c + 1),
+                ("comp", self.comp_id as usize == c + 2),
+            ] {
+                let id = format!("mixer{}.{name}", c + 1);
+                if !self.knobs.contains_key(&id) {
+                    continue;
+                }
+                if chosen && !self.knob_on(&id) {
+                    self.knobs.insert(id, KNOB_MAX);
+                } else if !chosen && self.knob_on(&id) {
+                    self.knobs.insert(id, 0);
+                }
+            }
         }
     }
 
@@ -660,6 +745,12 @@ impl Panel {
             .filter(|&r| r < 4)
         {
             self.rows[r].enabled = v != 0;
+        } else if let Some((_, "dist")) = mixer_insert(id) {
+            // the original's key, 0 or 1: the knob at 0, or at the top if it was at 0
+            let on = v != 0;
+            if on != self.knob_on(id) {
+                self.knobs.insert(id.into(), if on { KNOB_MAX } else { 0 });
+            }
         } else if let Some(p) = self.knobs.get_mut(id) {
             if behavior::is_tune(id) {
                 // the TUNE knob on the semitone the engine plays (this fork); the value kept
@@ -680,8 +771,10 @@ impl Panel {
             *n = v;
         } else if id == "mixer.pcf_id" {
             self.pcf_id = v as u8;
+            self.sync_insert_knobs();
         } else if id == "mixer.comp_id" {
             self.comp_id = v as u8;
+            self.sync_insert_knobs();
         }
     }
 
@@ -772,12 +865,6 @@ impl Panel {
             (_, "mutebtn" | "activity") if sec.starts_with("mixer") => {
                 self.mute[index_of(sec, "mixer").unwrap_or(0).min(3)]
             }
-            (_, "pcf") if sec.starts_with("mixer") => {
-                self.pcf_id as usize == index_of(sec, "mixer").unwrap_or(0) + 1
-            }
-            (_, "comp") if sec.starts_with("mixer") => {
-                self.comp_id as usize == index_of(sec, "mixer").unwrap_or(0) + 2
-            }
             _ => self.toggles.get(id).copied().unwrap_or(false),
         }
     }
@@ -814,22 +901,6 @@ impl Panel {
             s if s.starts_with("mixer") => {
                 let c = index_of(s, "mixer").unwrap_or(0).min(3);
                 match name {
-                    "pcf" => {
-                        self.pcf_id = if self.pcf_id as usize == c + 1 {
-                            0
-                        } else {
-                            c as u8 + 1
-                        };
-                        self.set_event("mixer.pcf_id", self.pcf_id as i32);
-                    }
-                    "comp" => {
-                        self.comp_id = if self.comp_id as usize == c + 2 {
-                            0
-                        } else {
-                            c as u8 + 2
-                        };
-                        self.set_event("mixer.comp_id", self.comp_id as i32);
-                    }
                     // SOLO and MUTE (this fork)
                     "solo" => {
                         self.solo[c] = !self.solo[c];
@@ -1699,19 +1770,27 @@ mod tests {
 
     #[test]
     fn mixer_pcf_and_comp_are_exclusive() {
+        // this fork: knobs, on above 0; one channel at a time, the others' back at 0
         let mut p = Panel::new();
-        p.press("mixer2.pcf", 0.0);
-        assert!(p.toggle_on("mixer2.pcf") && !p.toggle_on("mixer3.pcf"));
-        p.press("mixer3.pcf", 0.0);
-        assert!(!p.toggle_on("mixer2.pcf") && p.toggle_on("mixer3.pcf"));
-        p.press("mixer3.pcf", 0.0);
+        p.set_knob("mixer2.pcf", 300);
+        assert_eq!(p.pcf_id, 2);
+        p.set_knob("mixer3.pcf", 500);
+        assert_eq!(p.pcf_id, 3);
+        assert!(!p.knob_on("mixer2.pcf") && p.knob_on("mixer3.pcf"));
+        p.set_knob("mixer3.pcf", 0);
         assert_eq!(p.pcf_id, 0);
-        p.press("mixer1.comp", 0.0);
+        p.set_knob("mixer1.comp", 200);
         assert_eq!(p.comp_id, 2);
-        p.press("mixer2.comp", 0.0);
+        p.set_knob("mixer2.comp", 200);
         assert_eq!(p.comp_id, 3);
-        assert!(!p.toggle_on("mixer1.comp") && p.toggle_on("mixer2.comp"));
+        assert!(!p.knob_on("mixer1.comp") && p.knob_on("mixer2.comp"));
+        // the engine's choice turns the knobs: the chosen one up from 0, the others to 0
+        p.adopt("mixer.pcf_id", 4);
+        assert!(p.knob_on("mixer4.pcf") && !p.knob_on("mixer3.pcf"));
+        p.adopt("mixer.comp_id", 0);
+        assert!(!p.knob_on("mixer2.comp"));
         // the master's LIMIT key (this fork) leaves the channels' COMP as it is
+        p.set_knob("mixer2.comp", 200);
         p.events.clear();
         p.press("master.limit", 0.0);
         assert!(p.toggle_on("master.limit") && p.comp_id == 3);
@@ -1722,10 +1801,16 @@ mod tests {
                 value: 1
             }]
         );
-        // Dist is independent per channel.
-        p.press("mixer1.dist", 0.0);
-        p.press("mixer2.dist", 0.0);
-        assert!(p.toggle_on("mixer1.dist") && p.toggle_on("mixer2.dist"));
+        // Dist is independent per channel, sent as the original's key (0 or 1) once
+        p.events.clear();
+        p.set_knob("mixer1.dist", 100);
+        p.set_knob("mixer1.dist", 400);
+        p.set_knob("mixer2.dist", 100);
+        assert!(p.knob_on("mixer1.dist") && p.knob_on("mixer2.dist"));
+        assert_eq!(p.value("mixer1.dist"), Some(1));
+        assert_eq!(p.events.len(), 2);
+        p.set_knob("mixer1.dist", 0);
+        assert_eq!(p.value("mixer1.dist"), Some(0));
     }
 
     #[test]

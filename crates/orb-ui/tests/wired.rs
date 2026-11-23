@@ -493,13 +493,22 @@ fn the_mixer_sends_msg_145_and_147() {
             h.take_log(),
             vec![dev(Device::Mixer, 147, &[c, 3, v as u8])]
         );
-        h.click(&format!("mixer{n}.dist"));
+        // this fork: DIST, PCF and COMP are knobs, on above 0; DIST sends the original's key
+        h.drag(&format!("mixer{n}.dist"), 20.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 147, &[c, 4, 1])]);
+        // more of it sends nothing
+        h.drag(&format!("mixer{n}.dist"), 20.0);
+        assert_eq!(h.take_log(), vec![]);
         // PCF and Comp are exclusive ids: c + 1 and c + 2
-        h.click(&format!("mixer{n}.pcf"));
+        h.drag(&format!("mixer{n}.pcf"), 20.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[2, c + 1])]);
-        h.click(&format!("mixer{n}.comp"));
+        h.drag(&format!("mixer{n}.comp"), 20.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, c + 2])]);
+        // the other channels' PCF and COMP knobs are at 0
+        for o in (1..=4).filter(|&o| o != n) {
+            assert!(!h.app.panel.knob_on(&format!("mixer{o}.pcf")), "{o}");
+            assert!(!h.app.panel.knob_on(&format!("mixer{o}.comp")), "{o}");
+        }
         h.calls(2);
         let m = h.snap().mixer;
         let ch = m.channels[c as usize];
@@ -515,11 +524,13 @@ fn the_mixer_sends_msg_145_and_147() {
                 orb_ui::behavior::knob_send(h.app.panel.knob(&format!("mixer{n}.delay"))),
             )
         );
-        // the radio switches turn off with a second click
-        h.click(&format!("mixer{n}.pcf"));
+        // the knobs turned back to 0 turn them off
+        h.drag(&format!("mixer{n}.pcf"), -400.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[2, 0])]);
-        h.click(&format!("mixer{n}.comp"));
+        h.drag(&format!("mixer{n}.comp"), -400.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, 0])]);
+        h.drag(&format!("mixer{n}.dist"), -400.0);
+        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 147, &[c, 4, 0])]);
     }
     // the master: the fader is id 0, its Comp switch the compressor id 1
     h.drag("master.fader", 10.0);
@@ -1226,6 +1237,9 @@ fn knob_ids() -> Vec<String> {
     layout::controls()
         .into_iter()
         .filter(|c| c.kind == "knob" && !orb_ui::model::FLIP_FACES.contains(&c.section.as_str()))
+        // the mixer's DIST, PCF and COMP knobs (this fork) are the original's keys: off in a
+        // new song, and a double click does not set them
+        .filter(|c| orb_ui::model::mixer_insert(&c.id).is_none())
         .map(|c| c.id)
         .collect()
 }
@@ -1251,8 +1265,9 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
 fn a_double_click_sets_every_knob_to_its_value_in_a_new_song() {
     let mut h = Harness::new();
     let knobs = knob_ids();
-    // (this fork: each 303's SUB knob, + 2; the master's limiter's AMT, + 1)
-    assert_eq!(knobs.len(), 80);
+    // (this fork: each 303's SUB knob, + 2; the master's limiter's AMT, + 1; the PCF's four
+    // sliders are knobs, + 4)
+    assert_eq!(knobs.len(), 84);
     for id in &knobs {
         // the panel shows the new empty song: its value is the knob's default
         let new_song = h.app.panel.value(id).unwrap();
@@ -1300,7 +1315,7 @@ fn engine_fader(h: &mut Harness, id: &str) -> u8 {
 }
 
 /// (this fork) A double click on a fader's handle sets it to its value in a new song, as on
-/// the knobs: the mixer's levels, the master and the PCF's four.
+/// the knobs: the mixer's levels and the master.
 #[test]
 fn a_double_click_sets_every_fader_to_its_value_in_a_new_song() {
     let mut h = Harness::new();
@@ -1308,7 +1323,8 @@ fn a_double_click_sets_every_fader_to_its_value_in_a_new_song() {
         .into_iter()
         .filter(|c| c.kind == "fader")
         .collect();
-    assert_eq!(faders.len(), 9);
+    // (this fork: the PCF's four are knobs)
+    assert_eq!(faders.len(), 5);
     for c in &faders {
         let id = c.id.as_str();
         let new_song = h.app.panel.value(id).unwrap();

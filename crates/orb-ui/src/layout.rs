@@ -81,10 +81,11 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
     }
     v.push(("bg_master", 526.0, 50.0));
     // this fork's order: DELAY, DIST, PCF, COMP under the master
-    v.push(("bg_delay", 526.0, 148.0));
-    v.push(("bg_dist", 526.0, 241.0));
-    v.push(("bg_pcf", 526.0, 306.0));
-    v.push(("bg_comp", 526.0, 417.0));
+    // this fork: the four effects slots, 90 px each
+    v.push(("bg_delay", 526.0, 150.0));
+    v.push(("bg_dist", 526.0, 240.0));
+    v.push(("bg_pcf", 526.0, 330.0));
+    v.push(("bg_comp", 526.0, 420.0));
     v
 }
 
@@ -124,8 +125,9 @@ mod tests {
         // 303, 380 + 2 * 13; each mixer channel's on/off button is now its green LED (MUTE),
         // and it has an amber SOLO LED, + 4; the 909's FLIP, + 1)
         // (this fork's FLIP faces: KIT, 11 PAN knobs and 11 FX keys each, + 46; each 303's SUB
-        // knob, + 2; the master's LIMIT key and AMT knob in place of its COMP key, + 1)
-        assert_eq!(c.len(), 460);
+        // knob, + 2; the master's LIMIT key and AMT knob in place of its COMP key, + 1; the
+        // mixer's slot knobs in place of its keys and their labels, + 16; the slots' menus, + 4)
+        assert_eq!(c.len(), 480);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)
