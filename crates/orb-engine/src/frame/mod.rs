@@ -232,6 +232,11 @@ pub trait SongDevice: Send {
     fn live(&self) -> &[u8] {
         &[]
     }
+    /// Not a slot (this fork): the live value of a controller this fork adds to a device (the
+    /// 303's sub-oscillator, [`crate::tb303::SUB`]); `None` for every other controller.
+    fn fork_param(&self, _ctrl: u8) -> Option<u8> {
+        None
+    }
     /// Not a slot: the pattern-mode copy of the parameter block (the 303's, 808's and 909's
     /// `+0x30`, the delay's `+0x3A`, the distortion's and the compressor's `+0x3D`, the PCF's
     /// `+0x40`), indexed as [`SongDevice::live`]. Empty for a placeholder.
@@ -1173,7 +1178,11 @@ fn live_value(devices: &mut Devices, d: song::Device, ctrl: u8) -> Option<u8> {
             .live()
             .get(crate::tr909::internal_index(ctrl as usize))
             .copied(),
-        _ => devices.device_mut(d).live().get(ctrl as usize).copied(),
+        _ => {
+            let dev = devices.device_mut(d);
+            dev.fork_param(ctrl)
+                .or_else(|| dev.live().get(ctrl as usize).copied())
+        }
     }
 }
 

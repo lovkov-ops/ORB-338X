@@ -269,3 +269,109 @@ fn a_note_sounds_in_both_models() {
         assert_eq!(d.retrig, vintage);
     }
 }
+
+/// The sum of `blocks` blocks of a note on 303 `d` (sub level `sub`), as f32 bits.
+fn render_note(vintage: bool, square: bool, sub: u8, blocks: usize) -> Vec<u32> {
+    let t = Tables::new();
+    let ctx = BlockContext {
+        tables: &t,
+        meter_index: 0,
+        tempo: 120_000,
+        tick: 0,
+        stack_word: None,
+    };
+    let mut d = device(&[NOTE]);
+    d.vintage = vintage;
+    d.set_param(WAVEFORM as u8, square as u8);
+    d.set_param(SUB, sub);
+    d.start(0);
+    d.step(0, 0, 120_000);
+    let mut out = Vec::new();
+    for _ in 0..blocks {
+        let mut bus = [0.0f32; BLOCK];
+        d.process(&mut bus, &ctx);
+        out.extend(bus.iter().map(|x| x.to_bits()));
+    }
+    out
+}
+
+#[test]
+fn the_sub_oscillator_is_off_by_default_and_changes_the_sound() {
+    assert_eq!(
+        (Tb303::new().sub, Tb303::new().fork_param(SUB)),
+        (0, Some(0))
+    );
+    for vintage in [false, true] {
+        for square in [false, true] {
+            let plain = render_note(vintage, square, 0, 20);
+            assert_ne!(plain, render_note(vintage, square, 127, 20));
+            assert_ne!(
+                render_note(vintage, square, 64, 20),
+                render_note(vintage, square, 127, 20)
+            );
+        }
+    }
+}
+
+#[test]
+fn the_sub_oscillator_plays_an_octave_lower() {
+    // the oscillator alone, then with the sub: the sub's half cycle flips at every wrap
+    let mut v = Voice {
+        ph: 0.0,
+        s: 0.0,
+        y1: 0.0,
+        y2: 0.0,
+        o: 0.0,
+        sub: 0.5,
+        sub_hi: false,
+    };
+    let k = Coefs {
+        c0: 0.0,
+        c1: 0.0,
+        g: 1.0,
+        c3: 0.0,
+    };
+    let inc = 0.1;
+    let (mut wraps, mut flips, mut last) = (0, 0, v.sub_hi);
+    let mut ph = v.ph;
+    for _ in 0..1000 {
+        v.sample(inc, false, &k);
+        if v.ph < ph {
+            wraps += 1;
+        }
+        if v.sub_hi != last {
+            flips += 1;
+        }
+        (ph, last) = (v.ph, v.sub_hi);
+    }
+    // a full sub cycle is two flips: half the oscillator's cycles
+    assert_eq!(flips, wraps);
+    assert!(wraps > 40);
+}
+
+#[test]
+fn the_sub_level_is_as_loud_as_the_oscillator_at_full() {
+    // the saw is a ramp over -1..1 (RMS 1/sqrt(3)); the square has its own level
+    assert!((SUB_SAW - 1.0 / 3f64.sqrt()).abs() < 1e-15);
+    assert_eq!(SUB_SQUARE, SQ_HI as f64);
+    let mut d = Tb303::new();
+    d.set_param(SUB, 127);
+    assert_eq!(d.voice().sub, SUB_SAW);
+    d.set_param(WAVEFORM as u8, 1);
+    assert_eq!(d.voice().sub, SUB_SQUARE);
+    d.set_param(SUB, 200);
+    assert_eq!(d.sub, 127);
+    d.set_param(SUB, 0);
+    assert_eq!(d.voice().sub, 0.0);
+}
+
+#[test]
+fn song_mode_keeps_the_pattern_modes_sub_aside() {
+    let mut d = Tb303::new();
+    d.set_param(SUB, 40);
+    d.set_song_mode(true);
+    d.set_param(SUB, 90);
+    assert_eq!(d.fork_param(SUB), Some(90));
+    d.set_song_mode(false);
+    assert_eq!(d.sub, 40);
+}

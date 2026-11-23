@@ -1261,6 +1261,50 @@ fn panel_messages_record() {
 }
 
 #[test]
+fn the_303s_sub_is_recorded_with_its_start_value() {
+    use crate::tb303::SUB;
+    use song::Device as D;
+    let mut e = edit_engine();
+    let sub_events = |e: &Engine, rec: bool| -> Vec<(i32, u8)> {
+        let i = D::Tb303_2.id() as usize;
+        let list = if rec {
+            e.frame.seq.recorded(i)
+        } else {
+            e.frame.seq.events(i)
+        };
+        list.iter()
+            .filter(|x| x.ctrl == SUB)
+            .map(|x| (x.tick, x.value))
+            .collect()
+    };
+    // pattern mode: the level changes, nothing is recorded
+    e.device_param(D::Tb303_2, SUB, 30);
+    assert_eq!(e.frame.devices.channels[1].fork_param(SUB), Some(30));
+    assert!(sub_events(&e, false).is_empty());
+    e.set_song_mode(1);
+    e.locate(1000);
+    // song mode without record: still nothing
+    e.device_param(D::Tb303_2, SUB, 40);
+    assert!(sub_events(&e, false).is_empty());
+    // recording: the level so far becomes the start value, the move is recorded
+    e.set_record(1);
+    e.device_param(D::Tb303_2, SUB, 100);
+    assert_eq!(sub_events(&e, false), [(0, 40)]);
+    assert_eq!(sub_events(&e, true), [(984, 100)]);
+    e.device_param(D::Tb303_2, SUB, 110);
+    assert_eq!(sub_events(&e, false), [(0, 40)]);
+    e.set_record(0);
+    // merged as every controller's recording: after the move, the value from before it
+    assert_eq!(sub_events(&e, false), [(0, 40), (984, 110), (1008, 40)]);
+    // a locate before the move chases the start value
+    e.locate(0);
+    assert_eq!(e.frame.devices.channels[1].fork_param(SUB), Some(40));
+    // the other 303 has no sub events
+    let i = D::Tb303_1.id() as usize;
+    assert!(e.frame.seq.events(i).iter().all(|x| x.ctrl != SUB));
+}
+
+#[test]
 fn songs_built_on_one_process_state_share_it() {
     let a = Devices::implemented(None);
     let b = Devices::implemented_with(None, a.process.clone());

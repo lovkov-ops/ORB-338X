@@ -38,6 +38,10 @@ pub const ACCENT: usize = 7;
 pub const WAVEFORM: usize = 8;
 /// Byte 9 of the live block (`+0xC85`): the last step the step function played.
 const LAST_STEP: usize = 9;
+/// This fork: the controller of the sub-oscillator's level (0 off .. 127 as loud as the
+/// oscillator). Not in the parameter block and not a controller of the original, so `.rbs`
+/// songs never carry it; the app keeps its value and its track events in `.rbsx` songs.
+pub const SUB: u8 = 64;
 /// One pattern: shuffle flag, length, 16 steps of `{note, slide, accent, up, down, rest}`.
 pub const PATTERN_LEN: usize = 98;
 pub const PATTERNS: usize = 32;
@@ -126,6 +130,10 @@ const DC: f32 = f32::from_bits(0x3F7C_60E3); // 0.985853374
 const SQ_THRESH: f32 = f32::from_bits(0x3D3B_8000); // 0.0457763671875
 const SQ_HI: f32 = f32::from_bits(0x3F0C_A000); // 0.54931640625
 const SQ_LO: f32 = f32::from_bits(0xBF0C_A000);
+/// This fork: the sub-oscillator's square at full level, as loud (RMS) as the oscillator: the
+/// saw's `1/sqrt(3)` (a ramp over -1..1), the square's own level.
+const SUB_SAW: f64 = 0.577_350_269_189_625_8;
+const SUB_SQUARE: f64 = SQ_HI as f64;
 
 fn st(x: f64) -> f32 {
     x as f32
@@ -165,6 +173,11 @@ struct Voice {
     y1: f64,
     y2: f64,
     o: f64,
+    /// This fork: the sub-oscillator's level (0: off, the original's sum) and its half cycle
+    /// (it flips at every wrap of the phase, so it plays an octave lower, locked to the
+    /// oscillator through glides and slides).
+    sub: f64,
+    sub_hi: bool,
 }
 
 impl Voice {
@@ -176,15 +189,19 @@ impl Voice {
         let mut ph = self.ph + inc;
         if ph > PHASE_MAX as f64 {
             ph -= PHASE_WRAP as f64;
+            self.sub_hi = !self.sub_hi;
         }
         self.ph = ph;
-        let x = if !square {
+        let mut x = if !square {
             ph
         } else if ph <= SQ_THRESH as f64 {
             SQ_LO as f64
         } else {
             SQ_HI as f64
         };
+        if self.sub != 0.0 {
+            x += if self.sub_hi { self.sub } else { -self.sub };
+        }
         self.s = self.s * k.c3 + x;
         let y = (self.s * k.g + self.y1 * k.c0) - self.y2 * k.c1;
         self.o = (y - self.y1) + self.o * DC as f64;
@@ -256,6 +273,11 @@ pub struct Tb303 {
     pub song_mode: bool,
     /// The song's byte `+0x16D` (`sub_10013DA0()+0x15`), followed through msg 36.
     pub vintage: bool,
+    /// This fork: the live sub-oscillator level ([`SUB`]), its pattern-mode copy, and its half
+    /// cycle.
+    pub sub: u8,
+    pub sub_params: u8,
+    pub sub_hi: bool,
 }
 
 impl Default for Tb303 {
@@ -309,6 +331,9 @@ impl Tb303 {
             coefs: [0.0; 4],
             song_mode: false,
             vintage: false,
+            sub: 0,
+            sub_params: 0,
+            sub_hi: false,
         }
     }
 
@@ -397,16 +422,24 @@ impl Tb303 {
     }
 
     fn voice(&self) -> Voice {
+        let full = if self.live[WAVEFORM] != 0 {
+            SUB_SQUARE
+        } else {
+            SUB_SAW
+        };
         Voice {
             ph: self.phase as f64,
             s: self.s as f64,
             y1: self.y1 as f64,
             y2: self.y2 as f64,
             o: self.o as f64,
+            sub: full * self.sub.min(127) as f64 / 127.0,
+            sub_hi: self.sub_hi,
         }
     }
 
     fn store_voice(&mut self, v: &Voice) {
+        self.sub_hi = v.sub_hi;
         self.phase = st(v.ph);
         self.s = st(v.s);
         self.y1 = st(v.y1);
@@ -652,6 +685,7 @@ impl SongDevice for Tb303 {
         self.env_decay = 0.0;
         self.env = 0.0;
         self.phase = 0.0;
+        self.sub_hi = false;
         self.cs2 = 0.5;
         self.cs1 = 0.5;
         self.gate_off = -1;
@@ -669,8 +703,10 @@ impl SongDevice for Tb303 {
     fn set_song_mode(&mut self, on: bool) {
         if on {
             self.params = self.live;
+            self.sub_params = self.sub;
         } else {
             self.params_live();
+            self.sub = self.sub_params;
         }
         self.song_mode = on;
     }
@@ -688,10 +724,14 @@ impl SongDevice for Tb303 {
 
     /// Slot 11, 0x10026180: controllers 0..8 set the live byte. (The "changed" flags at
     /// `+0xC88 + ctrl`, read only by the panel update 0x10026700, are not modelled; the load
-    /// accepts no other controller on a 303 track.)
+    /// accepts no other controller on a 303 track.) This fork: [`SUB`] sets the
+    /// sub-oscillator's level.
     fn set_param(&mut self, ctrl: u8, value: u8) {
         if (ctrl as usize) <= WAVEFORM {
             self.live[ctrl as usize] = value;
+        } else if ctrl == SUB {
+            // this fork: the sub-oscillator's level
+            self.sub = value.min(127);
         }
     }
 
@@ -708,6 +748,10 @@ impl SongDevice for Tb303 {
 
     fn set_sound_model(&mut self, vintage: bool) {
         self.vintage = vintage;
+    }
+
+    fn fork_param(&self, ctrl: u8) -> Option<u8> {
+        (ctrl == SUB).then_some(self.sub)
     }
 
     /// Slots 7 (0x10026C40) and 8 (0x10025650) from the song ctor: controllers 0 and 1 of the

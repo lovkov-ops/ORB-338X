@@ -80,7 +80,9 @@ fn field_ok(d: Device, field: u8) -> bool {
 /// switch does not store included (0x1000FD6C, 0x10010F66, 0x1000F1CE, 0x10016E8A).
 pub fn hooks(d: Device, ctrl: u8) -> bool {
     match d {
-        Device::Tb303_1 | Device::Tb303_2 => ctrl as usize <= crate::tb303::WAVEFORM,
+        Device::Tb303_1 | Device::Tb303_2 => {
+            ctrl as usize <= crate::tb303::WAVEFORM || ctrl == crate::tb303::SUB
+        }
         Device::Tr808 => ctrl as usize <= crate::tr808::LAST_CTRL,
         Device::Tr909 => ctrl as usize <= crate::tr909::LAST_CTRL,
         Device::Mixer => false,
@@ -89,6 +91,27 @@ pub fn hooks(d: Device, ctrl: u8) -> bool {
 }
 
 impl Engine {
+    /// This fork: before the first recorded move of a 303's sub-oscillator, its level so far
+    /// becomes the track's start value (a tick-0 event, as every original controller has from
+    /// the song ctor), so the song plays it up to the move and a locate before it chases back.
+    /// A song that never records the sub has no such event.
+    fn sub_start(&mut self, d: Device) {
+        let f = &mut self.frame;
+        if f.seq.globals.song_mode == 0 || f.seq.globals.byte2 == 0 {
+            return;
+        }
+        let i = d.id() as usize;
+        if f.seq.events(i).iter().any(|e| e.ctrl == crate::tb303::SUB) {
+            return;
+        }
+        let Some(v) = super::live_value(&mut f.devices, d, crate::tb303::SUB) else {
+            return;
+        };
+        if f.seq.track_mut(i).insert(0, crate::tb303::SUB, v) {
+            f.seq.revision += 1;
+        }
+    }
+
     /// The record hook for device `d` ([`crate::seq::Sequencer::record_hook`]).
     fn record_hook(&mut self, d: Device, ctrl: u8, value: u8) {
         self.frame.seq.record_hook(d, ctrl, value);
@@ -120,6 +143,9 @@ impl Engine {
     /// 808 30, 909 31). Then the record hook for the controllers [`hooks`] names. The mixer has
     /// no such message (its are [`Engine::mixer_global`] and [`Engine::mixer_channel`]).
     pub fn device_param(&mut self, d: Device, ctrl: u8, value: u8) {
+        if matches!(d, Device::Tb303_1 | Device::Tb303_2) && ctrl == crate::tb303::SUB {
+            self.sub_start(d);
+        }
         if d != Device::Mixer {
             self.frame.devices.device_mut(d).param_message(ctrl, value);
         }
