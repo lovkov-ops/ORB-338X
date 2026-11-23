@@ -124,8 +124,8 @@ mod tests {
         // 303, 380 + 2 * 13; each mixer channel's on/off button is now its green LED (MUTE),
         // and it has an amber SOLO LED, + 4; the 909's FLIP, + 1)
         // (this fork's FLIP faces: KIT, 11 PAN knobs and 11 FX keys each, + 46; each 303's SUB
-        // knob, + 2)
-        assert_eq!(c.len(), 459);
+        // knob, + 2; the master's LIMIT key and AMT knob in place of its COMP key, + 1)
+        assert_eq!(c.len(), 460);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

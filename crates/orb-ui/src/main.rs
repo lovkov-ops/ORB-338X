@@ -220,6 +220,8 @@ fn main() -> eframe::Result {
     orb_engine::frame::set_fork_drum_gain(true);
     // this fork: one set of settings for pattern and song mode
     orb_engine::frame::set_fork_shared_modes(true);
+    // this fork: the master's LIMIT key in place of the master COMP
+    orb_engine::frame::set_fork_master_limit(true);
     let Args {
         demo,
         about,

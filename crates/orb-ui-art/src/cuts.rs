@@ -1565,23 +1565,43 @@ fn mixer_and_effects(c: &mut Cuts) {
         Bx::new(456.0, 50.0, 70.0, 115.0),
     );
 
-    // the master: its meters (well and segments), fader and compressor key
+    // the master: its meters (well and segments), fader, LIMIT key and AMT knob (this fork:
+    // the user's panel with the effects rack, `Mockup::panel_fx`, in place of the COMP key)
     let ml = grp(m, "14.14");
     let mlb = bbox(&ml);
     let well = grp(m, "14.14.0");
     meter(c, "meter_15x56", mlb, Some(&well), &segments(m, "14.14", 1));
-    for (g, id) in [("14.14", "meter_l"), ("14.15", "meter_r")] {
-        let v = grp(m, g);
+    let mf = Mockup::panel_fx();
+    for (g, id) in [("16.14", "meter_l"), ("16.15", "meter_r")] {
+        let v = grp(mf, g);
         let b = bbox(&v);
         c.take(&v);
         c.place(&format!("master.{id}"), b.x0, b.y0);
     }
-    fader(c, m, "master.fader", "14.16", "14.17", false);
-    let v = grp(m, "14.18");
+    fader(c, mf, "master.fader", "16.16", "16.17", false);
+    // the LIMIT key: off as drawn, on with the lit LED of channel 2's PCF key and a light label
+    let v = grp(mf, "16.18");
     let b = bbox(&v);
+    let base = grps(mf, &["16.18.0", "16.18.1"]);
+    let label = grp(mf, "16.18.3");
+    c.parts
+        .push(part("mixsw_limit_off", b.x0, b.y0, b.w(), b.h(), &body(&v)));
+    let on = format!(
+        "{}{}{}",
+        body(&base),
+        moved(&lit_led, b.x0 - lit_b.x0, b.y0 - lit_b.y0),
+        recolor(&label, &[("#9aa7b8", "#e9edf2")])
+    );
+    c.parts
+        .push(part("mixsw_limit_on", b.x0, b.y0, b.w(), b.h(), &on));
     c.take(&v);
-    c.place("master.comp", b.x0, b.y0);
-    c.background(m, "master", "bg_master", Bx::new(526.0, 50.0, 82.0, 98.0));
+    c.place("master.limit", b.x0, b.y0);
+    // the AMT knob: the small knob (the 303 LFO rows'), centered on the drawn one's body
+    let amt = grp(mf, "16.20");
+    let ab = bbox(&grp(mf, "16.20.1"));
+    c.take(&amt);
+    c.place("master.limit_amt", ab.cx() - 6.0, ab.cy() - 6.0);
+    c.background(mf, "master", "bg_master", Bx::new(526.0, 50.0, 82.0, 98.0));
 
     // the effects: the header LED and meter, then each one's controls
     let header = |c: &mut Cuts, fx: &str, ledg: &str, meterg: &str| {

@@ -99,13 +99,15 @@ pub fn source_of_1x(engine: &EngineSong, song: &rbs::rb1x::Song1x) -> rbs::Song 
 /// below the one before as a wrap past 2^32 (what a file's own deltas may do) and refuses
 /// nothing, so an unsorted list here is a bug of the model, checked in debug builds.
 ///
-/// This fork: the 303s' sub-oscillator events ([`sub_events`]) stay out (no `.rbs` controller
-/// is theirs); an `.rbsx` keeps them in its own chunk.
+/// This fork: the 303s' sub-oscillator events ([`sub_events`]) and the master's limiter's
+/// ([`limit_events`]) stay out (no `.rbs` controller is theirs); an `.rbsx` keeps them in its
+/// own chunk.
 pub fn set_engine_tracks(s: &mut rbs::Song, tracks: &[Vec<TrackEvent>; 9]) {
     for (t, events) in tracks.iter().enumerate() {
         s.tracks[t].events = events
             .iter()
             .filter(|e| !(is_303_track(t) && e.ctrl == orb_engine::tb303::SUB))
+            .filter(|e| !(t == Device::Mixer as usize && LIMIT_CTRLS.contains(&e.ctrl)))
             .map(|e| rbs::Event {
                 pos: e.tick as u32 / 24,
                 ctrl: e.ctrl,
@@ -122,6 +124,20 @@ pub fn set_engine_tracks(s: &mut rbs::Song, tracks: &[Vec<TrackEvent>; 9]) {
 /// Whether track `t` (by device id) is a 303's.
 fn is_303_track(t: usize) -> bool {
     t == Device::Tb303_1 as usize || t == Device::Tb303_2 as usize
+}
+
+/// This fork: the mixer's controllers of the master's limiter, LIMIT and AMT.
+pub const LIMIT_CTRLS: [u8; 2] = [orb_engine::frame::LIMIT, orb_engine::frame::LIMIT_AMT];
+
+/// This fork: the events of the master's limiter's LIMIT (`i` 0) or AMT (1) in `tracks`,
+/// `(tick, value)`.
+pub fn limit_events(tracks: &[Vec<TrackEvent>; 9], i: usize) -> Vec<(i32, u8)> {
+    let ctrl = LIMIT_CTRLS[i.min(1)];
+    tracks[Device::Mixer as usize]
+        .iter()
+        .filter(|e| e.ctrl == ctrl)
+        .map(|e| (e.tick, e.value))
+        .collect()
 }
 
 /// This fork: synth `k`'s (0, 1) sub-oscillator events in `tracks`, `(tick, level)`.

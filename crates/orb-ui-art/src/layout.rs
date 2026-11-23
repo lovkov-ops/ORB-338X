@@ -618,8 +618,10 @@ fn master(b: &mut Builder) {
     b.part("meter_l", "meter", "meter_15x56_8", 16.0, 24.0);
     b.part("meter_r", "meter", "meter_15x56_7", 51.0, 24.0);
     b.fader("fader", 33.0, 25.0, 0.8);
-    // centered under the meters
-    b.part("comp", "radio", "mixsw_comp_off", 27.0, 82.0);
+    // this fork: the LIMIT key and its AMT knob in place of the COMP key (cuts.rs puts them
+    // where the user's panel has them)
+    b.part("limit", "toggle", "mixsw_limit_off", 7.0, 82.0);
+    b.knob("limit_amt", KNOB_LFO, 48.0, 83.0, 0.0);
 }
 
 /// An effect's header (2..20): the on/off button and the meter 2 px from its edges.

@@ -189,8 +189,17 @@ pub enum Command {
         level: u8,
         events: Box<[u8]>,
     },
+    /// This fork (not a message of the original): another controller this fork adds (the
+    /// master's limiter) as a song keeps it ([`Engine::fork_track`]): its value and its track
+    /// events, as [`Command::Sub`]'s.
+    ForkTrack {
+        device: Device,
+        ctrl: u8,
+        value: u8,
+        events: Box<[u8]>,
+    },
     /// Mixer msg 145 `{id, v}` ([`Engine::mixer_global`]): 0 the master, 1 the compressor id,
-    /// 2 the PCF id.
+    /// 2 the PCF id (this fork: 64 and 65 the master's limiter).
     MixerGlobal { id: u8, value: u8 },
     /// Mixer msg 147 `{c, k, v}` ([`Engine::mixer_channel`]): channel c's field k, 0 enabled,
     /// 1 level, 2 pan, 3 delay send, 4 dist.
@@ -747,6 +756,21 @@ impl Audio {
                     .map(|e| (i32::from_le_bytes([e[0], e[1], e[2], e[3]]), e[4]))
                     .collect();
                 self.target().sub(device, level, &list);
+                self.throw(Garbage::Bytes(events));
+            }
+            Command::ForkTrack {
+                device,
+                ctrl,
+                value,
+                events,
+            } => {
+                let list: Vec<(i32, u8)> = events
+                    .as_chunks::<5>()
+                    .0
+                    .iter()
+                    .map(|e| (i32::from_le_bytes([e[0], e[1], e[2], e[3]]), e[4]))
+                    .collect();
+                self.target().fork_track(device, ctrl, value, &list);
                 self.throw(Garbage::Bytes(events));
             }
             Command::MixerChannel {

@@ -251,6 +251,9 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
         "master.fader" => return Some(MixerTarget::Global(0)),
         "mixer.comp_id" => return Some(MixerTarget::Global(1)),
         "mixer.pcf_id" => return Some(MixerTarget::Global(2)),
+        // this fork: the master's LIMIT key and its AMT knob
+        "master.limit" => return Some(MixerTarget::Global(orb_engine::frame::LIMIT)),
+        "master.limit_amt" => return Some(MixerTarget::Global(orb_engine::frame::LIMIT_AMT)),
         _ => {}
     }
     let (sec, name) = id.split_once('.')?;
@@ -310,6 +313,7 @@ fn new_song_knobs(
         let v = match mixer_target(&c.id) {
             // the faders (this fork: a double click sets them too)
             Some(MixerTarget::Global(0)) => Some(d.mixer.live.master),
+            Some(MixerTarget::Global(orb_engine::frame::LIMIT_AMT)) => Some(d.mixer.live.limit_amt),
             Some(MixerTarget::Channel(ch, 1)) => Some(d.mixer.live.channels[ch as usize].level),
             Some(MixerTarget::Channel(ch, 2)) => Some(d.mixer.live.channels[ch as usize].pan),
             Some(MixerTarget::Channel(ch, 3)) => Some(d.mixer.live.channels[ch as usize].send),
@@ -1036,6 +1040,18 @@ impl Link {
         self.flush();
     }
 
+    /// This fork: another controller this fork adds (the master's limiter) as a song keeps it,
+    /// its value and its track events `(tick, value)`, to the newest song.
+    pub fn send_fork_track(&mut self, device: Device, ctrl: u8, value: u8, events: &[(i32, u8)]) {
+        self.backlog.push_back(Command::ForkTrack {
+            device,
+            ctrl,
+            value,
+            events: Command::sub_events(events),
+        });
+        self.flush();
+    }
+
     /// This fork's pans and effects switches of the 808's or the 909's sounds (the FLIP face),
     /// to the newest song when they differ from what it has (a new song has them neutral).
     pub fn sync_voice_mix(&mut self, device: Device, mix: VoiceMix) {
@@ -1192,6 +1208,9 @@ impl Link {
         let m = &s.mixer;
         panel.adopt("master.fader", m.master as i32);
         panel.adopt("mixer.comp_id", m.comp_id as i32);
+        // this fork: the master's limiter
+        panel.adopt("master.limit", m.limit as i32);
+        panel.adopt("master.limit_amt", m.limit_amt as i32);
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {
             let n = c + 1;

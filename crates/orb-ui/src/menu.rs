@@ -776,7 +776,18 @@ impl App {
         let song = song.map(|mut song| {
             let g = self.gen_state();
             song.sub = g.sub;
-            song.sub_events = g.sub_track;
+            song.sub_events = g.sub_track.clone();
+            // and the master's limiter
+            song.fork_tracks = crate::document::LIMIT_CTRLS
+                .into_iter()
+                .enumerate()
+                .map(|(i, ctrl)| orb_engine::song::ForkTrack {
+                    device: orb_engine::song::Device::Mixer,
+                    ctrl,
+                    value: g.limit[i],
+                    events: g.limit_track[i].clone(),
+                })
+                .collect();
             song
         });
         let song = match song {

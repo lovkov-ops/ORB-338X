@@ -210,6 +210,14 @@ mod tests {
         orb_engine::load::convert(&parsed).unwrap()
     }
 
+    /// The tests that make engines take the fork's global drum-gain switch, which one test
+    /// turns on for a moment: they run one at a time, so no engine is made in that moment.
+    static DRUM_GAIN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn drum_gain_lock() -> std::sync::MutexGuard<'static, ()> {
+        DRUM_GAIN.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn peak(a: &[i16]) -> i32 {
         a.iter().map(|&s| (s as i32).abs()).max().unwrap_or(0)
     }
@@ -235,6 +243,7 @@ mod tests {
     /// drum machines are louder than the original by `DRUM_GAINS`; off, they are the original's.
     #[test]
     fn the_drum_machines_take_the_forks_gains() {
+        let _one_at_a_time = drum_gain_lock();
         let tables = Arc::new(Tables::new());
         let song = song();
         let kit = Some(rbm::standard::builtin_samples());
@@ -254,6 +263,7 @@ mod tests {
     /// (this fork) One drum hit of the 808 or the 909 with the drum machine's `mix`, the
     /// distortion on (amount and shape up) and routed for it: the left and right peaks.
     fn stereo_hit(is808: bool, inst: usize, mix: VoiceMix, dist: bool) -> (i32, i32) {
+        let _one_at_a_time = drum_gain_lock();
         let tables = Arc::new(Tables::new());
         let song = song();
         let kit = Some(rbm::standard::builtin_samples());

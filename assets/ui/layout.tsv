@@ -422,7 +422,8 @@ mixer4.comp	mixer4	radio	mixsw_comp_off	494	489	28	13
 master.meter_l	master	meter	meter_15x56_8	542	74	15	56
 master.meter_r	master	meter	meter_15x56_7	577	74	15	56
 master.fader	master	fader	fader_track	559	75	15	54
-master.comp	master	radio	mixsw_comp_off	553	132	28	13
+master.limit	master	toggle	mixsw_limit_off	533	132	28	13
+master.limit_amt	master	knob	knob_lfo	573.5	133.1	12	12
 pcf.on	pcf	toggle	power_14x14_on	530	309	14	14
 pcf.meter	pcf	meter	meter_8x12_4	596	309.25	8	14
 pcf.pattern	pcf	display	segb_0..9,segb_blank	536	328.5	18	16

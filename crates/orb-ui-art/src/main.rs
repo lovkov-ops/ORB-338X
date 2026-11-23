@@ -97,12 +97,14 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "mockup" => {
-            // (this fork) the shapes of mockup 1, 2 or top (`ui-art mockup 1 [FILE]`); with FILE,
-            // also the whole mockup written back from its shapes (a check of the cut)
+            // (this fork) the shapes of mockup 1, 2, top, 303 or fx (`ui-art mockup 1 [FILE]`);
+            // with FILE, also the whole mockup written back from its shapes (a check of
+            // the cut)
             let m = match explicit_dir.as_deref().and_then(|p| p.to_str()) {
                 Some("2") => orb_ui_art::mockup::Mockup::panel_2(),
                 Some("top") => orb_ui_art::mockup::Mockup::top_bar(),
                 Some("303") => orb_ui_art::mockup::Mockup::tb303(),
+                Some("fx") => orb_ui_art::mockup::Mockup::panel_fx(),
                 _ => orb_ui_art::mockup::Mockup::panel_1(),
             };
             print!("{}", orb_ui_art::mockup::dump(m));

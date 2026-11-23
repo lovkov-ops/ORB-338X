@@ -65,6 +65,36 @@ pub struct GenState {
     /// is theirs, so only an `.rbsx` keeps them.
     pub sub: [u8; 2],
     pub sub_track: [Vec<(i32, u8)>; 2],
+    /// The master's limiter (this fork): its LIMIT key (0 off, 1 on) and AMT knob (0..=127),
+    /// the pattern-mode values, and their song-mode tracks' events, as `sub` and `sub_track`.
+    pub limit: [u8; 2],
+    pub limit_track: [Vec<(i32, u8)>; 2],
+}
+
+/// The names of the master's limiter's two values in an `.rbsx` (this fork): LIMIT, AMT.
+const LIMIT_KEYS: [&str; 2] = ["master.limit", "master.limit_amt"];
+
+/// A song-mode track's events as an `.rbsx` writes them: `tick:value,...`.
+fn track_text(track: &[(i32, u8)]) -> String {
+    let list: Vec<String> = track.iter().map(|(t, v)| format!("{t}:{v}")).collect();
+    list.join(",")
+}
+
+/// A track's events from their text, leniently: an event that does not parse, or a tick below
+/// 0 or between positions (24 ticks), is left out; values above 127 are 127; tick order.
+fn track_of(text: &str) -> Vec<(i32, u8)> {
+    let mut track: Vec<(i32, u8)> = text
+        .split(',')
+        .filter_map(|e| {
+            let (t, l) = e.trim().split_once(':')?;
+            let t: i32 = t.trim().parse().ok()?;
+            let l: u32 = l.trim().parse().ok()?;
+            // the engine's ticks: positions of 24 ticks, not below 0
+            (t >= 0 && t % 24 == 0).then_some((t, l.min(127) as u8))
+        })
+        .collect();
+    track.sort_by_key(|&(t, _)| t);
+    track
 }
 
 /// An LFO's settings: its RATE and AMOUNT knobs' values (0..=127) and its buttons.
@@ -144,11 +174,15 @@ pub fn encode(state: &GenState) -> Vec<u8> {
             lines.push(format!("baze{n}.{name}.shape={shape}"));
         }
         lines.push(format!("baze{n}.sub={}", state.sub[synth]));
-        let track: Vec<String> = state.sub_track[synth]
-            .iter()
-            .map(|(t, v)| format!("{t}:{v}"))
-            .collect();
-        lines.push(format!("baze{n}.sub.track={}", track.join(",")));
+        lines.push(format!(
+            "baze{n}.sub.track={}",
+            track_text(&state.sub_track[synth])
+        ));
+    }
+    // the master's limiter
+    for (i, key) in LIMIT_KEYS.into_iter().enumerate() {
+        lines.push(format!("{key}={}", state.limit[i]));
+        lines.push(format!("{key}.track={}", track_text(&state.limit_track[i])));
     }
     for c in 0..4 {
         let n = c + 1;
@@ -246,18 +280,20 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
             .and_then(|v| v.parse::<u32>().ok())
             .map_or(0, |v| v.min(127) as u8);
         if let Some(v) = get(&format!("baze{n}.sub.track")) {
-            let mut track: Vec<(i32, u8)> = v
-                .split(',')
-                .filter_map(|e| {
-                    let (t, l) = e.trim().split_once(':')?;
-                    let t: i32 = t.trim().parse().ok()?;
-                    let l: u32 = l.trim().parse().ok()?;
-                    // the engine's ticks: positions of 24 ticks, not below 0
-                    (t >= 0 && t % 24 == 0).then_some((t, l.min(127) as u8))
-                })
+            state.sub_track[synth] = track_of(v);
+        }
+    }
+    // the master's limiter (an older file without it: off)
+    for (i, key) in LIMIT_KEYS.into_iter().enumerate() {
+        let max = if i == 0 { 1 } else { 127 };
+        state.limit[i] = get(key)
+            .and_then(|v| v.parse::<u32>().ok())
+            .map_or(0, |v| v.min(max) as u8);
+        if let Some(v) = get(&format!("{key}.track")) {
+            state.limit_track[i] = track_of(v)
+                .into_iter()
+                .map(|(t, v)| (t, v.min(max as u8)))
                 .collect();
-            track.sort_by_key(|&(t, _)| t);
-            state.sub_track[synth] = track;
         }
     }
     for c in 0..4 {
@@ -448,6 +484,21 @@ impl App {
                     .map(|l| crate::document::sub_events(l.loaded_tracks(), k))
                     .unwrap_or_default()
             }),
+            // the master's limiter as a save keeps the mixer: in song mode the pattern-mode
+            // copy, else the panel's
+            limit: std::array::from_fn(|i| {
+                let saved = self.link.as_ref().and_then(|l| l.song_mode_blocks());
+                saved.map_or_else(
+                    || self.panel.value(LIMIT_KEYS[i]).unwrap_or(0),
+                    |b| [b.mixer.limit, b.mixer.limit_amt][i],
+                )
+            }),
+            limit_track: std::array::from_fn(|i| {
+                self.link
+                    .as_ref()
+                    .map(|l| crate::document::limit_events(l.loaded_tracks(), i))
+                    .unwrap_or_default()
+            }),
             kits: std::array::from_fn(|k| {
                 self.kit_of(k).map(|kit| match kit {
                     orb_cli::mods::Kit::Standard => orb_cli::mods::STANDARD.to_string(),
@@ -504,6 +555,16 @@ impl App {
                 .put_knob(&format!("tb303_{}.sub", k + 1), to(state.sub[k]));
             if let Some(link) = &mut self.link {
                 link.send_sub(k, state.sub[k], &state.sub_track[k]);
+            }
+        }
+        // the master's limiter (this fork): its key and knob, and the values and track events
+        // into the song
+        self.panel.put_toggle(LIMIT_KEYS[0], state.limit[0] != 0);
+        self.panel.put_knob(LIMIT_KEYS[1], to(state.limit[1]));
+        if let Some(link) = &mut self.link {
+            for (i, ctrl) in crate::document::LIMIT_CTRLS.into_iter().enumerate() {
+                let (v, track) = (state.limit[i], &state.limit_track[i]);
+                link.send_fork_track(orb_engine::song::Device::Mixer, ctrl, v, track);
             }
         }
         // the drum machines' FLIP faces (this fork) and their own kits
@@ -569,6 +630,8 @@ mod tests {
         st.kits[1] = Some("PBE2".into());
         st.sub = [0, 90];
         st.sub_track[1] = vec![(0, 40), (984, 110), (1008, 40)];
+        st.limit = [1, 70];
+        st.limit_track[1] = vec![(0, 70), (768, 127)];
         st
     }
 
@@ -602,6 +665,12 @@ mod tests {
         // (this fork) the sub-oscillators
         assert!(text.contains("baze1.sub=0\nbaze1.sub.track=\n"));
         assert!(text.contains("baze2.sub=90\nbaze2.sub.track=0:40,984:110,1008:40\n"));
+        // (this fork) the master's limiter
+        assert!(text.contains("master.limit=1\nmaster.limit.track=\n"));
+        assert!(text.contains("master.limit_amt=70\nmaster.limit_amt.track=0:70,768:127\n"));
+        // the key is 0 or 1
+        let on = text.replace("master.limit=1\n", "master.limit=5\n");
+        assert_eq!(decode(on.as_bytes()).map(|s| s.limit), Some([1, 70]));
         let old = text.replace("baze1.generated=1\n", "");
         assert_eq!(
             decode(old.as_bytes()).map(|s| s.generated),

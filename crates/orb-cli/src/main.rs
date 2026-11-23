@@ -278,6 +278,8 @@ fn main() -> ExitCode {
         _ => false,
     };
     orb_engine::frame::set_fork_drum_gain(gain);
+    // the master's LIMIT in place of the master COMP, as the app plays a song
+    orb_engine::frame::set_fork_master_limit(gain);
     let result = match cli.command {
         Cmd::Render {
             input,

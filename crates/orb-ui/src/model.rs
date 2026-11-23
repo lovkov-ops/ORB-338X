@@ -364,7 +364,7 @@ impl Panel {
             match c.kind.as_str() {
                 "knob" => {
                     let v = match c.name() {
-                        "shuffle" | "delay" => 0,
+                        "shuffle" | "delay" | "limit_amt" => 0,
                         _ => 500,
                     };
                     p.knobs.insert(c.id, v);
@@ -778,7 +778,6 @@ impl Panel {
             (_, "comp") if sec.starts_with("mixer") => {
                 self.comp_id as usize == index_of(sec, "mixer").unwrap_or(0) + 2
             }
-            ("master", "comp") => self.comp_id == 1,
             _ => self.toggles.get(id).copied().unwrap_or(false),
         }
     }
@@ -843,10 +842,8 @@ impl Panel {
                     _ => self.flip(id),
                 }
             }
-            "master" if name == "comp" => {
-                self.comp_id = if self.comp_id == 1 { 0 } else { 1 };
-                self.set_event("mixer.comp_id", self.comp_id as i32);
-            }
+            // the master's LIMIT key (this fork, in place of the COMP key)
+            "master" if name == "limit" => self.flip(id),
             _ => {
                 if name == "on" {
                     self.flip(id);
@@ -1711,9 +1708,20 @@ mod tests {
         assert_eq!(p.pcf_id, 0);
         p.press("mixer1.comp", 0.0);
         assert_eq!(p.comp_id, 2);
-        p.press("master.comp", 0.0);
-        assert_eq!(p.comp_id, 1);
-        assert!(!p.toggle_on("mixer1.comp") && p.toggle_on("master.comp"));
+        p.press("mixer2.comp", 0.0);
+        assert_eq!(p.comp_id, 3);
+        assert!(!p.toggle_on("mixer1.comp") && p.toggle_on("mixer2.comp"));
+        // the master's LIMIT key (this fork) leaves the channels' COMP as it is
+        p.events.clear();
+        p.press("master.limit", 0.0);
+        assert!(p.toggle_on("master.limit") && p.comp_id == 3);
+        assert_eq!(
+            p.events,
+            [Event::Set {
+                id: "master.limit".into(),
+                value: 1
+            }]
+        );
         // Dist is independent per channel.
         p.press("mixer1.dist", 0.0);
         p.press("mixer2.dist", 0.0);

@@ -528,11 +528,22 @@ fn the_mixer_sends_msg_145_and_147() {
         h.take_log().last(),
         Some(&dev(Device::Mixer, 145, &[0, v as u8]))
     );
-    h.click("master.comp");
-    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, 1])]);
+    // this fork: the LIMIT key (64) and its AMT knob (65), in place of the master's Comp
+    h.click("master.limit");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[64, 1])]);
+    h.drag("master.limit_amt", 20.0);
+    let amt = orb_ui::behavior::knob_send(h.app.panel.knob("master.limit_amt"));
+    assert!(amt > 0);
+    assert_eq!(
+        h.take_log().last(),
+        Some(&dev(Device::Mixer, 145, &[65, amt as u8]))
+    );
     h.calls(2);
     let m = h.snap().mixer;
-    assert_eq!((m.master as i32, m.comp_id), (v, 1));
+    assert_eq!(
+        (m.master as i32, m.comp_id, m.limit, m.limit_amt as i32),
+        (v, 0, 1, amt)
+    );
 }
 
 #[test]
@@ -1228,6 +1239,8 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
     } else if let Some(n) = section.strip_prefix("mixer") {
         let ch = &s.mixer.channels[n.parse::<usize>().unwrap() - 1];
         if name == "pan" { ch.pan } else { ch.send }
+    } else if id == "master.limit_amt" {
+        s.mixer.limit_amt
     } else {
         let (d, ctrl) = orb_ui::link::controls()[id];
         engine_value(&s, d, ctrl)
@@ -1238,8 +1251,8 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
 fn a_double_click_sets_every_knob_to_its_value_in_a_new_song() {
     let mut h = Harness::new();
     let knobs = knob_ids();
-    // (this fork: each 303's SUB knob, + 2)
-    assert_eq!(knobs.len(), 79);
+    // (this fork: each 303's SUB knob, + 2; the master's limiter's AMT, + 1)
+    assert_eq!(knobs.len(), 80);
     for id in &knobs {
         // the panel shows the new empty song: its value is the knob's default
         let new_song = h.app.panel.value(id).unwrap();

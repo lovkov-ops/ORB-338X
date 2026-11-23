@@ -306,3 +306,58 @@ fn an_rbsx_keeps_the_303s_sub_and_its_moves() {
     let snap = *h3.app.link.as_mut().unwrap().player().snapshot();
     assert_eq!(snap.sub, [0, 0]);
 }
+
+#[test]
+fn an_rbsx_keeps_the_master_limiter_and_its_moves() {
+    use orb_engine::frame::{LIMIT, LIMIT_AMT};
+    use orb_engine::song::Device;
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = Harness::new();
+    h.open(&song());
+    h.app.panel.press("master.limit", 0.0);
+    h.app.panel.set_knob("master.limit_amt", 1000);
+    // the frame sends them, the next calls play them
+    h.calls(2);
+    h.calls(2);
+    let snap = *h.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!((snap.mixer.limit, snap.mixer.limit_amt), (1, 127));
+    let moves = [(0, 127), (768, 30)];
+    h.app
+        .link
+        .as_mut()
+        .unwrap()
+        .send_fork_track(Device::Mixer, LIMIT_AMT, 127, &moves);
+    h.calls(2);
+    let kept = h.app.gen_state();
+    assert_eq!(kept.limit, [1, 127]);
+    assert_eq!(kept.limit_track, [vec![], moves.to_vec()]);
+    let out = dir.path().join("limit.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+    // the song's own tracks have no event of the limiter's controllers
+    let file = rbs::Song::parse(&std::fs::read(&out).unwrap()).unwrap();
+    assert!(
+        file.tracks
+            .iter()
+            .flat_map(|t| &t.events)
+            .all(|e| e.ctrl != LIMIT && e.ctrl != LIMIT_AMT)
+    );
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    h2.calls(2);
+    assert_eq!(h2.app.gen_state(), kept);
+    assert!(h2.app.panel.toggle_on("master.limit"));
+    assert_eq!(h2.app.panel.value("master.limit_amt"), Some(127));
+    let snap = *h2.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!((snap.mixer.limit, snap.mixer.limit_amt), (1, 127));
+    assert!(!h2.app.doc.modified, "opening is no edit");
+
+    // a plain .rbs: the limiter off
+    let mut h3 = Harness::new();
+    h3.open(&song());
+    h3.calls(2);
+    assert_eq!(h3.app.gen_state().limit, [0, 0]);
+    assert!(!h3.app.panel.toggle_on("master.limit"));
+}
