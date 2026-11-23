@@ -154,6 +154,26 @@ impl Engine {
         }
     }
 
+    /// This fork (not a message of the original): a 303's sub-oscillator as a song keeps it
+    /// (its `.rbsx` part): the level, live and in the pattern-mode copy, and the track events
+    /// `(tick, level)` song mode plays. Other devices: nothing.
+    pub fn sub(&mut self, d: Device, level: u8, events: &[(i32, u8)]) {
+        if !matches!(d, Device::Tb303_1 | Device::Tb303_2) {
+            return;
+        }
+        let f = &mut self.frame;
+        f.devices.device_mut(d).fork_set(crate::tb303::SUB, level);
+        let i = d.id() as usize;
+        for &(tick, v) in events {
+            f.seq
+                .track_mut(i)
+                .insert(tick.max(0), crate::tb303::SUB, v.min(127));
+        }
+        if !events.is_empty() {
+            f.seq.revision += 1;
+        }
+    }
+
     /// This fork ([`super::voices`], not a message of the original): the pans and effects
     /// switches of the 808's (`d` [`Device::Tr808`]) or the 909's sounds. Other devices: nothing.
     pub fn voice_mix(&mut self, d: Device, mix: super::voices::VoiceMix) {

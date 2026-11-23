@@ -98,10 +98,14 @@ pub fn source_of_1x(engine: &EngineSong, song: &rbs::rb1x::Song1x) -> rbs::Song 
 /// tick (`sub_10014750`), so the positions never go back. `rbs::Track::build` writes a position
 /// below the one before as a wrap past 2^32 (what a file's own deltas may do) and refuses
 /// nothing, so an unsorted list here is a bug of the model, checked in debug builds.
+///
+/// This fork: the 303s' sub-oscillator events ([`sub_events`]) stay out (no `.rbs` controller
+/// is theirs); an `.rbsx` keeps them in its own chunk.
 pub fn set_engine_tracks(s: &mut rbs::Song, tracks: &[Vec<TrackEvent>; 9]) {
     for (t, events) in tracks.iter().enumerate() {
         s.tracks[t].events = events
             .iter()
+            .filter(|e| !(is_303_track(t) && e.ctrl == orb_engine::tb303::SUB))
             .map(|e| rbs::Event {
                 pos: e.tick as u32 / 24,
                 ctrl: e.ctrl,
@@ -113,6 +117,21 @@ pub fn set_engine_tracks(s: &mut rbs::Song, tracks: &[Vec<TrackEvent>; 9]) {
             "track {t}: events not sorted by position"
         );
     }
+}
+
+/// Whether track `t` (by device id) is a 303's.
+fn is_303_track(t: usize) -> bool {
+    t == Device::Tb303_1 as usize || t == Device::Tb303_2 as usize
+}
+
+/// This fork: synth `k`'s (0, 1) sub-oscillator events in `tracks`, `(tick, level)`.
+pub fn sub_events(tracks: &[Vec<TrackEvent>; 9], k: usize) -> Vec<(i32, u8)> {
+    let t = [Device::Tb303_1, Device::Tb303_2][k.min(1)] as usize;
+    tracks[t]
+        .iter()
+        .filter(|e| e.ctrl == orb_engine::tb303::SUB)
+        .map(|e| (e.tick, e.value))
+        .collect()
 }
 
 /// The song to write: `base` with the panel's state (`link` has the patterns) over it.

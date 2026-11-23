@@ -259,3 +259,50 @@ fn an_rbsx_keeps_the_flip_faces_and_a_machines_kit() {
     assert!(h2.app.kit_of(0).is_some() && h2.app.kit_of(1).is_none());
     assert!(!h2.app.doc.modified, "opening is no edit");
 }
+
+/// (this fork) An .rbsx keeps each 303's sub-oscillator: its level and its song-mode track
+/// events, which the song's own tracks (the .rbs part) never carry; they come back with the
+/// song, into the knob and the engine. A plain .rbs opens with the sub off.
+#[test]
+fn an_rbsx_keeps_the_303s_sub_and_its_moves() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = Harness::new();
+    h.open(&song());
+    h.app.panel.set_knob("tb303_2.sub", 1000);
+    h.calls(2);
+    let moves = [(0, 40), (768, 100), (1536, 20)];
+    h.app.link.as_mut().unwrap().send_sub(1, 127, &moves);
+    h.calls(2);
+    let kept = h.app.gen_state();
+    assert_eq!(kept.sub, [0, 127]);
+    assert_eq!(kept.sub_track, [vec![], moves.to_vec()]);
+    let out = dir.path().join("sub.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+    // the song's own tracks have no event of the sub's controller
+    let file = rbs::Song::parse(&std::fs::read(&out).unwrap()).unwrap();
+    assert!(
+        file.tracks
+            .iter()
+            .flat_map(|t| &t.events)
+            .all(|e| e.ctrl != orb_engine::tb303::SUB)
+    );
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    h2.calls(2);
+    assert_eq!(h2.app.gen_state(), kept);
+    assert_eq!(h2.app.panel.value("tb303_2.sub"), Some(127));
+    let snap = *h2.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap.sub, [0, 127]);
+    assert!(!h2.app.doc.modified, "opening is no edit");
+
+    // a plain .rbs: the sub off
+    let mut h3 = Harness::new();
+    h3.open(&song());
+    h3.calls(2);
+    assert_eq!(h3.app.gen_state().sub, [0, 0]);
+    let snap = *h3.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap.sub, [0, 0]);
+}

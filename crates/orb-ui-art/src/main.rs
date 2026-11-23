@@ -102,6 +102,7 @@ fn main() -> ExitCode {
             let m = match explicit_dir.as_deref().and_then(|p| p.to_str()) {
                 Some("2") => orb_ui_art::mockup::Mockup::panel_2(),
                 Some("top") => orb_ui_art::mockup::Mockup::top_bar(),
+                Some("303") => orb_ui_art::mockup::Mockup::tb303(),
                 _ => orb_ui_art::mockup::Mockup::panel_1(),
             };
             print!("{}", orb_ui_art::mockup::dump(m));

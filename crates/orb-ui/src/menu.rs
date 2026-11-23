@@ -704,8 +704,10 @@ impl App {
     }
 
     fn save_to_inner(&mut self, path: &Path) {
+        // the song first: it takes the engine's newest tracks, which the .rbsx part reads too
+        let song = self.song_for_save();
         let generate = crate::rbsx::is_rbsx(path).then(|| self.gen_state());
-        let result = self.song_for_save().and_then(|song| {
+        let result = song.and_then(|song| {
             // an .rbsx also keeps the GENERATE menu; the document's song stays without it
             let file = match &generate {
                 Some(g) => crate::rbsx::attach(&song, g),
@@ -769,6 +771,13 @@ impl App {
                 song.mod_name = STANDARD.into();
             }
             Ok(song)
+        });
+        // this fork: the 303s' sub-oscillators, which the .rbs bytes do not carry
+        let song = song.map(|mut song| {
+            let g = self.gen_state();
+            song.sub = g.sub;
+            song.sub_events = g.sub_track;
+            song
         });
         let song = match song {
             Ok(s) => s,

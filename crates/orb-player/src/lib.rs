@@ -181,6 +181,14 @@ pub enum Command {
     /// This fork (not a message of the original): the pans and effects switches of the 808's
     /// or the 909's sounds ([`Engine::voice_mix`]).
     VoiceMix { device: Device, mix: VoiceMix },
+    /// This fork (not a message of the original): a 303's sub-oscillator as a song keeps it
+    /// ([`Engine::sub`]): its level, and its track events, 5 bytes each (the tick as an i32,
+    /// little-endian, then the level; see [`Command::sub_events`]).
+    Sub {
+        device: Device,
+        level: u8,
+        events: Box<[u8]>,
+    },
     /// Mixer msg 145 `{id, v}` ([`Engine::mixer_global`]): 0 the master, 1 the compressor id,
     /// 2 the PCF id.
     MixerGlobal { id: u8, value: u8 },
@@ -238,6 +246,19 @@ pub enum Command {
     /// Top-level msg 57's clear of the preview player (`sub_1001DB60`, 0x1001DBA4: whatever
     /// mod it frees).
     PreviewStop,
+}
+
+impl Command {
+    /// The events of [`Command::Sub`] as its bytes.
+    pub fn sub_events(events: &[(i32, u8)]) -> Box<[u8]> {
+        events
+            .iter()
+            .flat_map(|&(t, v)| {
+                let b = t.to_le_bytes();
+                [b[0], b[1], b[2], b[3], v]
+            })
+            .collect()
+    }
 }
 
 /// A sample for the preview player ([`Command::Preview`]).
@@ -358,6 +379,10 @@ pub struct Snapshot {
     pub master_meters: [u8; 2],
     /// The pattern each channel device plays (303 #1, 303 #2, 808, 909).
     pub patterns: [Option<u8>; 4],
+    /// This fork: the 303s' sub-oscillator levels, live and as a save keeps them (the
+    /// pattern-mode copy in song mode), as `live` and `saved`.
+    pub sub: [u8; 2],
+    pub saved_sub: [u8; 2],
     /// Every device's live block, by device id (index 0, the mixer, is empty: see `mixer`).
     /// The playing step of the 303s, the 808 and the 909 is their byte 9, 29 and 30.
     pub live: [LiveBlock; 9],
@@ -710,6 +735,20 @@ impl Audio {
             } => self.target().device_param(device, ctrl, value),
             Command::MixerGlobal { id, value } => self.target().mixer_global(id, value),
             Command::VoiceMix { device, mix } => self.target().voice_mix(device, mix),
+            Command::Sub {
+                device,
+                level,
+                events,
+            } => {
+                let list: Vec<(i32, u8)> = events
+                    .as_chunks::<5>()
+                    .0
+                    .iter()
+                    .map(|e| (i32::from_le_bytes([e[0], e[1], e[2], e[3]]), e[4]))
+                    .collect();
+                self.target().sub(device, level, &list);
+                self.throw(Garbage::Bytes(events));
+            }
             Command::MixerChannel {
                 channel,
                 field,
@@ -856,6 +895,17 @@ impl Audio {
         s.saved[Device::Pcf as usize].set(d.pcf.saved_block(sm));
         s.saved[Device::Compressor as usize].set(d.comp.saved_block(sm));
         s.saved_mixer = d.mixer.saved(sm);
+        for k in 0..2 {
+            let dev = &d.channels[k];
+            let sub = orb_engine::tb303::SUB;
+            s.sub[k] = dev.fork_param(sub).unwrap_or(0);
+            s.saved_sub[k] = if sm {
+                dev.fork_pattern_param(sub)
+            } else {
+                dev.fork_param(sub)
+            }
+            .unwrap_or(0);
+        }
         s.faulted_calls = e.fault().map_or(0, |f| f.calls);
         s.output_errors = self.output_errors;
         self.snapshot.publish();

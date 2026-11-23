@@ -754,6 +754,17 @@ impl SongDevice for Tb303 {
         (ctrl == SUB).then_some(self.sub)
     }
 
+    fn fork_pattern_param(&self, ctrl: u8) -> Option<u8> {
+        (ctrl == SUB).then_some(self.sub_params)
+    }
+
+    fn fork_set(&mut self, ctrl: u8, value: u8) {
+        if ctrl == SUB {
+            self.sub = value.min(127);
+            self.sub_params = self.sub;
+        }
+    }
+
     /// Slots 7 (0x10026C40) and 8 (0x10025650) from the song ctor: controllers 0 and 1 of the
     /// track are quantised to 32 * 24 ticks (a bar, `sub_10021560` → `sub_10014600`), and a
     /// tick-0 event of every controller 0..8 with the ctor's value is inserted

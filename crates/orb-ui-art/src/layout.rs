@@ -10,8 +10,9 @@ use crate::parts::{
     BLACK_KEY_W_303, BLACK_NOTES_303, CLEAR_Y_303, FLAGS_303, KEY_ROWS_303, KNOB_SWEEP, KNOB_W_303,
     KNOB_Y_303, KNOB_Y_909, KNOBS, KNOBS_909, LEFT_X_303, LEGEND808_Y, LFO_MODE_W, LFO_MODE_Y_303,
     LOGO_X, LOGO_Y, NAMES_Y_909, PILL_W_303, PILL808_H, PILL808_W, PITCH_LED_Y_303, PITCH_Y_303,
-    STEP808_Y, STEPS_Y_909, TUNE_Y_303, UPPER808_Y, WAVE_X_303, WAVE_Y_303, WHITE_303, black_x_303,
-    col808, column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303, step808_x,
+    STEP808_Y, STEPS_Y_909, TUNE_Y_303, UPPER808_Y, WAVE_W_303, WAVE_X_303, WAVE_Y_303, WHITE_303,
+    black_x_303, col808, column_909, knob_x_303, knob_y_909, lfo_knobs_303, rndm_303, step_led_303,
+    step808_x,
 };
 use crate::svg::{Part, Svg, arc_path, n, pal};
 
@@ -301,6 +302,15 @@ fn tb303(b: &mut Builder, r: usize) {
     // The waveform: the saw and the square on one frame over the pitch/clear block, under the
     // label; a click on either chooses it (orb-ui's App::control).
     b.part("wave", "hswitch", "switch_wave_0", WAVE_X_303, WAVE_Y_303);
+    // The sub-oscillator's level (this fork): the LFO rows' small knob right of the waveform,
+    // level with it (cuts.rs puts it where the user's 303.svg has it)
+    b.knob(
+        "sub",
+        KNOB_LFO,
+        WAVE_X_303 + WAVE_W_303 + 2.0,
+        WAVE_Y_303 - 0.5,
+        0.0,
+    );
     // TUNE over the waveform in its column (this fork); the other five spread along the paper
     b.knob(
         "tune",

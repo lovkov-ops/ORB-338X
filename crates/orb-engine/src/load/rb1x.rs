@@ -364,6 +364,8 @@ pub fn load_1x(song: &Song1x) -> Result<Loaded, LoadError> {
         tr909: tr909_ctor(),
         tracks,
         batches: super::send_plan(&buf.batches, &buf.order),
+        sub: [0; 2],
+        sub_events: Default::default(),
     };
     Ok(Loaded {
         song: out,

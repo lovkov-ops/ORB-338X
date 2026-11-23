@@ -60,6 +60,11 @@ pub struct GenState {
     pub flip: [bool; 2],
     pub voice_mix: [VoiceMix; 2],
     pub kits: [Option<String>; 2],
+    /// Each synth's sub-oscillator (this fork): its level (0..=127, the pattern-mode value)
+    /// and the song-mode track's events, `(tick, level)` in tick order. No `.rbs` controller
+    /// is theirs, so only an `.rbsx` keeps them.
+    pub sub: [u8; 2],
+    pub sub_track: [Vec<(i32, u8)>; 2],
 }
 
 /// An LFO's settings: its RATE and AMOUNT knobs' values (0..=127) and its buttons.
@@ -138,6 +143,12 @@ pub fn encode(state: &GenState) -> Vec<u8> {
             };
             lines.push(format!("baze{n}.{name}.shape={shape}"));
         }
+        lines.push(format!("baze{n}.sub={}", state.sub[synth]));
+        let track: Vec<String> = state.sub_track[synth]
+            .iter()
+            .map(|(t, v)| format!("{t}:{v}"))
+            .collect();
+        lines.push(format!("baze{n}.sub.track={}", track.join(",")));
     }
     for c in 0..4 {
         let n = c + 1;
@@ -230,6 +241,23 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
                 Some("sh") => lfo::Shape::SampleHold,
                 _ => lfo::Shape::Sine,
             };
+        }
+        state.sub[synth] = get(&format!("baze{n}.sub"))
+            .and_then(|v| v.parse::<u32>().ok())
+            .map_or(0, |v| v.min(127) as u8);
+        if let Some(v) = get(&format!("baze{n}.sub.track")) {
+            let mut track: Vec<(i32, u8)> = v
+                .split(',')
+                .filter_map(|e| {
+                    let (t, l) = e.trim().split_once(':')?;
+                    let t: i32 = t.trim().parse().ok()?;
+                    let l: u32 = l.trim().parse().ok()?;
+                    // the engine's ticks: positions of 24 ticks, not below 0
+                    (t >= 0 && t % 24 == 0).then_some((t, l.min(127) as u8))
+                })
+                .collect();
+            track.sort_by_key(|&(t, _)| t);
+            state.sub_track[synth] = track;
         }
     }
     for c in 0..4 {
@@ -401,6 +429,25 @@ impl App {
             lfo,
             flip: [self.panel.flipped(0), self.panel.flipped(1)],
             voice_mix: [self.panel.voice_mix(0), self.panel.voice_mix(1)],
+            // the sub's level as a save keeps the 303's knobs: in song mode the pattern-mode
+            // copy, else the panel's
+            sub: std::array::from_fn(|k| {
+                let saved = self.link.as_ref().and_then(|l| l.song_mode_blocks());
+                saved.map_or_else(
+                    || {
+                        self.panel
+                            .value(&format!("tb303_{}.sub", k + 1))
+                            .unwrap_or(0)
+                    },
+                    |b| b.sub[k],
+                )
+            }),
+            sub_track: std::array::from_fn(|k| {
+                self.link
+                    .as_ref()
+                    .map(|l| crate::document::sub_events(l.loaded_tracks(), k))
+                    .unwrap_or_default()
+            }),
             kits: std::array::from_fn(|k| {
                 self.kit_of(k).map(|kit| match kit {
                     orb_cli::mods::Kit::Standard => orb_cli::mods::STANDARD.to_string(),
@@ -448,6 +495,15 @@ impl App {
                 self.panel.put_knob(&rate, to(l.rate));
                 self.panel.put_knob(&amount, to(l.amount));
                 self.lfo_mode[k][p] = l.mode;
+            }
+        }
+        // the 303s' sub-oscillators (this fork): their knobs, and the level and track events
+        // into the song
+        for k in 0..2 {
+            self.panel
+                .put_knob(&format!("tb303_{}.sub", k + 1), to(state.sub[k]));
+            if let Some(link) = &mut self.link {
+                link.send_sub(k, state.sub[k], &state.sub_track[k]);
             }
         }
         // the drum machines' FLIP faces (this fork) and their own kits
@@ -511,6 +567,8 @@ mod tests {
         st.voice_mix[1].fx[11] = false;
         st.voice_mix[1].pan[1] = 127;
         st.kits[1] = Some("PBE2".into());
+        st.sub = [0, 90];
+        st.sub_track[1] = vec![(0, 40), (984, 110), (1008, 40)];
         st
     }
 
@@ -541,11 +599,24 @@ mod tests {
         assert!(text.contains("tr909.flip=1\ntr909.pan=127,64,"));
         assert!(text.contains("tr909.fx=1,1,1,1,1,1,1,1,1,1,0\ntr909.kit=PBE2\n"));
         assert!(text.contains("mixer4.solo=0\nmixer4.mute=1\n"));
+        // (this fork) the sub-oscillators
+        assert!(text.contains("baze1.sub=0\nbaze1.sub.track=\n"));
+        assert!(text.contains("baze2.sub=90\nbaze2.sub.track=0:40,984:110,1008:40\n"));
         let old = text.replace("baze1.generated=1\n", "");
         assert_eq!(
             decode(old.as_bytes()).map(|s| s.generated),
             Some([true, false])
         );
+    }
+
+    #[test]
+    fn a_sub_track_is_read_leniently() {
+        // out of order, off the tick grid, negative, too loud, not a number
+        let text = "ORB-338X GENERATE 1\nbaze1.sub=300\nbaze1.sub.track=48:5,7:1,-24:3,0:200,x\n";
+        let st = decode(text.as_bytes()).unwrap();
+        assert_eq!(st.sub, [127, 0]);
+        assert_eq!(st.sub_track[0], [(0, 127), (48, 5)]);
+        assert!(st.sub_track[1].is_empty());
     }
 
     #[test]

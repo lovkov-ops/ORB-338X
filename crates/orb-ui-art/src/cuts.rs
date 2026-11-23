@@ -138,7 +138,12 @@ impl Cuts {
     /// The background `name` of section `sec` at its panel box `b`: the section's shapes no
     /// control took.
     fn background(&mut self, m: &Mockup, sec: &str, name: &str, b: Bx) {
-        let svg: String = m
+        self.background_with(m, sec, name, b, "");
+    }
+
+    /// [`Cuts::background`] with `extra` drawn over it (panel coordinates).
+    fn background_with(&mut self, m: &Mockup, sec: &str, name: &str, b: Bx, extra: &str) {
+        let mut svg: String = m
             .section(sec)
             .filter(|s| !self.taken.contains(&(s.doc, s.index)))
             .map(|s| match self.swaps.get(&(s.doc, s.index)) {
@@ -146,6 +151,7 @@ impl Cuts {
                 None => s.svg(),
             })
             .collect();
+        svg.push_str(extra);
         self.parts.push(part(name, b.x0, b.y0, b.w(), b.h(), &svg));
     }
 }
@@ -789,6 +795,13 @@ fn tb303(c: &mut Cuts, k: usize) {
     let b = bbox(&wave);
     c.take(&wave);
     c.place(&format!("{sec}.wave"), b.x0, b.y0);
+    // the sub-oscillator's knob right of the waveform (this fork, the user's 303.svg): the
+    // LFO rows' small knob, its center level with theirs
+    let s3 = Mockup::tb303();
+    let sub_knob = bbox(&grp(s3, SUB_KNOB_303));
+    let (sx, sy) = (sub_knob.cx(), sub_knob.cy());
+    let oy = 50.0 + 115.0 * k as f32;
+    c.place(&format!("{sec}.sub"), 90.0 + sx - 6.0, oy + sy - 6.0);
 
     // the knobs: track, bezel and body; the lower cap turns with the pointer
     for (i, id) in KNOBS_303.iter().enumerate() {
@@ -1019,9 +1032,23 @@ fn tb303(c: &mut Cuts, k: usize) {
             let at = format!("translate({} {})", b.x0, b.y0);
             c.replace(&old, &format!(r#"<g transform="{at}">{}</g>"#, body(&all)));
         }
-        c.background(m, "_303-a", "bg_tb303", Bx::new(90.0, 50.0, 366.0, 115.0));
+        // the SUB label over the sub-oscillator's knob (this fork, the user's 303.svg)
+        let label: Vec<&Shape> = grp(Mockup::tb303(), SUB_LABEL_303);
+        let extra = format!(r#"<g transform="translate(90 50)">{}</g>"#, body(&label));
+        c.background_with(
+            m,
+            "_303-a",
+            "bg_tb303",
+            Bx::new(90.0, 50.0, 366.0, 115.0),
+            &extra,
+        );
     }
 }
+
+/// The groups of the user's 303.svg (`Mockup::tb303`): the SUB label and the sub-oscillator's
+/// knob's body (this fork).
+const SUB_LABEL_303: &str = "0.4";
+const SUB_KNOB_303: &str = "0.79.1";
 
 /// The shape's SVG with its plain fill `color` at `opacity` (1: opaque).
 fn tint(s: &Shape, color: &str, opacity: f32) -> String {

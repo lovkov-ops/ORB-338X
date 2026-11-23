@@ -3,7 +3,7 @@
 //! `tools/rbhost` reproduces the app's exports (`docs/export_state.md` sections 12 and 13).
 
 use super::{Activation, BLOCK, Engine, LoadRefused};
-use crate::song::{Globals, Song};
+use crate::song::{Device, Globals, Song};
 
 /// The frames of one realtime MME call (`docs/export_state.md` section 2.1): the idle blocks are
 /// rendered 16 at a time, as the app's stream and rbhost do.
@@ -135,6 +135,12 @@ pub fn export_song(
     engine.activate(Activation::ReplacesCurrent {
         current_playing: false,
     });
+    // this fork: the 303s' sub-oscillators as the app keeps them
+    for (k, d) in [Device::Tb303_1, Device::Tb303_2].into_iter().enumerate() {
+        if song.sub[k] != 0 || !song.sub_events[k].is_empty() {
+            engine.sub(d, song.sub[k], &song.sub_events[k]);
+        }
+    }
     Ok(export(
         engine,
         ExportRange::from(&song.globals),

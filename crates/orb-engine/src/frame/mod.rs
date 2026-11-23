@@ -237,6 +237,14 @@ pub trait SongDevice: Send {
     fn fork_param(&self, _ctrl: u8) -> Option<u8> {
         None
     }
+    /// Not a slot (this fork): such a controller's pattern-mode copy, the value a save keeps
+    /// (as [`SongDevice::pattern_params`] for the original's).
+    fn fork_pattern_param(&self, _ctrl: u8) -> Option<u8> {
+        None
+    }
+    /// Not a slot (this fork): sets such a controller's live value and its pattern-mode copy
+    /// (a song's value as it is opened).
+    fn fork_set(&mut self, _ctrl: u8, _value: u8) {}
     /// Not a slot: the pattern-mode copy of the parameter block (the 303's, 808's and 909's
     /// `+0x30`, the delay's `+0x3A`, the distortion's and the compressor's `+0x3D`, the PCF's
     /// `+0x40`), indexed as [`SongDevice::live`]. Empty for a placeholder.

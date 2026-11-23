@@ -23,6 +23,9 @@ pub const RANDOMIZER: &str = include_str!("../../../assets/mockup/randomizer.svg
 /// The top bar with the ORB-338X logo and its icon (this fork), 592 x 50: the transport
 /// section's coordinates.
 pub const TOP_BAR: &str = include_str!("../../../assets/mockup/top_bar.svg");
+/// The user's 303 (this fork), 366 x 115: the SUB knob's label is cut from it
+/// (`cuts::tb303`).
+pub const TB303: &str = include_str!("../../../assets/mockup/303.svg");
 
 /// A box in panel pixels: left, top, right, bottom.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -182,6 +185,11 @@ impl Mockup {
     pub fn top_bar() -> &'static Mockup {
         static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
         M.get_or_init(|| Mockup::parse(TOP_BAR, "mt"))
+    }
+
+    pub fn tb303() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(TB303, "m3"))
     }
 
     pub fn section<'a>(&'a self, sec: &'a str) -> impl Iterator<Item = &'a Shape> + 'a {

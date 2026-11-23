@@ -467,6 +467,8 @@ pub fn load(song: &rbs::Song) -> Result<Loaded, LoadError> {
         tr909: tr909(&song.tr909)?,
         tracks,
         batches: send_plan(&batches, &order),
+        sub: [0; 2],
+        sub_events: Default::default(),
     };
     Ok(Loaded {
         song: out,

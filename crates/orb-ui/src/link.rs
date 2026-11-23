@@ -141,6 +141,8 @@ pub fn controls() -> HashMap<String, (Device, u8)> {
             ("decay", 6),
             ("accent", 7),
             ("wave", 8),
+            // this fork: the sub-oscillator
+            ("sub", orb_engine::tb303::SUB),
         ] {
             add(format!("tb303_{k}.{n}"), d, c);
         }
@@ -291,7 +293,14 @@ fn new_song_knobs(
             Device::Pcf => (d.pcf.live(), c as usize),
             Device::Compressor => (d.comp.live(), c as usize),
         };
-        block.get(i).copied()
+        // this fork's controllers (the 303's sub) are not in the block
+        let dev_ref = match dev {
+            Device::Tb303_1 | Device::Tb303_2 => Some(&d.channels[dev as usize - 1]),
+            _ => None,
+        };
+        dev_ref
+            .and_then(|x| x.fork_param(c))
+            .or_else(|| block.get(i).copied())
     };
     let mut knobs = HashMap::new();
     for c in crate::layout::controls() {
@@ -402,11 +411,20 @@ pub struct SavedBlocks {
     /// By device id, indexed as the device's live block (index 0, the mixer, is empty).
     pub blocks: [LiveBlock; 9],
     pub mixer: MixerParams,
+    /// This fork: the 303s' sub-oscillator levels (`Snapshot::saved_sub`).
+    pub sub: [u8; 2],
 }
 
 impl SavedBlocks {
     /// Controller `c` of device `d` (not the mixer), by controller number.
     pub fn param(&self, d: Device, c: u8) -> Option<u8> {
+        if c == orb_engine::tb303::SUB {
+            return match d {
+                Device::Tb303_1 => Some(self.sub[0]),
+                Device::Tb303_2 => Some(self.sub[1]),
+                _ => None,
+            };
+        }
         let i = if d == Device::Tr909 {
             tr909::internal_index(c as usize)
         } else {
@@ -1006,6 +1024,18 @@ impl Link {
         self.flush();
     }
 
+    /// This fork: synth `k`'s (0, 1) sub-oscillator as a song keeps it, its level and its
+    /// track events `(tick, level)`, to the newest song.
+    pub fn send_sub(&mut self, k: usize, level: u8, events: &[(i32, u8)]) {
+        let device = [Device::Tb303_1, Device::Tb303_2][k.min(1)];
+        self.backlog.push_back(Command::Sub {
+            device,
+            level,
+            events: Command::sub_events(events),
+        });
+        self.flush();
+    }
+
     /// This fork's pans and effects switches of the 808's or the 909's sounds (the FLIP face),
     /// to the newest song when they differ from what it has (a new song has them neutral).
     pub fn sync_voice_mix(&mut self, device: Device, mix: VoiceMix) {
@@ -1135,6 +1165,7 @@ impl Link {
         self.saved = s.song_mode.then_some(SavedBlocks {
             blocks: s.saved,
             mixer: s.saved_mixer,
+            sub: s.saved_sub,
         });
         for (id, &(d, c)) in &self.controls {
             let i = if d == Device::Tr909 {
@@ -1142,7 +1173,13 @@ impl Link {
             } else {
                 c as usize
             };
-            if let Some(v) = live(d, i) {
+            // this fork: the 303's sub is not in the live block
+            let v = match (d, c) {
+                (Device::Tb303_1, orb_engine::tb303::SUB) => Some(s.sub[0]),
+                (Device::Tb303_2, orb_engine::tb303::SUB) => Some(s.sub[1]),
+                _ => live(d, i),
+            };
+            if let Some(v) = v {
                 panel.adopt(id, v as i32);
             }
         }

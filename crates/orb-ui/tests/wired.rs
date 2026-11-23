@@ -249,6 +249,8 @@ fn param_controls() -> Vec<(String, Device, u8)> {
             ("envmod", 5),
             ("decay", 6),
             ("accent", 7),
+            // this fork: the sub-oscillator
+            ("sub", orb_engine::tb303::SUB),
         ] {
             v.push((format!("tb303_{k}.{n}"), d, c));
         }
@@ -345,6 +347,16 @@ fn param_controls() -> Vec<(String, Device, u8)> {
 /// the test that checks them).
 const OTHER: &[&str] = &["tr808.mod_view", "tr909.flam_button", "tr909.flam"];
 
+/// The engine's value of a device's controller in a snapshot: its live byte, or this fork's
+/// 303 sub-oscillator level, which is not in the block.
+fn engine_value(s: &orb_player::Snapshot, d: Device, ctrl: u8) -> u8 {
+    match (d, ctrl) {
+        (Device::Tb303_1, orb_engine::tb303::SUB) => s.sub[0],
+        (Device::Tb303_2, orb_engine::tb303::SUB) => s.sub[1],
+        _ => s.live[d as usize].as_slice()[live_index(d, ctrl)],
+    }
+}
+
 /// The live byte index of a device's controller in the snapshot's live block.
 fn live_index(d: Device, ctrl: u8) -> usize {
     if d == Device::Tr909 {
@@ -402,9 +414,8 @@ fn every_knob_fader_and_switch_sends_its_device_message_and_the_engine_takes_it(
         let all = if c.kind == "fader" { 2 } else { 1 };
         assert!(log.len() <= all, "{id}: {log:?}");
         h.calls(2);
-        let live = h.snap().live[d as usize];
         assert_eq!(
-            live.as_slice()[live_index(d, ctrl)],
+            engine_value(&h.snap(), d, ctrl),
             value,
             "{id}: the engine did not take {value}"
         );
@@ -1219,7 +1230,7 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
         if name == "pan" { ch.pan } else { ch.send }
     } else {
         let (d, ctrl) = orb_ui::link::controls()[id];
-        s.live[d as usize].as_slice()[live_index(d, ctrl)]
+        engine_value(&s, d, ctrl)
     }
 }
 
@@ -1227,7 +1238,8 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
 fn a_double_click_sets_every_knob_to_its_value_in_a_new_song() {
     let mut h = Harness::new();
     let knobs = knob_ids();
-    assert_eq!(knobs.len(), 77);
+    // (this fork: each 303's SUB knob, + 2)
+    assert_eq!(knobs.len(), 79);
     for id in &knobs {
         // the panel shows the new empty song: its value is the knob's default
         let new_song = h.app.panel.value(id).unwrap();
@@ -1270,7 +1282,7 @@ fn engine_fader(h: &mut Harness, id: &str) -> u8 {
         s.mixer.channels[n.parse::<usize>().unwrap() - 1].level
     } else {
         let (d, ctrl) = orb_ui::link::controls()[id];
-        s.live[d as usize].as_slice()[live_index(d, ctrl)]
+        engine_value(&s, d, ctrl)
     }
 }
 

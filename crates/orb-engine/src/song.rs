@@ -455,6 +455,12 @@ pub struct Song {
     /// [`Song::tracks`] in these batches; events a batch does not cover (a song edited after
     /// the load, or a model built by hand with no batches) go as one more batch per track.
     pub batches: Vec<Batch>,
+    /// This fork: the 303s' sub-oscillator levels and their track events `(tick, level)`,
+    /// which no song file of the original carries (the app keeps them in an `.rbsx`). The
+    /// load leaves them off; [`crate::frame::export::export_song`] applies them
+    /// ([`crate::frame::Engine::sub`]), so the app's export plays them.
+    pub sub: [u8; 2],
+    pub sub_events: [Vec<(i32, u8)>; 2],
 }
 
 impl Song {
