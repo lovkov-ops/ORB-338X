@@ -513,7 +513,8 @@ fn routing_order() {
         Routing {
             dist: true,
             pcf: true,
-            comp: true
+            comp: true,
+            ..Routing::default()
         }
     );
     assert_eq!(r[0], Routing::default());
@@ -1422,7 +1423,50 @@ fn an_insert_is_mixed_with_the_channel_by_its_wet_amount() {
     e.mixer_global(WET + 3 * 2 + 1, 40);
     assert_eq!(e.frame.devices.mixer.live.wet[2][1], 40);
     assert_eq!(e.frame.devices.mixer.fork_param(WET + 7), Some(40));
-    assert!(is_fork_mixer(WET + 11) && !is_fork_mixer(WET + 12));
+    assert!(is_fork_mixer(WET + 11) && WET + 12 == MORE);
+}
+
+/// This fork: the PCF and the compressor also on other channels ([`MORE`]), each such channel
+/// with its own copy; none such, the original's routing as it was.
+#[test]
+fn the_pcf_and_the_compressor_run_on_more_channels_as_copies() {
+    let render = |pcf_id: u8, comp_id: u8, more: [[u8; 2]; 4]| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        d.channels[1] = Box::new(Ramp(7));
+        d.pcf.set_param(0, 1);
+        d.comp.set_param(0, 1);
+        d.comp.set_param(2, 20);
+        let mut e = Engine::new(tables(), d);
+        let m = &mut e.frame.devices.mixer.live;
+        m.pcf_id = pcf_id;
+        m.comp_id = comp_id;
+        for (c, k) in more.iter().enumerate() {
+            for (i, &v) in k.iter().enumerate() {
+                e.mixer_global(MORE + 2 * c as u8 + i as u8, v);
+            }
+        }
+        let mut buf = vec![0i16; 2 * 64 * 60];
+        e.render(&mut buf, 64 * 60);
+        (buf, e)
+    };
+    let none = [[0; 2]; 4];
+    // a channel's copy plays as the song's insert would there
+    let (song, _) = render(1, 2, none);
+    let (copy, e) = render(0, 0, [[1, 1], [0, 0], [0, 0], [0, 0]]);
+    assert_eq!(copy, song);
+    let r = e.frame.state.channels[0].routing;
+    assert!(r.pcf_copy && r.comp_copy && !r.pcf && !r.comp);
+    // the song's channel keeps the song's insert, the other gets a copy: both filtered
+    let (both, e) = render(1, 2, [[0, 0], [1, 1], [0, 0], [0, 0]]);
+    assert_ne!(both, song);
+    let r = e.frame.state.channels.map(|c| c.routing);
+    assert!(r[0].pcf && !r[0].pcf_copy && r[1].pcf_copy && r[1].comp_copy);
+    // MORE on the channel the id already chooses: no copy
+    let (same, e) = render(1, 2, [[1, 1], [0, 0], [0, 0], [0, 0]]);
+    assert_eq!(same, song);
+    assert!(!e.frame.state.channels[0].routing.pcf_copy);
+    assert!(is_fork_mixer(MORE + 7) && !is_fork_mixer(MORE + 8));
 }
 
 #[test]

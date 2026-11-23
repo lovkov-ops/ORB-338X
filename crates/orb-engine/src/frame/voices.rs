@@ -103,6 +103,34 @@ impl Default for SplitBuses {
 /// copied from the song's on first use, then given every parameter change of the song's
 /// (the live controller bytes, through slot 11) and every mixer update, with their own
 /// signal state.
+/// This fork: a channel's own copy of an insert (the PCF, the compressor) on a channel besides
+/// the one the original's id chooses ([`super::MixerParams::more`]). It follows the song's
+/// insert's controllers; its meters and faults are not the song's.
+pub struct InsertCopy {
+    pub ins: Box<dyn InsertEffect>,
+    live: Vec<u8>,
+}
+
+impl InsertCopy {
+    /// A copy of `src` as it is now; `None` for an insert that cannot be copied.
+    pub fn new(src: &dyn InsertEffect) -> Option<Self> {
+        Some(InsertCopy {
+            ins: src.fork_clone()?,
+            live: src.live().to_vec(),
+        })
+    }
+
+    /// The song's insert's changed controller bytes, into the copy.
+    pub fn follow(&mut self, src: &dyn InsertEffect) {
+        for (i, (&v, old)) in src.live().iter().zip(self.live.iter_mut()).enumerate() {
+            if v != *old {
+                self.ins.set_param(i as u8, v);
+                *old = v;
+            }
+        }
+    }
+}
+
 pub struct RightInserts {
     pub ins: [Option<Box<dyn InsertEffect>>; 3],
     live: [Vec<u8>; 3],

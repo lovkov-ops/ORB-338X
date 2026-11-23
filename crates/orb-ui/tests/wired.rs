@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use eframe::egui::{self, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
-use orb_engine::frame::WET;
+use orb_engine::frame::{MORE, WET};
 use orb_engine::samples::SampleSet;
 use orb_engine::song::Device;
 use orb_engine::tables::Tables;
@@ -514,11 +514,7 @@ fn the_mixer_sends_msg_145_and_147() {
         h.drag(&format!("mixer{n}.comp"), 20.0);
         let w = wet(2, "comp", &h);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, c + 2]), w]);
-        // the other channels' PCF and COMP knobs are at 0
-        for o in (1..=4).filter(|&o| o != n) {
-            assert!(!h.app.panel.knob_on(&format!("mixer{o}.pcf")), "{o}");
-            assert!(!h.app.panel.knob_on(&format!("mixer{o}.comp")), "{o}");
-        }
+
         h.calls(2);
         let m = h.snap().mixer;
         let ch = m.channels[c as usize];
@@ -542,6 +538,27 @@ fn the_mixer_sends_msg_145_and_147() {
         h.drag(&format!("mixer{n}.dist"), -400.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 147, &[c, 4, 0])]);
     }
+    // this fork: the PCF on a second channel sends that channel's MORE (MORE + 2c), and the
+    // first one letting go hands it the id
+    h.drag("mixer1.pcf", 20.0);
+    h.take_log();
+    h.drag("mixer3.pcf", 20.0);
+    let log = h.take_log();
+    assert_eq!(log[0], dev(Device::Mixer, 145, &[MORE + 4, 1]));
+    h.drag("mixer1.pcf", -400.0);
+    assert_eq!(
+        h.take_log(),
+        vec![
+            dev(Device::Mixer, 145, &[MORE + 4, 0]),
+            dev(Device::Mixer, 145, &[2, 3])
+        ]
+    );
+    h.calls(2);
+    h.calls(2);
+    let m = h.snap().mixer;
+    assert_eq!((m.pcf_id, m.more[2][0]), (3, 0));
+    h.drag("mixer3.pcf", -400.0);
+    h.take_log();
     // the master: the fader is id 0, its Comp switch the compressor id 1
     h.drag("master.fader", 10.0);
     let v = orb_ui::behavior::fader_send(h.app.panel.fader("master.fader"));

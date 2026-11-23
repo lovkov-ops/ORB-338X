@@ -271,6 +271,12 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
             orb_engine::frame::WET + 3 * c as u8 + k as u8,
         ));
     }
+    // and the PCF and the COMP also on more channels
+    if let Some((c, k)) = crate::model::more_of(id) {
+        return Some(MixerTarget::Global(
+            orb_engine::frame::MORE + 2 * c as u8 + k as u8,
+        ));
+    }
     let (sec, name) = id.split_once('.')?;
     let c = sec
         .strip_prefix("mixer")?
@@ -1230,6 +1236,9 @@ impl Link {
         for (c, w) in m.wet.iter().enumerate() {
             for (k, name) in ["dist", "pcf", "comp"].into_iter().enumerate() {
                 panel.adopt(&format!("mixer{}.{name}_wet", c + 1), w[k] as i32);
+            }
+            for (k, name) in ["pcf", "comp"].into_iter().enumerate() {
+                panel.adopt(&format!("mixer{}.{name}_more", c + 1), m.more[c][k] as i32);
             }
         }
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);

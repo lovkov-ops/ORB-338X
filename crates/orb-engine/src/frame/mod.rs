@@ -517,6 +517,10 @@ pub struct MixerParams {
     /// insert), less the channel's sound mixed with it; no song file of the original carries
     /// them.
     pub wet: [[u8; 3]; 4],
+    /// This fork: the PCF (`more[c][0]`) and the compressor (`[1]`) also on channel c, besides
+    /// the channel `pcf_id` and `comp_id` choose ([`MORE`]): non-zero on. Such a channel runs
+    /// its own copy of the insert ([`voices::InsertCopy`]), with the song's insert's settings.
+    pub more: [[u8; 2]; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -524,11 +528,14 @@ pub struct MixerParams {
 pub const WET: u8 = 66;
 /// The wet amount that is the original's insert (only the effect is heard).
 pub const WET_FULL: u8 = 127;
+/// This fork: the mixer's controller of the PCF (k 0) or the compressor (k 1) also on channel
+/// c ([`MixerParams::more`]): `MORE + 2c + k`, 0 off, else on.
+pub const MORE: u8 = WET + 12;
 
 /// This fork: whether `ctrl` is one of this fork's mixer controllers ([`LIMIT`],
-/// [`LIMIT_AMT`], [`WET`]..).
+/// [`LIMIT_AMT`], [`WET`].., [`MORE`]..).
 pub fn is_fork_mixer(ctrl: u8) -> bool {
-    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..WET + 12).contains(&ctrl)
+    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..MORE + 8).contains(&ctrl)
 }
 
 impl MixerParams {
@@ -537,6 +544,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= MORE && is_fork_mixer(ctrl) => {
+                let x = (ctrl - MORE) as usize;
+                Some(self.more[x / 2][x % 2])
+            }
             _ if is_fork_mixer(ctrl) => {
                 let x = (ctrl - WET) as usize;
                 Some(self.wet[x / 3][x % 3])
@@ -550,6 +561,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= MORE && is_fork_mixer(ctrl) => {
+                let x = (ctrl - MORE) as usize;
+                self.more[x / 2][x % 2] = value;
+            }
             _ if is_fork_mixer(ctrl) => {
                 let x = (ctrl - WET) as usize;
                 self.wet[x / 3][x % 3] = value.min(WET_FULL);
@@ -563,6 +578,7 @@ impl MixerParams {
         self.limit = from.limit;
         self.limit_amt = from.limit_amt;
         self.wet = from.wet;
+        self.more = from.more;
     }
 }
 
@@ -584,6 +600,7 @@ impl Default for MixerParams {
             limit: 0,
             limit_amt: 0,
             wet: [[WET_FULL; 3]; 4],
+            more: [[0; 2]; 4],
         }
     }
 }
@@ -604,6 +621,7 @@ impl From<&song::Mixer> for MixerParams {
             limit: 0,
             limit_amt: 0,
             wet: [[WET_FULL; 3]; 4],
+            more: [[0; 2]; 4],
         }
     }
 }
@@ -620,6 +638,7 @@ impl MixerParams {
             limit: 0,
             limit_amt: 0,
             wet: [[WET_FULL; 3]; 4],
+            more: [[0; 2]; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -789,6 +808,10 @@ pub struct Routing {
     pub pcf: bool,
     /// `+0xCC`.
     pub comp: bool,
+    /// This fork: the PCF and the compressor on this channel too, each its own copy
+    /// ([`MixerParams::more`]; not when the original's id chooses the channel).
+    pub pcf_copy: bool,
+    pub comp_copy: bool,
 }
 
 /// One mixer channel's state: the 44-byte block at `song+0xA4 + 44c`.
@@ -929,6 +952,9 @@ pub struct Frame {
     pub voice_mix: [voices::VoiceMix; 2],
     /// The inserts the drum machines' right wet buses go through, made when first needed.
     right: Option<Box<voices::RightInserts>>,
+    /// This fork: each channel's own copies of the PCF and the compressor ([`Routing::pcf_copy`],
+    /// [`Routing::comp_copy`]).
+    copies: [[Option<Box<voices::InsertCopy>>; 2]; 4],
     /// This fork's master LIMIT in place of the master COMP ([`set_fork_master_limit`] at the
     /// frame's making): a song's master COMP (`comp_id` 1) is not heard.
     pub master_limit: bool,
@@ -987,6 +1013,7 @@ impl Frame {
             shared_modes: FORK_SHARED_MODES.load(Ordering::Relaxed),
             voice_mix: [voices::VoiceMix::default(); 2],
             right: None,
+            copies: Default::default(),
             master_limit: FORK_MASTER_LIMIT.load(Ordering::Relaxed),
             limiter: crate::limiter::Limiter::default(),
         }
@@ -1027,10 +1054,13 @@ impl Frame {
             let m = t[lev] as f64 * ch.peak as f64;
             ch.meter = meter_byte(m, m > METER_FULL as f64);
             ch.peak = st(ch.peak as f64 * METER_DECAY as f64);
+            let (pcf, comp) = (p.pcf_id as usize == c + 1, p.comp_id as usize == c + 2);
             ch.routing = Routing {
                 dist: cp.dist != 0,
-                pcf: p.pcf_id as usize == c + 1,
-                comp: p.comp_id as usize == c + 2,
+                pcf,
+                comp,
+                pcf_copy: !pcf && p.more[c][0] != 0,
+                comp_copy: !comp && p.more[c][1] != 0,
             };
         }
         // 0x100130A4: slot 16 of every insert, in list order (`song+0x1EC`: dist, PCF, comp)
@@ -1039,6 +1069,28 @@ impl Frame {
         self.devices.comp.update(&ctx);
         if let Some(r) = &mut self.right {
             r.update(&ctx);
+        }
+        // this fork: the channels' own copies of the PCF and the compressor, made from the
+        // song's insert when a channel takes it (so a copy starts where the song's insert is),
+        // dropped when it leaves
+        for (c, copies) in self.copies.iter_mut().enumerate() {
+            let r = self.state.channels[c].routing;
+            let src = [&self.devices.pcf, &self.devices.comp];
+            for (k, want) in [r.pcf_copy, r.comp_copy].into_iter().enumerate() {
+                let slot = &mut copies[k];
+                if !want {
+                    *slot = None;
+                    continue;
+                }
+                match slot {
+                    // a new copy is the song's insert as this update left it
+                    None => *slot = voices::InsertCopy::new(&**src[k]).map(Box::new),
+                    Some(cp) => {
+                        cp.follow(&**src[k]);
+                        cp.ins.update(&ctx);
+                    }
+                }
+            }
         }
         // 0x100130D7: 2 * T[master] + 1e-6
         self.state.master_target =
@@ -1119,15 +1171,26 @@ impl Frame {
                     .get_or_insert_with(|| Box::new(voices::RightInserts::new(&self.devices)));
                 right.follow(&self.devices);
             }
-            // this fork: how much of each insert is heard (the original's: all of it)
+            // this fork: how much of each insert is heard (the original's: all of it), and the
+            // channel's own copies of the PCF and the compressor
             let wet = self.devices.mixer.live.wet[c];
+            let [pcf_copy, comp_copy] = &mut self.copies[c];
+            let rt = ch.routing;
             let inserts = [
-                (ch.routing.dist, &mut self.devices.dist),
-                (ch.routing.pcf, &mut self.devices.pcf),
-                (ch.routing.comp, &mut self.devices.comp),
+                pick(rt.dist, &mut self.devices.dist, None),
+                pick(
+                    rt.pcf,
+                    &mut self.devices.pcf,
+                    copy_of(rt.pcf_copy, pcf_copy),
+                ),
+                pick(
+                    rt.comp,
+                    &mut self.devices.comp,
+                    copy_of(rt.comp_copy, comp_copy),
+                ),
             ];
-            for (k, (routed, ins)) in inserts.into_iter().enumerate() {
-                if routed {
+            for (k, routed) in inserts.into_iter().enumerate() {
+                if let Some((ins, song)) = routed {
                     ctx.stack_word = self.stack_word;
                     let b = if split_now {
                         &mut split.wet_l
@@ -1136,13 +1199,19 @@ impl Frame {
                     };
                     let dry = (wet[k] < WET_FULL).then_some(*b);
                     ins.process(b, &ctx);
-                    if let Some(f) = ins.faulted() {
+                    // a copy's faults are dropped (the original has no such call), and it
+                    // leaves the stack word as it is
+                    if let Some(f) = ins.faulted()
+                        && song
+                    {
                         return Err(f);
                     }
                     if let Some(dry) = &dry {
                         mix_wet(b, dry, wet[k]);
                     }
-                    self.stack_word = ins.stack_word(self.stack_word);
+                    if song {
+                        self.stack_word = ins.stack_word(self.stack_word);
+                    }
                     if split_now && let Some(right) = &mut self.right {
                         let dry = (wet[k] < WET_FULL).then_some(split.wet_r);
                         right.process(k, &mut split.wet_r, &ctx);
@@ -1288,6 +1357,28 @@ pub fn set_fork_shared_modes(on: bool) {
 
 /// The live value of device `d`'s controller `ctrl` (the controller number its track uses), if
 /// the device has one.
+/// This fork: the insert a channel runs in a place: the song's `ins` when the original's
+/// routing has it there (`song`, true in the result), else the channel's own copy, if any.
+fn pick<'a>(
+    song: bool,
+    ins: &'a mut Box<dyn InsertEffect>,
+    copy: Option<&'a mut Box<dyn InsertEffect>>,
+) -> Option<(&'a mut Box<dyn InsertEffect>, bool)> {
+    match (song, copy) {
+        (true, _) => Some((ins, true)),
+        (false, Some(cp)) => Some((cp, false)),
+        (false, None) => None,
+    }
+}
+
+/// This fork: a channel's own copy of an insert when the routing has it (`on`).
+fn copy_of(
+    on: bool,
+    c: &mut Option<Box<voices::InsertCopy>>,
+) -> Option<&mut Box<dyn InsertEffect>> {
+    c.as_mut().filter(|_| on).map(|c| &mut c.ins)
+}
+
 /// This fork: an insert's output `wet` (in place) mixed with its input `dry`, `amount` of 127
 /// the insert's ([`MixerParams::wet`]).
 fn mix_wet(wet: &mut Block, dry: &Block, amount: u8) {
@@ -1796,5 +1887,7 @@ impl Engine {
         s.send = [GUARD; BLOCK];
         self.output.leftover = [[0.0; BLOCK]; 2];
         self.frame.devices.reset_all();
+        // this fork: the channels' copies of the inserts start anew from the reset ones
+        self.frame.copies = Default::default();
     }
 }

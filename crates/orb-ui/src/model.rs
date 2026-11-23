@@ -283,6 +283,10 @@ pub struct Panel {
     /// The global PCF and Comp routing ids: 0 none, PCF `c + 1`, Comp `c + 2` (master 1).
     pub pcf_id: u8,
     pub comp_id: u8,
+    /// This fork: the PCF (`[c][0]`) and the COMP (`[1]`) also on channel c, besides the
+    /// channel `pcf_id` and `comp_id` choose (the mixer's `MORE` controllers, `mixerN.pcf_more`
+    /// and `.comp_more`).
+    pub more: [[bool; 2]; 4],
     /// Meter states 0..=10 by control id (mixer, master, effect input); engine-fed.
     pub meters: HashMap<String, u8>,
     /// The compressor's nine gain-reduction LEDs: 0 off, 1 green, 2 amber, 3 red.
@@ -328,6 +332,13 @@ pub fn mixer_insert(id: &str) -> Option<(usize, &str)> {
     matches!(name, "dist" | "pcf" | "comp").then_some((c, name))
 }
 
+/// This fork: the channel (0..4) and the effect (0 PCF, 1 COMP) of a `mixerN.pcf_more` or
+/// `.comp_more` id.
+pub fn more_of(id: &str) -> Option<(usize, usize)> {
+    let (c, name) = mixer_insert(id.strip_suffix("_more")?)?;
+    Some((c, ["pcf", "comp"].iter().position(|&n| n == name)?))
+}
+
 fn index_of(section: &str, prefix: &str) -> Option<usize> {
     section
         .strip_prefix(prefix)?
@@ -352,6 +363,7 @@ impl Panel {
             playing_step303: [None; 2],
             pcf_id: 0,
             comp_id: 0,
+            more: [[false; 2]; 4],
             meters: HashMap::new(),
             gr_leds: [0; 9],
             vintage: false,
@@ -632,40 +644,63 @@ impl Panel {
     }
 
     /// A mixer channel's DIST, PCF or COMP knob turned on or off (this fork): DIST sends the
-    /// original's key, PCF and COMP choose the channel the effect is on (one at a time: the
-    /// other channels' knobs go back to 0).
+    /// original's key. PCF and COMP: the first channel to take one is the one the original's id
+    /// chooses (`pcf_id`, `comp_id`, what an `.rbs` keeps); more channels take it too, each with
+    /// its own copy (`more`). When the id's channel lets go, the lowest other channel becomes it.
     fn insert_on(&mut self, c: usize, name: &str, on: bool) {
-        let (id, me, now) = match name {
+        let n = c + 1;
+        let (k, base) = match name {
             "dist" => {
-                self.set_event(&format!("mixer{}.dist", c + 1), on as i32);
+                self.set_event(&format!("mixer{n}.dist"), on as i32);
                 return;
             }
-            "pcf" => ("mixer.pcf_id", c as u8 + 1, self.pcf_id),
-            _ => ("mixer.comp_id", c as u8 + 2, self.comp_id),
+            "pcf" => (0, 1),
+            _ => (1, 2),
         };
-        let new = match (on, now == me) {
-            (true, _) => me,
-            (false, true) => 0,
-            (false, false) => now,
+        // the channel the id chooses, if any (the COMP's 1 is the master's, no channel's)
+        let id_ch = |p: &Panel| {
+            let v = if k == 0 { p.pcf_id } else { p.comp_id } as usize;
+            v.checked_sub(base).filter(|&x| x < 4)
         };
-        if new != now {
-            if name == "pcf" {
-                self.pcf_id = new;
+        let set_id = |p: &mut Panel, ch: Option<usize>| {
+            let v = ch.map_or(0, |x| (x + base) as u8);
+            if k == 0 {
+                p.pcf_id = v;
+                p.set_event("mixer.pcf_id", v as i32);
             } else {
-                self.comp_id = new;
+                p.comp_id = v;
+                p.set_event("mixer.comp_id", v as i32);
             }
-            self.set_event(id, new as i32);
+        };
+        let set_more = |p: &mut Panel, ch: usize, v: bool| {
+            if p.more[ch][k] != v {
+                p.more[ch][k] = v;
+                p.set_event(&format!("mixer{}.{name}_more", ch + 1), v as i32);
+            }
+        };
+        match (on, id_ch(self)) {
+            (true, None) => set_id(self, Some(c)),
+            (true, Some(x)) if x != c => set_more(self, c, true),
+            (true, Some(_)) => {}
+            (false, Some(x)) if x == c => {
+                let next = (0..4).find(|&j| self.more[j][k]);
+                if let Some(j) = next {
+                    set_more(self, j, false);
+                }
+                set_id(self, next);
+            }
+            (false, _) => set_more(self, c, false),
         }
         self.sync_insert_knobs();
     }
 
-    /// The mixer's PCF and COMP knobs as `pcf_id` and `comp_id` choose: the chosen channel's
-    /// knob on (at the top if it was at 0), the others at 0.
+    /// The mixer's PCF and COMP knobs as `pcf_id`, `comp_id` and `more` have them: a channel
+    /// that has the effect on (its knob at the top if it was at 0), the others at 0.
     fn sync_insert_knobs(&mut self) {
         for c in 0..4 {
             for (name, chosen) in [
-                ("pcf", self.pcf_id as usize == c + 1),
-                ("comp", self.comp_id as usize == c + 2),
+                ("pcf", self.pcf_id as usize == c + 1 || self.more[c][0]),
+                ("comp", self.comp_id as usize == c + 2 || self.more[c][1]),
             ] {
                 let id = format!("mixer{}.{name}", c + 1);
                 if !self.knobs.contains_key(&id) {
@@ -785,6 +820,9 @@ impl Panel {
             *s = v as u8;
         } else if let Some(n) = self.numbers.get_mut(id) {
             *n = v;
+        } else if let Some((c, k)) = more_of(id) {
+            self.more[c][k] = v != 0;
+            self.sync_insert_knobs();
         } else if id == "mixer.pcf_id" {
             self.pcf_id = v as u8;
             self.sync_insert_knobs();
@@ -1785,26 +1823,41 @@ mod tests {
     }
 
     #[test]
-    fn mixer_pcf_and_comp_are_exclusive() {
-        // this fork: knobs, on above 0; one channel at a time, the others' back at 0
+    fn mixer_pcf_and_comp_take_more_channels() {
+        // this fork: knobs, on above 0; the first channel is the original's id, more channels
+        // take it too (MORE)
         let mut p = Panel::new();
         p.set_knob("mixer2.pcf", 300);
         assert_eq!(p.pcf_id, 2);
+        p.events.clear();
         p.set_knob("mixer3.pcf", 500);
+        assert_eq!(p.pcf_id, 2);
+        assert!(p.more[2][0] && p.knob_on("mixer2.pcf") && p.knob_on("mixer3.pcf"));
+        assert!(p.events.contains(&Event::Set {
+            id: "mixer3.pcf_more".into(),
+            value: 1
+        }));
+        // the id's channel lets go: the other channel becomes the id's
+        p.set_knob("mixer2.pcf", 0);
         assert_eq!(p.pcf_id, 3);
-        assert!(!p.knob_on("mixer2.pcf") && p.knob_on("mixer3.pcf"));
+        assert!(!p.more[2][0] && !p.knob_on("mixer2.pcf") && p.knob_on("mixer3.pcf"));
         p.set_knob("mixer3.pcf", 0);
         assert_eq!(p.pcf_id, 0);
         p.set_knob("mixer1.comp", 200);
         assert_eq!(p.comp_id, 2);
         p.set_knob("mixer2.comp", 200);
-        assert_eq!(p.comp_id, 3);
-        assert!(!p.knob_on("mixer1.comp") && p.knob_on("mixer2.comp"));
-        // the engine's choice turns the knobs: the chosen one up from 0, the others to 0
+        assert_eq!(p.comp_id, 2);
+        assert!(p.more[1][1] && p.knob_on("mixer1.comp") && p.knob_on("mixer2.comp"));
+        // a more channel lets go: only its flag
+        p.set_knob("mixer2.comp", 0);
+        assert_eq!(p.comp_id, 2);
+        assert!(!p.more[1][1] && !p.knob_on("mixer2.comp"));
+        // the engine's choice turns the knobs: the chosen ones up from 0, the others to 0
         p.adopt("mixer.pcf_id", 4);
-        assert!(p.knob_on("mixer4.pcf") && !p.knob_on("mixer3.pcf"));
+        p.adopt("mixer1.pcf_more", 1);
+        assert!(p.knob_on("mixer4.pcf") && p.knob_on("mixer1.pcf") && !p.knob_on("mixer3.pcf"));
         p.adopt("mixer.comp_id", 0);
-        assert!(!p.knob_on("mixer2.comp"));
+        assert!(!p.knob_on("mixer1.comp"));
         // the master's LIMIT key (this fork) leaves the channels' COMP as it is
         p.set_knob("mixer2.comp", 200);
         p.events.clear();
