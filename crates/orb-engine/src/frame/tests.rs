@@ -1305,6 +1305,97 @@ fn the_303s_sub_is_recorded_with_its_start_value() {
 }
 
 #[test]
+fn the_master_limit_is_recorded_with_its_start_value() {
+    use song::Device as D;
+    let mut e = edit_engine();
+    let amt_events = |e: &Engine| -> Vec<(i32, u8)> {
+        e.frame
+            .seq
+            .events(D::Mixer.id() as usize)
+            .iter()
+            .filter(|x| x.ctrl == LIMIT_AMT)
+            .map(|x| (x.tick, x.value))
+            .collect()
+    };
+    // pattern mode: the key and the knob change, nothing is recorded
+    e.mixer_global(LIMIT, 1);
+    e.mixer_global(LIMIT_AMT, 30);
+    let m = &e.frame.devices.mixer;
+    assert_eq!((m.live.limit, m.live.limit_amt), (1, 30));
+    assert_eq!(m.fork_param(LIMIT_AMT), Some(30));
+    assert!(amt_events(&e).is_empty());
+    // recording in song mode: the value so far becomes the start value
+    e.set_song_mode(1);
+    e.locate(1000);
+    e.set_record(1);
+    e.mixer_global(LIMIT_AMT, 100);
+    e.set_record(0);
+    assert_eq!(amt_events(&e), [(0, 30), (984, 100), (1008, 30)]);
+    // a locate before the move chases the start value; the key was never recorded
+    e.locate(0);
+    assert_eq!(e.frame.devices.mixer.live.limit_amt, 30);
+    let i = D::Mixer.id() as usize;
+    assert!(e.frame.seq.events(i).iter().all(|x| x.ctrl != LIMIT));
+    // an .rbsx's value and moves (`fork_track`): live, the pattern copy and the track
+    let mut f = edit_engine();
+    f.fork_track(D::Mixer, LIMIT_AMT, 90, &[(0, 90), (984, 20)]);
+    f.fork_track(D::Mixer, LIMIT, 1, &[]);
+    let m = &f.frame.devices.mixer;
+    assert_eq!((m.live.limit, m.live.limit_amt), (1, 90));
+    assert_eq!((m.pattern.limit, m.pattern.limit_amt), (1, 90));
+    assert_eq!(amt_events(&f), [(0, 90), (984, 20)]);
+    // a controller the device does not have: nothing
+    f.fork_track(D::Tr808, LIMIT, 1, &[(0, 1)]);
+    assert!(
+        f.frame
+            .seq
+            .events(D::Tr808.id() as usize)
+            .iter()
+            .all(|x| x.ctrl != LIMIT)
+    );
+}
+
+#[test]
+fn the_limiter_caps_the_master_and_off_leaves_it() {
+    let loud = |limit: u8| {
+        let mut e = loud_engine();
+        e.frame.devices.mixer.live.master = 127;
+        e.frame.devices.mixer.live.limit = limit;
+        e.frame.devices.mixer.live.limit_amt = 127;
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        buf[2 * 64 * 20..]
+            .iter()
+            .fold(0i32, |m, &x| m.max((x as i32).abs()))
+    };
+    let ceiling = (crate::limiter::CEILING * 32768.0) as i32;
+    // AMT 127 drives the master 12 dB up, into the ceiling
+    let off = loud(0);
+    assert!(off * 3 > ceiling && off < ceiling, "{off}");
+    let on = loud(1);
+    assert!(on <= ceiling + 1 && on > ceiling - 400, "{on}");
+    // off, the master is the original's, bit for bit
+    let mut a = loud_engine();
+    let mut b = loud_engine();
+    b.frame.devices.mixer.live.limit_amt = 127;
+    let (mut x, mut y) = (vec![0i16; 2 * 6400], vec![0i16; 2 * 6400]);
+    a.render(&mut x, 6400);
+    b.render(&mut y, 6400);
+    assert_eq!(x, y);
+}
+
+#[test]
+fn the_master_comp_gives_way_to_the_limit_key() {
+    let mut e = loud_engine();
+    e.frame.devices.mixer.live.comp_id = 1;
+    e.frame.mixer_update();
+    assert!(e.frame.state.master_comp);
+    e.frame.master_limit = true;
+    e.frame.mixer_update();
+    assert!(!e.frame.state.master_comp);
+}
+
+#[test]
 fn songs_built_on_one_process_state_share_it() {
     let a = Devices::implemented(None);
     let b = Devices::implemented_with(None, a.process.clone());

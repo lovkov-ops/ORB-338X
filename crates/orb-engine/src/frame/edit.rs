@@ -91,23 +91,24 @@ pub fn hooks(d: Device, ctrl: u8) -> bool {
 }
 
 impl Engine {
-    /// This fork: before the first recorded move of a 303's sub-oscillator, its level so far
-    /// becomes the track's start value (a tick-0 event, as every original controller has from
-    /// the song ctor), so the song plays it up to the move and a locate before it chases back.
-    /// A song that never records the sub has no such event.
-    fn sub_start(&mut self, d: Device) {
+    /// This fork: before the first recorded move of a controller this fork adds (the 303's
+    /// sub-oscillator, the master's limiter), its value so far becomes the track's start value
+    /// (a tick-0 event, as every original controller has from the song ctor), so the song plays
+    /// it up to the move and a locate before it chases back. A song that never records it has
+    /// no such event.
+    fn fork_start(&mut self, d: Device, ctrl: u8) {
         let f = &mut self.frame;
         if f.seq.globals.song_mode == 0 || f.seq.globals.byte2 == 0 {
             return;
         }
         let i = d.id() as usize;
-        if f.seq.events(i).iter().any(|e| e.ctrl == crate::tb303::SUB) {
+        if f.seq.events(i).iter().any(|e| e.ctrl == ctrl) {
             return;
         }
-        let Some(v) = super::live_value(&mut f.devices, d, crate::tb303::SUB) else {
+        let Some(v) = super::live_value(&mut f.devices, d, ctrl) else {
             return;
         };
-        if f.seq.track_mut(i).insert(0, crate::tb303::SUB, v) {
+        if f.seq.track_mut(i).insert(0, ctrl, v) {
             f.seq.revision += 1;
         }
     }
@@ -144,7 +145,7 @@ impl Engine {
     /// no such message (its are [`Engine::mixer_global`] and [`Engine::mixer_channel`]).
     pub fn device_param(&mut self, d: Device, ctrl: u8, value: u8) {
         if matches!(d, Device::Tb303_1 | Device::Tb303_2) && ctrl == crate::tb303::SUB {
-            self.sub_start(d);
+            self.fork_start(d, crate::tb303::SUB);
         }
         if d != Device::Mixer {
             self.frame.devices.device_mut(d).param_message(ctrl, value);
@@ -158,16 +159,26 @@ impl Engine {
     /// (its `.rbsx` part): the level, live and in the pattern-mode copy, and the track events
     /// `(tick, level)` song mode plays. Other devices: nothing.
     pub fn sub(&mut self, d: Device, level: u8, events: &[(i32, u8)]) {
-        if !matches!(d, Device::Tb303_1 | Device::Tb303_2) {
+        if matches!(d, Device::Tb303_1 | Device::Tb303_2) {
+            self.fork_track(d, crate::tb303::SUB, level, events);
+        }
+    }
+
+    /// This fork (not a message of the original): a controller this fork adds to device `d`
+    /// (the 303's [`crate::tb303::SUB`], the mixer's [`super::LIMIT`] and
+    /// [`super::LIMIT_AMT`]) as a song keeps it (its `.rbsx` part): the value, live and in the
+    /// pattern-mode copy, and the track events `(tick, value)` song mode plays. A controller
+    /// the device does not have: nothing.
+    pub fn fork_track(&mut self, d: Device, ctrl: u8, value: u8, events: &[(i32, u8)]) {
+        let f = &mut self.frame;
+        let dev = f.devices.device_mut(d);
+        if dev.fork_param(ctrl).is_none() {
             return;
         }
-        let f = &mut self.frame;
-        f.devices.device_mut(d).fork_set(crate::tb303::SUB, level);
+        dev.fork_set(ctrl, value);
         let i = d.id() as usize;
         for &(tick, v) in events {
-            f.seq
-                .track_mut(i)
-                .insert(tick.max(0), crate::tb303::SUB, v.min(127));
+            f.seq.track_mut(i).insert(tick.max(0), ctrl, v.min(127));
         }
         if !events.is_empty() {
             f.seq.revision += 1;
@@ -187,12 +198,16 @@ impl Engine {
     /// Mixer msg 145 `{id, v}` (0x10015900, sender `sub_4131BC`): id 0 the live master
     /// (0x1001592C, no record hook), 1 the compressor id and 2 the PCF id (0x10015947,
     /// 0x10015989: slot 11's controllers 1 and 2, then the record hook with that controller,
-    /// 0x1001596C, 0x100159AE), 3 and 4 nothing.
+    /// 0x1001596C, 0x100159AE), 3 and 4 nothing. This fork: [`super::LIMIT`] and
+    /// [`super::LIMIT_AMT`], the master's limiter, as 1 and 2 (song mode records them).
     pub fn mixer_global(&mut self, id: u8, value: u8) {
+        if matches!(id, super::LIMIT | super::LIMIT_AMT) {
+            self.fork_start(Device::Mixer, id);
+        }
         let m = &mut self.frame.devices.mixer;
         match id {
             0 => m.set_master(value),
-            1 | 2 => {
+            1 | 2 | super::LIMIT | super::LIMIT_AMT => {
                 super::SongDevice::set_param(m, id, value);
                 self.record_hook(Device::Mixer, id, value);
             }

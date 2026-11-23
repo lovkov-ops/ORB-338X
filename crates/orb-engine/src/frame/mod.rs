@@ -508,7 +508,17 @@ pub struct MixerParams {
     /// 0 off, 1..4 channel 0..3.
     pub pcf_id: u8,
     pub channels: [ChannelParams; 4],
+    /// This fork: the master's limiter, on (non-zero) or off ([`LIMIT`]), and its AMT
+    /// ([`LIMIT_AMT`]); no song file of the original carries them.
+    pub limit: u8,
+    pub limit_amt: u8,
 }
+
+/// This fork: the mixer's controller of the master's LIMIT key (0 off, else on) and of its AMT
+/// knob (0..=127, [`crate::limiter`]). Not controllers of the original (its mixer has 1, 2 and
+/// `6..9 + 6c`), so `.rbs` songs never carry them; the app keeps them in `.rbsx` songs.
+pub const LIMIT: u8 = 64;
+pub const LIMIT_AMT: u8 = 65;
 
 impl Default for MixerParams {
     /// The mixer device ctor's values (`sub_10015400` → `sub_10019CC0`: master 100, comp and PCF
@@ -519,6 +529,8 @@ impl Default for MixerParams {
             comp_id: 0,
             pcf_id: 0,
             channels: [ChannelParams::default(); 4],
+            limit: 0,
+            limit_amt: 0,
         }
     }
 }
@@ -536,6 +548,8 @@ impl From<&song::Mixer> for MixerParams {
                 send: c.delay_send,
                 dist: c.dist,
             }),
+            limit: 0,
+            limit_amt: 0,
         }
     }
 }
@@ -549,6 +563,8 @@ impl MixerParams {
             comp_id: b[1],
             pcf_id: b[2],
             channels: [ChannelParams::default(); 4],
+            limit: 0,
+            limit_amt: 0,
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -609,15 +625,24 @@ impl SongDevice for MixerDevice {
 
     /// Msg 143, 0x1001588F: the block goes into the pattern copy; then song mode copies only the
     /// master and the channel enables live (no controller reaches them), pattern mode all of it.
+    /// This fork: the limiter's controllers are not in the block; they keep their values.
     fn data(&mut self, payload: &[u8], song_mode: bool) {
-        self.pattern = MixerParams::from_payload(payload);
+        let keep = |p: &mut MixerParams, from: &MixerParams| {
+            p.limit = from.limit;
+            p.limit_amt = from.limit_amt;
+        };
+        let mut pattern = MixerParams::from_payload(payload);
+        keep(&mut pattern, &self.pattern);
+        self.pattern = pattern;
         if song_mode {
             self.live.master = self.pattern.master;
             for c in 0..4 {
                 self.live.channels[c].enabled = self.pattern.channels[c].enabled;
             }
         } else {
+            let live = self.live;
             self.live = self.pattern;
+            keep(&mut self.live, &live);
         }
     }
 
@@ -644,10 +669,13 @@ impl SongDevice for MixerDevice {
     /// controllers below 5 are not set. The exe accepts only 1, 2 and `6..9 + 6c` (c = 0..3) on
     /// track 0 at load (`sub_42F8F0`, `docs/song_load.md` section 5; `load::control_range`), so
     /// c is at most 3 (a larger c would write past the channel blocks in the original).
+    /// This fork: [`LIMIT`] and [`LIMIT_AMT`] set the master's limiter.
     fn set_param(&mut self, ctrl: u8, value: u8) {
         match ctrl {
             1 => self.live.comp_id = value,
             2 => self.live.pcf_id = value,
+            LIMIT => self.live.limit = value,
+            LIMIT_AMT => self.live.limit_amt = value.min(127),
             _ => {
                 let x = ctrl as i32 - 5;
                 let (c, k) = ((x / 6) as u8 as usize, (x % 6) as u8);
@@ -667,6 +695,30 @@ impl SongDevice for MixerDevice {
     /// The mixer has no `{ctrl, v}` message: its live messages are 145 and 147
     /// ([`Engine::mixer_global`], [`Engine::mixer_channel`]).
     fn param_message(&mut self, _ctrl: u8, _value: u8) {}
+
+    fn fork_param(&self, ctrl: u8) -> Option<u8> {
+        match ctrl {
+            LIMIT => Some(self.live.limit),
+            LIMIT_AMT => Some(self.live.limit_amt),
+            _ => None,
+        }
+    }
+
+    fn fork_pattern_param(&self, ctrl: u8) -> Option<u8> {
+        match ctrl {
+            LIMIT => Some(self.pattern.limit),
+            LIMIT_AMT => Some(self.pattern.limit_amt),
+            _ => None,
+        }
+    }
+
+    fn fork_set(&mut self, ctrl: u8, value: u8) {
+        if matches!(ctrl, LIMIT | LIMIT_AMT) {
+            self.set_param(ctrl, value);
+            self.pattern.limit = self.live.limit;
+            self.pattern.limit_amt = self.live.limit_amt;
+        }
+    }
 }
 
 impl MixerDevice {
@@ -835,6 +887,12 @@ pub struct Frame {
     pub voice_mix: [voices::VoiceMix; 2],
     /// The inserts the drum machines' right wet buses go through, made when first needed.
     right: Option<Box<voices::RightInserts>>,
+    /// This fork's master LIMIT in place of the master COMP ([`set_fork_master_limit`] at the
+    /// frame's making): a song's master COMP (`comp_id` 1) is not heard.
+    pub master_limit: bool,
+    /// This fork: the master's limiter ([`crate::limiter`]), run when the mixer's [`LIMIT`] is
+    /// on (off: the master is the original's).
+    pub limiter: crate::limiter::Limiter,
 }
 
 /// `unk_100F012C`: the right channel's float output of a render call (0x10013A3A), at the
@@ -887,6 +945,8 @@ impl Frame {
             shared_modes: FORK_SHARED_MODES.load(Ordering::Relaxed),
             voice_mix: [voices::VoiceMix::default(); 2],
             right: None,
+            master_limit: FORK_MASTER_LIMIT.load(Ordering::Relaxed),
+            limiter: crate::limiter::Limiter::default(),
         }
     }
 
@@ -941,7 +1001,8 @@ impl Frame {
         // 0x100130D7: 2 * T[master] + 1e-6
         self.state.master_target =
             st(MASTER_SCALE as f64 * t[p.master as usize] as f64 + OFFSET as f64);
-        self.state.master_comp = p.comp_id == 1;
+        // this fork: with the master's LIMIT the master COMP is not heard
+        self.state.master_comp = p.comp_id == 1 && !self.master_limit;
         // 0x10013189..0x100131FD: the master meters (an integer compare of the float bits)
         for k in 0..2 {
             let pk = self.state.master_peak[k];
@@ -1119,6 +1180,9 @@ impl Frame {
         for x in l.iter_mut().chain(r.iter_mut()) {
             *x = st(*x as f64 * m);
         }
+        // this fork: the master's limiter (it leaves the master as it is while off)
+        let live = &self.devices.mixer.live;
+        self.limiter.process(l, r, live.limit != 0, live.limit_amt);
         // 0x10013960: the master peak meters
         for (k, buf) in [&*l, &*r].into_iter().enumerate() {
             let v = abs_bits(buf[mi]);
@@ -1146,6 +1210,17 @@ pub fn set_fork_drum_gain(on: bool) {
     FORK_DRUM_GAIN.store(on, Ordering::Relaxed);
 }
 
+static FORK_MASTER_LIMIT: AtomicBool = AtomicBool::new(false);
+
+/// Turns this fork's master LIMIT in place of the master COMP on or off for the engines made
+/// from now on. Off by default, so a song's master COMP (`comp_id` 1) is heard as in the
+/// original (the reference tests); the app and the `orb` tool turn it on at their start, where
+/// the panel has a LIMIT key and no master COMP key. The limiter itself is off until the
+/// mixer's [`LIMIT`] turns it on, with this switch or without.
+pub fn set_fork_master_limit(on: bool) {
+    FORK_MASTER_LIMIT.store(on, Ordering::Relaxed);
+}
+
 static FORK_SHARED_MODES: AtomicBool = AtomicBool::new(false);
 
 /// Turns this fork's one set of settings for pattern and song mode on or off for the engines
@@ -1168,6 +1243,8 @@ fn live_value(devices: &mut Devices, d: song::Device, ctrl: u8) -> Option<u8> {
             match ctrl {
                 1 => Some(m.comp_id),
                 2 => Some(m.pcf_id),
+                LIMIT => Some(m.limit),
+                LIMIT_AMT => Some(m.limit_amt),
                 5..=28 => {
                     let p = &m.channels[((ctrl - 5) / 6) as usize];
                     match (ctrl - 5) % 6 {

@@ -461,6 +461,20 @@ pub struct Song {
     /// ([`crate::frame::Engine::sub`]), so the app's export plays them.
     pub sub: [u8; 2],
     pub sub_events: [Vec<(i32, u8)>; 2],
+    /// This fork: the other controllers this fork adds (the master's limiter, the mixer's
+    /// [`crate::frame::LIMIT`] and [`crate::frame::LIMIT_AMT`]) as the app keeps them, which
+    /// [`crate::frame::export::export_song`] applies ([`crate::frame::Engine::fork_track`]).
+    pub fork_tracks: Vec<ForkTrack>,
+}
+
+/// This fork: a controller this fork adds to a device, as an `.rbsx` song keeps it: its value
+/// and its track events `(tick, value)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForkTrack {
+    pub device: Device,
+    pub ctrl: u8,
+    pub value: u8,
+    pub events: Vec<(i32, u8)>,
 }
 
 impl Song {

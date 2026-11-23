@@ -469,6 +469,7 @@ pub fn load(song: &rbs::Song) -> Result<Loaded, LoadError> {
         batches: send_plan(&batches, &order),
         sub: [0; 2],
         sub_events: Default::default(),
+        fork_tracks: Vec::new(),
     };
     Ok(Loaded {
         song: out,

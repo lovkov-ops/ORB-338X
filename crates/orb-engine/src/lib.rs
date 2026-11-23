@@ -24,6 +24,7 @@ pub mod delay;
 pub mod dist;
 pub mod drums;
 pub mod frame;
+pub mod limiter;
 pub mod load;
 pub mod pcf;
 pub mod process;

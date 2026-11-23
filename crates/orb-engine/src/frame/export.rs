@@ -141,6 +141,10 @@ pub fn export_song(
             engine.sub(d, song.sub[k], &song.sub_events[k]);
         }
     }
+    // this fork: the master's limiter as the app keeps it
+    for t in &song.fork_tracks {
+        engine.fork_track(t.device, t.ctrl, t.value, &t.events);
+    }
     Ok(export(
         engine,
         ExportRange::from(&song.globals),

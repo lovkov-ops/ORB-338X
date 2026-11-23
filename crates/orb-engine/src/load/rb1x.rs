@@ -366,6 +366,7 @@ pub fn load_1x(song: &Song1x) -> Result<Loaded, LoadError> {
         batches: super::send_plan(&buf.batches, &buf.order),
         sub: [0; 2],
         sub_events: Default::default(),
+        fork_tracks: Vec::new(),
     };
     Ok(Loaded {
         song: out,
