@@ -199,15 +199,17 @@ impl Engine {
     /// (0x1001592C, no record hook), 1 the compressor id and 2 the PCF id (0x10015947,
     /// 0x10015989: slot 11's controllers 1 and 2, then the record hook with that controller,
     /// 0x1001596C, 0x100159AE), 3 and 4 nothing. This fork: [`super::LIMIT`] and
-    /// [`super::LIMIT_AMT`], the master's limiter, as 1 and 2 (song mode records them).
+    /// [`super::LIMIT_AMT`], the master's limiter, and [`super::WET`].., the inserts' wet
+    /// amounts, as 1 and 2 (song mode records them).
     pub fn mixer_global(&mut self, id: u8, value: u8) {
-        if matches!(id, super::LIMIT | super::LIMIT_AMT) {
+        let fork = super::is_fork_mixer(id);
+        if fork {
             self.fork_start(Device::Mixer, id);
         }
         let m = &mut self.frame.devices.mixer;
         match id {
             0 => m.set_master(value),
-            1 | 2 | super::LIMIT | super::LIMIT_AMT => {
+            _ if id == 1 || id == 2 || fork => {
                 super::SongDevice::set_param(m, id, value);
                 self.record_hook(Device::Mixer, id, value);
             }

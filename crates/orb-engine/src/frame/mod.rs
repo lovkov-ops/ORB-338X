@@ -512,6 +512,58 @@ pub struct MixerParams {
     /// ([`LIMIT_AMT`]); no song file of the original carries them.
     pub limit: u8,
     pub limit_amt: u8,
+    /// This fork: how much of each channel's DIST, PCF and COMP is heard when the insert is on
+    /// (`wet[c][k]`, k 0 DIST, 1 PCF, 2 COMP; [`WET`]): 127 only the effect (the original's
+    /// insert), less the channel's sound mixed with it; no song file of the original carries
+    /// them.
+    pub wet: [[u8; 3]; 4],
+}
+
+/// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
+/// [`MixerParams::wet`]): `WET + 3c + k`, c 0..3, k 0 DIST, 1 PCF, 2 COMP.
+pub const WET: u8 = 66;
+/// The wet amount that is the original's insert (only the effect is heard).
+pub const WET_FULL: u8 = 127;
+
+/// This fork: whether `ctrl` is one of this fork's mixer controllers ([`LIMIT`],
+/// [`LIMIT_AMT`], [`WET`]..).
+pub fn is_fork_mixer(ctrl: u8) -> bool {
+    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..WET + 12).contains(&ctrl)
+}
+
+impl MixerParams {
+    /// This fork's controller `ctrl` ([`is_fork_mixer`]).
+    fn fork(&self, ctrl: u8) -> Option<u8> {
+        match ctrl {
+            LIMIT => Some(self.limit),
+            LIMIT_AMT => Some(self.limit_amt),
+            _ if is_fork_mixer(ctrl) => {
+                let x = (ctrl - WET) as usize;
+                Some(self.wet[x / 3][x % 3])
+            }
+            _ => None,
+        }
+    }
+
+    /// Sets this fork's controller `ctrl` ([`is_fork_mixer`]); others: nothing.
+    fn set_fork(&mut self, ctrl: u8, value: u8) {
+        match ctrl {
+            LIMIT => self.limit = value,
+            LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if is_fork_mixer(ctrl) => {
+                let x = (ctrl - WET) as usize;
+                self.wet[x / 3][x % 3] = value.min(WET_FULL);
+            }
+            _ => {}
+        }
+    }
+
+    /// This fork's controllers taken from `from` (a block of the original does not carry them).
+    fn keep_fork(&mut self, from: &MixerParams) {
+        self.limit = from.limit;
+        self.limit_amt = from.limit_amt;
+        self.wet = from.wet;
+    }
 }
 
 /// This fork: the mixer's controller of the master's LIMIT key (0 off, else on) and of its AMT
@@ -531,6 +583,7 @@ impl Default for MixerParams {
             channels: [ChannelParams::default(); 4],
             limit: 0,
             limit_amt: 0,
+            wet: [[WET_FULL; 3]; 4],
         }
     }
 }
@@ -550,6 +603,7 @@ impl From<&song::Mixer> for MixerParams {
             }),
             limit: 0,
             limit_amt: 0,
+            wet: [[WET_FULL; 3]; 4],
         }
     }
 }
@@ -565,6 +619,7 @@ impl MixerParams {
             channels: [ChannelParams::default(); 4],
             limit: 0,
             limit_amt: 0,
+            wet: [[WET_FULL; 3]; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -627,12 +682,8 @@ impl SongDevice for MixerDevice {
     /// master and the channel enables live (no controller reaches them), pattern mode all of it.
     /// This fork: the limiter's controllers are not in the block; they keep their values.
     fn data(&mut self, payload: &[u8], song_mode: bool) {
-        let keep = |p: &mut MixerParams, from: &MixerParams| {
-            p.limit = from.limit;
-            p.limit_amt = from.limit_amt;
-        };
         let mut pattern = MixerParams::from_payload(payload);
-        keep(&mut pattern, &self.pattern);
+        pattern.keep_fork(&self.pattern);
         self.pattern = pattern;
         if song_mode {
             self.live.master = self.pattern.master;
@@ -642,7 +693,7 @@ impl SongDevice for MixerDevice {
         } else {
             let live = self.live;
             self.live = self.pattern;
-            keep(&mut self.live, &live);
+            self.live.keep_fork(&live);
         }
     }
 
@@ -669,13 +720,13 @@ impl SongDevice for MixerDevice {
     /// controllers below 5 are not set. The exe accepts only 1, 2 and `6..9 + 6c` (c = 0..3) on
     /// track 0 at load (`sub_42F8F0`, `docs/song_load.md` section 5; `load::control_range`), so
     /// c is at most 3 (a larger c would write past the channel blocks in the original).
-    /// This fork: [`LIMIT`] and [`LIMIT_AMT`] set the master's limiter.
+    /// This fork: [`LIMIT`] and [`LIMIT_AMT`] set the master's limiter, [`WET`].. the inserts'
+    /// wet amounts.
     fn set_param(&mut self, ctrl: u8, value: u8) {
         match ctrl {
             1 => self.live.comp_id = value,
             2 => self.live.pcf_id = value,
-            LIMIT => self.live.limit = value,
-            LIMIT_AMT => self.live.limit_amt = value.min(127),
+            _ if is_fork_mixer(ctrl) => self.live.set_fork(ctrl, value),
             _ => {
                 let x = ctrl as i32 - 5;
                 let (c, k) = ((x / 6) as u8 as usize, (x % 6) as u8);
@@ -697,27 +748,18 @@ impl SongDevice for MixerDevice {
     fn param_message(&mut self, _ctrl: u8, _value: u8) {}
 
     fn fork_param(&self, ctrl: u8) -> Option<u8> {
-        match ctrl {
-            LIMIT => Some(self.live.limit),
-            LIMIT_AMT => Some(self.live.limit_amt),
-            _ => None,
-        }
+        self.live.fork(ctrl)
     }
 
     fn fork_pattern_param(&self, ctrl: u8) -> Option<u8> {
-        match ctrl {
-            LIMIT => Some(self.pattern.limit),
-            LIMIT_AMT => Some(self.pattern.limit_amt),
-            _ => None,
-        }
+        self.pattern.fork(ctrl)
     }
 
     fn fork_set(&mut self, ctrl: u8, value: u8) {
-        if matches!(ctrl, LIMIT | LIMIT_AMT) {
-            self.set_param(ctrl, value);
-            self.pattern.limit = self.live.limit;
-            self.pattern.limit_amt = self.live.limit_amt;
-        }
+        self.live.set_fork(ctrl, value);
+        // the pattern-mode copy takes this fork's live values
+        let live = self.live;
+        self.pattern.keep_fork(&live);
     }
 }
 
@@ -1077,6 +1119,8 @@ impl Frame {
                     .get_or_insert_with(|| Box::new(voices::RightInserts::new(&self.devices)));
                 right.follow(&self.devices);
             }
+            // this fork: how much of each insert is heard (the original's: all of it)
+            let wet = self.devices.mixer.live.wet[c];
             let inserts = [
                 (ch.routing.dist, &mut self.devices.dist),
                 (ch.routing.pcf, &mut self.devices.pcf),
@@ -1090,13 +1134,21 @@ impl Frame {
                     } else {
                         &mut *bus
                     };
+                    let dry = (wet[k] < WET_FULL).then_some(*b);
                     ins.process(b, &ctx);
                     if let Some(f) = ins.faulted() {
                         return Err(f);
                     }
+                    if let Some(dry) = &dry {
+                        mix_wet(b, dry, wet[k]);
+                    }
                     self.stack_word = ins.stack_word(self.stack_word);
                     if split_now && let Some(right) = &mut self.right {
+                        let dry = (wet[k] < WET_FULL).then_some(split.wet_r);
                         right.process(k, &mut split.wet_r, &ctx);
+                        if let Some(dry) = &dry {
+                            mix_wet(&mut split.wet_r, dry, wet[k]);
+                        }
                     }
                 }
             }
@@ -1236,6 +1288,15 @@ pub fn set_fork_shared_modes(on: bool) {
 
 /// The live value of device `d`'s controller `ctrl` (the controller number its track uses), if
 /// the device has one.
+/// This fork: an insert's output `wet` (in place) mixed with its input `dry`, `amount` of 127
+/// the insert's ([`MixerParams::wet`]).
+fn mix_wet(wet: &mut Block, dry: &Block, amount: u8) {
+    let w = amount.min(WET_FULL) as f64 / WET_FULL as f64;
+    for (x, &d) in wet.iter_mut().zip(dry.iter()) {
+        *x = st(d as f64 + (*x as f64 - d as f64) * w);
+    }
+}
+
 fn live_value(devices: &mut Devices, d: song::Device, ctrl: u8) -> Option<u8> {
     match d {
         song::Device::Mixer => {
@@ -1243,8 +1304,7 @@ fn live_value(devices: &mut Devices, d: song::Device, ctrl: u8) -> Option<u8> {
             match ctrl {
                 1 => Some(m.comp_id),
                 2 => Some(m.pcf_id),
-                LIMIT => Some(m.limit),
-                LIMIT_AMT => Some(m.limit_amt),
+                _ if is_fork_mixer(ctrl) => m.fork(ctrl),
                 5..=28 => {
                     let p = &m.channels[((ctrl - 5) / 6) as usize];
                     match (ctrl - 5) % 6 {

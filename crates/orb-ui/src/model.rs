@@ -606,11 +606,14 @@ impl Panel {
             return;
         }
         if let Some((c, name)) = mixer_insert(id) {
-            let was = self.knob_on(id);
-            self.knobs.insert(id.into(), p);
-            let on = self.knob_on(id);
+            let old = self.knobs.insert(id.into(), p).unwrap_or(0);
+            let (was, on) = (behavior::knob_send(old) > 0, self.knob_on(id));
             if on != was {
                 self.insert_on(c, name, on);
+            }
+            // how much of the effect is heard (this fork): the knob's value while it is on
+            if on && (!was || behavior::knob_send(old) != behavior::knob_send(p)) {
+                self.set_event(&format!("{id}_wet"), behavior::knob_send(p));
             }
             return;
         }
@@ -745,6 +748,19 @@ impl Panel {
             .filter(|&r| r < 4)
         {
             self.rows[r].enabled = v != 0;
+        } else if let Some(knob) = id
+            .strip_suffix("_wet")
+            .filter(|k| mixer_insert(k).is_some())
+        {
+            // an insert's wet amount (this fork): the knob's value while it is on
+            if self.held.as_deref() != Some(knob)
+                && self.knob_on(knob)
+                && v > 0
+                && behavior::knob_send(self.knob(knob)) != v
+            {
+                self.knobs
+                    .insert(knob.into(), behavior::knob_from_engine(v));
+            }
         } else if let Some((_, "dist")) = mixer_insert(id) {
             // the original's key, 0 or 1: the knob at 0, or at the top if it was at 0
             let on = v != 0;
@@ -1801,16 +1817,38 @@ mod tests {
                 value: 1
             }]
         );
-        // Dist is independent per channel, sent as the original's key (0 or 1) once
+        // Dist is independent per channel, sent as the original's key (0 or 1) once; the
+        // knob's value while on is how much of the effect is heard (this fork)
         p.events.clear();
         p.set_knob("mixer1.dist", 100);
         p.set_knob("mixer1.dist", 400);
         p.set_knob("mixer2.dist", 100);
         assert!(p.knob_on("mixer1.dist") && p.knob_on("mixer2.dist"));
         assert_eq!(p.value("mixer1.dist"), Some(1));
-        assert_eq!(p.events.len(), 2);
+        let set = |id: &str, value| Event::Set {
+            id: id.into(),
+            value,
+        };
+        let (a, b) = (behavior::knob_send(100), behavior::knob_send(400));
+        assert_eq!(
+            p.events,
+            [
+                set("mixer1.dist", 1),
+                set("mixer1.dist_wet", a),
+                set("mixer1.dist_wet", b),
+                set("mixer2.dist", 1),
+                set("mixer2.dist_wet", a),
+            ]
+        );
+        p.events.clear();
         p.set_knob("mixer1.dist", 0);
         assert_eq!(p.value("mixer1.dist"), Some(0));
+        assert_eq!(p.events, [set("mixer1.dist", 0)]);
+        // the engine's wet amount turns a knob that is on, not one that is off
+        p.adopt("mixer2.dist_wet", 127);
+        p.adopt("mixer1.dist_wet", 127);
+        assert_eq!(p.knob("mixer2.dist"), KNOB_MAX);
+        assert_eq!(p.knob("mixer1.dist"), 0);
     }
 
     #[test]

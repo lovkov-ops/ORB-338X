@@ -99,15 +99,15 @@ pub fn source_of_1x(engine: &EngineSong, song: &rbs::rb1x::Song1x) -> rbs::Song 
 /// below the one before as a wrap past 2^32 (what a file's own deltas may do) and refuses
 /// nothing, so an unsorted list here is a bug of the model, checked in debug builds.
 ///
-/// This fork: the 303s' sub-oscillator events ([`sub_events`]) and the master's limiter's
-/// ([`limit_events`]) stay out (no `.rbs` controller is theirs); an `.rbsx` keeps them in its
-/// own chunk.
+/// This fork: the 303s' sub-oscillator events ([`sub_events`]), the master's limiter's
+/// ([`limit_events`]) and the inserts' wet amounts' stay out (no `.rbs` controller is theirs);
+/// an `.rbsx` keeps them in its own chunk.
 pub fn set_engine_tracks(s: &mut rbs::Song, tracks: &[Vec<TrackEvent>; 9]) {
     for (t, events) in tracks.iter().enumerate() {
         s.tracks[t].events = events
             .iter()
             .filter(|e| !(is_303_track(t) && e.ctrl == orb_engine::tb303::SUB))
-            .filter(|e| !(t == Device::Mixer as usize && LIMIT_CTRLS.contains(&e.ctrl)))
+            .filter(|e| !(t == Device::Mixer as usize && orb_engine::frame::is_fork_mixer(e.ctrl)))
             .map(|e| rbs::Event {
                 pos: e.tick as u32 / 24,
                 ctrl: e.ctrl,

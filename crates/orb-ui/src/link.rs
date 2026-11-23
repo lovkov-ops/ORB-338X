@@ -246,6 +246,15 @@ pub enum MixerTarget {
     Channel(u8, u8),
 }
 
+/// This fork: the channel (0..4) and insert (0 DIST, 1 PCF, 2 COMP) of a mixer knob's wet
+/// amount id (`mixerN.dist_wet`, `.pcf_wet`, `.comp_wet`).
+pub fn wet_of(id: &str) -> Option<(usize, usize)> {
+    let base = id.strip_suffix("_wet")?;
+    let (c, name) = crate::model::mixer_insert(base)?;
+    let k = ["dist", "pcf", "comp"].iter().position(|&n| n == name)?;
+    Some((c, k))
+}
+
 pub fn mixer_target(id: &str) -> Option<MixerTarget> {
     match id {
         "master.fader" => return Some(MixerTarget::Global(0)),
@@ -255,6 +264,12 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
         "master.limit" => return Some(MixerTarget::Global(orb_engine::frame::LIMIT)),
         "master.limit_amt" => return Some(MixerTarget::Global(orb_engine::frame::LIMIT_AMT)),
         _ => {}
+    }
+    // this fork: a channel's DIST, PCF and COMP wet amounts (the knobs' values above 0)
+    if let Some((c, k)) = wet_of(id) {
+        return Some(MixerTarget::Global(
+            orb_engine::frame::WET + 3 * c as u8 + k as u8,
+        ));
     }
     let (sec, name) = id.split_once('.')?;
     let c = sec
@@ -1211,6 +1226,12 @@ impl Link {
         // this fork: the master's limiter
         panel.adopt("master.limit", m.limit as i32);
         panel.adopt("master.limit_amt", m.limit_amt as i32);
+        // this fork: the inserts' wet amounts
+        for (c, w) in m.wet.iter().enumerate() {
+            for (k, name) in ["dist", "pcf", "comp"].into_iter().enumerate() {
+                panel.adopt(&format!("mixer{}.{name}_wet", c + 1), w[k] as i32);
+            }
+        }
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {
             let n = c + 1;

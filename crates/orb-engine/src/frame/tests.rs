@@ -1384,6 +1384,47 @@ fn the_limiter_caps_the_master_and_off_leaves_it() {
     assert_eq!(x, y);
 }
 
+/// This fork: a channel's insert at a wet amount below 127 is mixed with the channel's sound;
+/// at 127 (the default) it is the original's insert, at 0 the channel as if it were off.
+#[test]
+fn an_insert_is_mixed_with_the_channel_by_its_wet_amount() {
+    let render = |dist: u8, wet: Option<u8>| {
+        let mut d = Devices::placeholders();
+        d.channels[0] = Box::new(Ramp(0));
+        d.dist = Box::new(Op {
+            name: "dist",
+            f: |x| x * 0.5,
+            log: Log::default(),
+        });
+        let mut e = Engine::new(tables(), d);
+        e.frame.devices.mixer.live.channels[0].dist = dist;
+        if let Some(w) = wet {
+            e.mixer_global(WET, w);
+        }
+        let mut buf = vec![0i16; 2 * 64 * 40];
+        e.render(&mut buf, 64 * 40);
+        buf
+    };
+    let sum = |b: &[i16]| b.iter().map(|&x| (x as i64).abs()).sum::<i64>();
+    let full = render(1, None);
+    assert_eq!(render(1, Some(127)), full);
+    assert_eq!(render(1, Some(0)), render(0, None));
+    let half = render(1, Some(64));
+    let (lo, mid, hi) = (sum(&full), sum(&half), sum(&render(0, None)));
+    assert!(lo < mid && mid < hi, "{lo} {mid} {hi}");
+    // the mix itself: dry + (wet - dry) * amount / 127
+    let mut wet = [0.5f32; BLOCK];
+    mix_wet(&mut wet, &[1.0; BLOCK], 64);
+    assert_eq!(wet[0], (1.0 - 0.5 * 64.0 / 127.0) as f32);
+    // the controllers: WET + 3c + k, recorded and kept like the limiter's
+    let mut e = edit_engine();
+    assert_eq!(e.frame.devices.mixer.live.wet, [[WET_FULL; 3]; 4]);
+    e.mixer_global(WET + 3 * 2 + 1, 40);
+    assert_eq!(e.frame.devices.mixer.live.wet[2][1], 40);
+    assert_eq!(e.frame.devices.mixer.fork_param(WET + 7), Some(40));
+    assert!(is_fork_mixer(WET + 11) && !is_fork_mixer(WET + 12));
+}
+
 #[test]
 fn the_master_comp_gives_way_to_the_limit_key() {
     let mut e = loud_engine();

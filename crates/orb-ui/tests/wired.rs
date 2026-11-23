@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use eframe::egui::{self, Event, Modifiers, PointerButton, Pos2, RawInput, Rect, Vec2};
+use orb_engine::frame::WET;
 use orb_engine::samples::SampleSet;
 use orb_engine::song::Device;
 use orb_engine::tables::Tables;
@@ -493,17 +494,26 @@ fn the_mixer_sends_msg_145_and_147() {
             h.take_log(),
             vec![dev(Device::Mixer, 147, &[c, 3, v as u8])]
         );
-        // this fork: DIST, PCF and COMP are knobs, on above 0; DIST sends the original's key
+        // this fork: DIST, PCF and COMP are knobs, on above 0; DIST sends the original's key,
+        // and each its wet amount (WET + 3c + k), the knob's value
+        let wet = |k: u8, id: &str, h: &Harness| {
+            let v = orb_ui::behavior::knob_send(h.app.panel.knob(&format!("mixer{n}.{id}")));
+            dev(Device::Mixer, 145, &[WET + 3 * c + k, v as u8])
+        };
         h.drag(&format!("mixer{n}.dist"), 20.0);
-        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 147, &[c, 4, 1])]);
-        // more of it sends nothing
+        let w = wet(0, "dist", &h);
+        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 147, &[c, 4, 1]), w]);
+        // more of it sends only the wet amount
         h.drag(&format!("mixer{n}.dist"), 20.0);
-        assert_eq!(h.take_log(), vec![]);
+        let w = wet(0, "dist", &h);
+        assert_eq!(h.take_log(), vec![w]);
         // PCF and Comp are exclusive ids: c + 1 and c + 2
         h.drag(&format!("mixer{n}.pcf"), 20.0);
-        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[2, c + 1])]);
+        let w = wet(1, "pcf", &h);
+        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[2, c + 1]), w]);
         h.drag(&format!("mixer{n}.comp"), 20.0);
-        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, c + 2])]);
+        let w = wet(2, "comp", &h);
+        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, c + 2]), w]);
         // the other channels' PCF and COMP knobs are at 0
         for o in (1..=4).filter(|&o| o != n) {
             assert!(!h.app.panel.knob_on(&format!("mixer{o}.pcf")), "{o}");
