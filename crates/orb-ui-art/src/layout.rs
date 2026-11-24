@@ -610,7 +610,7 @@ fn mixer(b: &mut Builder, c: usize) {
     .enumerate()
     {
         b.part(
-            &format!("label{}", k + 1),
+            &format!("{id}_label"),
             "label",
             &format!("mixlbl_{id}"),
             31.0,

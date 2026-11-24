@@ -271,6 +271,14 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
             orb_engine::frame::WET + 3 * c as u8 + k as u8,
         ));
     }
+    // the effects slots' effects
+    if let Some(s) = id
+        .strip_prefix("mixer.slot")
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|n| (1..=4).contains(n))
+    {
+        return Some(MixerTarget::Global(orb_engine::frame::SLOT + s - 1));
+    }
     // and the PCF and the COMP also on more channels
     if let Some((c, k)) = crate::model::more_of(id) {
         return Some(MixerTarget::Global(
@@ -1240,6 +1248,9 @@ impl Link {
             for (k, name) in ["pcf", "comp"].into_iter().enumerate() {
                 panel.adopt(&format!("mixer{}.{name}_more", c + 1), m.more[c][k] as i32);
             }
+        }
+        for (s, &fx) in m.slots.iter().enumerate() {
+            panel.adopt(&format!("mixer.slot{}", s + 1), fx as i32);
         }
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {

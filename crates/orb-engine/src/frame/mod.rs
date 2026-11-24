@@ -521,6 +521,9 @@ pub struct MixerParams {
     /// the channel `pcf_id` and `comp_id` choose ([`MORE`]): non-zero on. Such a channel runs
     /// its own copy of the insert ([`voices::InsertCopy`]), with the song's insert's settings.
     pub more: [[u8; 2]; 4],
+    /// This fork: the effect each of the four effects slots holds ([`SLOT`], [`FX_DELAY`]..),
+    /// top to bottom; a channel's inserts run in their slots' order.
+    pub slots: [u8; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -531,11 +534,25 @@ pub const WET_FULL: u8 = 127;
 /// This fork: the mixer's controller of the PCF (k 0) or the compressor (k 1) also on channel
 /// c ([`MixerParams::more`]): `MORE + 2c + k`, 0 off, else on.
 pub const MORE: u8 = WET + 12;
+/// This fork: the mixer's controller of the effect in effects slot s (0..4, top to bottom):
+/// `SLOT + s`, the effect [`FX_RVRB`]..[`FX_COMP`].
+pub const SLOT: u8 = MORE + 8;
+/// This fork: the effects a slot may hold (the panel's menu order).
+pub const FX_RVRB: u8 = 0;
+pub const FX_DELAY: u8 = 1;
+pub const FX_DIST: u8 = 2;
+pub const FX_PCF: u8 = 3;
+pub const FX_CHO: u8 = 4;
+pub const FX_FLA: u8 = 5;
+pub const FX_PHA: u8 = 6;
+pub const FX_COMP: u8 = 7;
+/// The original's slots: the delay, the distortion, the PCF, the compressor.
+pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
 /// This fork: whether `ctrl` is one of this fork's mixer controllers ([`LIMIT`],
 /// [`LIMIT_AMT`], [`WET`].., [`MORE`]..).
 pub fn is_fork_mixer(ctrl: u8) -> bool {
-    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..MORE + 8).contains(&ctrl)
+    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..SLOT + 4).contains(&ctrl)
 }
 
 impl MixerParams {
@@ -544,6 +561,7 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= SLOT && is_fork_mixer(ctrl) => Some(self.slots[(ctrl - SLOT) as usize]),
             _ if ctrl >= MORE && is_fork_mixer(ctrl) => {
                 let x = (ctrl - MORE) as usize;
                 Some(self.more[x / 2][x % 2])
@@ -561,6 +579,9 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= SLOT && is_fork_mixer(ctrl) => {
+                self.slots[(ctrl - SLOT) as usize] = value.min(FX_COMP);
+            }
             _ if ctrl >= MORE && is_fork_mixer(ctrl) => {
                 let x = (ctrl - MORE) as usize;
                 self.more[x / 2][x % 2] = value;
@@ -579,6 +600,17 @@ impl MixerParams {
         self.limit_amt = from.limit_amt;
         self.wet = from.wet;
         self.more = from.more;
+        self.slots = from.slots;
+    }
+
+    /// The order a channel runs its inserts in (0 the distortion, 1 the PCF, 2 the
+    /// compressor): their slots' order (the original's: 0, 1, 2). An insert no slot holds goes
+    /// last, in the original's order.
+    pub fn insert_order(&self) -> [usize; 3] {
+        let at = |fx: u8| self.slots.iter().position(|&s| s == fx).unwrap_or(4);
+        let mut order = [0, 1, 2];
+        order.sort_by_key(|&k| at([FX_DIST, FX_PCF, FX_COMP][k]));
+        order
     }
 }
 
@@ -601,6 +633,7 @@ impl Default for MixerParams {
             limit_amt: 0,
             wet: [[WET_FULL; 3]; 4],
             more: [[0; 2]; 4],
+            slots: DEFAULT_SLOTS,
         }
     }
 }
@@ -622,6 +655,7 @@ impl From<&song::Mixer> for MixerParams {
             limit_amt: 0,
             wet: [[WET_FULL; 3]; 4],
             more: [[0; 2]; 4],
+            slots: DEFAULT_SLOTS,
         }
     }
 }
@@ -639,6 +673,7 @@ impl MixerParams {
             limit_amt: 0,
             wet: [[WET_FULL; 3]; 4],
             more: [[0; 2]; 4],
+            slots: DEFAULT_SLOTS,
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1176,7 +1211,8 @@ impl Frame {
             let wet = self.devices.mixer.live.wet[c];
             let [pcf_copy, comp_copy] = &mut self.copies[c];
             let rt = ch.routing;
-            let inserts = [
+            let order = self.devices.mixer.live.insert_order();
+            let mut inserts = [
                 pick(rt.dist, &mut self.devices.dist, None),
                 pick(
                     rt.pcf,
@@ -1189,8 +1225,10 @@ impl Frame {
                     copy_of(rt.comp_copy, comp_copy),
                 ),
             ];
-            for (k, routed) in inserts.into_iter().enumerate() {
-                if let Some((ins, song)) = routed {
+            // this fork: in their slots' order (the original's: the distortion, the PCF, the
+            // compressor)
+            for k in order {
+                if let Some((ins, song)) = inserts[k].take() {
                     ctx.stack_word = self.stack_word;
                     let b = if split_now {
                         &mut split.wet_l

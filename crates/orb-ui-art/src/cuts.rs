@@ -1598,7 +1598,7 @@ fn mixer_and_effects(c: &mut Cuts) {
             let lb = bbox(&lv);
             c.take(&lv);
             c.place(
-                &format!("{sec}.label{}", slot + 1),
+                &format!("{sec}.{id}_label"),
                 kb.cx() - MIX_LABEL_W / 2.0,
                 lb.cy() - 2.0,
             );

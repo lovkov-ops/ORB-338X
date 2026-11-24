@@ -703,6 +703,10 @@ impl App {
         }
 
         for (name, x, y) in layout::backgrounds() {
+            // an effects slot's face where its effect's slot is now (this fork)
+            let y = y + name
+                .strip_prefix("bg_")
+                .map_or(0.0, |sec| self.panel.slot_dy(sec, ""));
             // a drum machine's FLIP face (this fork)
             let name = self.panel.background(name);
             let (w, h) = part_size(name);
@@ -731,6 +735,14 @@ impl App {
         for c in &ctls {
             // a drum machine's FLIP face shows its own controls instead of its knobs (this fork)
             if !self.panel.hidden(c) {
+                // an effect's controls where its slot is now (this fork)
+                let dy = self.panel.slot_dy(&c.section, c.name());
+                if dy != 0.0 {
+                    let mut moved = c.clone();
+                    moved.y += dy;
+                    self.control(ui, &view, &moved, now);
+                    continue;
+                }
                 self.control(ui, &view, c, now);
             }
         }
@@ -916,11 +928,15 @@ impl App {
                 let r = self.hit(ui, c, rect);
                 self.kit_menu(&r, usize::from(c.section == "tr909f"));
             }
-            // an effects slot's title (this fork): the menu of the effects a slot can hold;
-            // until the slots are free (step 2b) each slot keeps its own
+            // an effects slot's title (this fork): the menu of the effects a slot can hold; a
+            // choice swaps the slot's effect with the one of the slot that holds it
             "fxmenu" => {
                 let r = self.hit(ui, c, rect);
-                fx_menu(&r, &c.section);
+                if let Some(fx) = fx_menu(&r, &c.section)
+                    && let Some(from) = crate::model::fx_code(&c.section)
+                {
+                    self.panel.swap_slot(from, fx);
+                }
             }
             // a mixer knob's label (this fork): the effect of its slot
             "label" => paint_part(ui, &c.part, rect),
@@ -1555,17 +1571,24 @@ const FX_NAMES: [(&str, &str); 8] = [
     ("comp", "COMP (compressor)"),
 ];
 
-/// An effects slot's title menu (this fork): every effect, the slot's own checked. The others
-/// are greyed out until the slots are free (step 2b of docs/fork_effects.md).
-fn fx_menu(r: &egui::Response, slot: &str) {
+/// An effects slot's title menu (this fork): every effect, the slot's own checked; the ones
+/// the engine does not have yet greyed out. The effect chosen, if another.
+fn fx_menu(r: &egui::Response, slot: &str) -> Option<u8> {
+    let mut pick = None;
     egui::Popup::menu(r).show(|ui| {
         for (kind, name) in FX_NAMES {
             let own = kind == slot;
-            ui.add_enabled_ui(own, |ui| {
+            let code = crate::model::fx_code(kind);
+            let ready = code.is_some_and(|c| crate::model::FX_READY.contains(&c));
+            ui.add_enabled_ui(ready, |ui| {
                 if ui.selectable_label(own, name).clicked() {
+                    if !own {
+                        pick = code;
+                    }
                     ui.close();
                 }
             });
         }
     });
+    pick
 }

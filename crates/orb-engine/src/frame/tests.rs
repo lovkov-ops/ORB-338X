@@ -1466,7 +1466,50 @@ fn the_pcf_and_the_compressor_run_on_more_channels_as_copies() {
     let (same, e) = render(1, 2, [[1, 1], [0, 0], [0, 0], [0, 0]]);
     assert_eq!(same, song);
     assert!(!e.frame.state.channels[0].routing.pcf_copy);
-    assert!(is_fork_mixer(MORE + 7) && !is_fork_mixer(MORE + 8));
+    assert!(is_fork_mixer(MORE + 7) && MORE + 8 == SLOT);
+}
+
+/// This fork: a channel runs its inserts in their slots' order ([`SLOT`]); the default slots
+/// are the original's order.
+#[test]
+fn the_inserts_run_in_their_slots_order() {
+    let log: Log = Rc::default();
+    let mut d = Devices::placeholders();
+    d.channels[1] = Box::new(Const(0.0));
+    for (name, slot) in [("dist", 0), ("pcf", 1), ("comp", 2)] {
+        let op = Box::new(Op {
+            name,
+            f: |x| x,
+            log: log.clone(),
+        });
+        match slot {
+            0 => d.dist = op,
+            1 => d.pcf = op,
+            _ => d.comp = op,
+        }
+    }
+    let mut e = engine_with(d, quiet_state());
+    let m = &mut e.frame.devices.mixer.live;
+    assert_eq!(m.slots, DEFAULT_SLOTS);
+    assert_eq!(m.insert_order(), [0, 1, 2]);
+    m.channels[1].dist = 1;
+    m.pcf_id = 2;
+    m.comp_id = 3;
+    e.frame.mixer_update();
+    let run = |e: &mut Engine| {
+        log.borrow_mut().clear();
+        block_once(e);
+        log.borrow().clone()
+    };
+    assert_eq!(run(&mut e), ["dist", "pcf", "comp"]);
+    // the compressor on top, the PCF at the bottom
+    for (s, fx) in [FX_COMP, FX_DIST, FX_DELAY, FX_PCF].into_iter().enumerate() {
+        e.mixer_global(SLOT + s as u8, fx);
+    }
+    assert_eq!(e.frame.devices.mixer.live.insert_order(), [2, 0, 1]);
+    assert_eq!(run(&mut e), ["comp", "dist", "pcf"]);
+    assert_eq!(e.frame.devices.mixer.fork_param(SLOT), Some(FX_COMP));
+    assert!(is_fork_mixer(SLOT + 3) && !is_fork_mixer(SLOT + 4));
 }
 
 #[test]

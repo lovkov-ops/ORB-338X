@@ -287,6 +287,9 @@ pub struct Panel {
     /// channel `pcf_id` and `comp_id` choose (the mixer's `MORE` controllers, `mixerN.pcf_more`
     /// and `.comp_more`).
     pub more: [[bool; 2]; 4],
+    /// This fork: the effect each effects slot holds, top to bottom (the mixer's `SLOT`
+    /// controllers, `mixer.slot1`..`4`; [`FX_KINDS`] order).
+    pub slots: [u8; 4],
     /// Meter states 0..=10 by control id (mixer, master, effect input); engine-fed.
     pub meters: HashMap<String, u8>,
     /// The compressor's nine gain-reduction LEDs: 0 off, 1 green, 2 amber, 3 red.
@@ -332,6 +335,18 @@ pub fn mixer_insert(id: &str) -> Option<(usize, &str)> {
     matches!(name, "dist" | "pcf" | "comp").then_some((c, name))
 }
 
+/// This fork: the effects a slot may hold, by the engine's codes (`orb_engine::frame::FX_RVRB`
+/// ..), as section and knob names.
+pub const FX_KINDS: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
+
+/// This fork: the effects the engine has so far (a slot's menu offers only these).
+pub const FX_READY: [u8; 4] = orb_engine::frame::DEFAULT_SLOTS;
+
+/// This fork: the effect code of a section or knob name (`delay`, `dist`, ...).
+pub fn fx_code(name: &str) -> Option<u8> {
+    FX_KINDS.iter().position(|&k| k == name).map(|i| i as u8)
+}
+
 /// This fork: the channel (0..4) and the effect (0 PCF, 1 COMP) of a `mixerN.pcf_more` or
 /// `.comp_more` id.
 pub fn more_of(id: &str) -> Option<(usize, usize)> {
@@ -364,6 +379,7 @@ impl Panel {
             pcf_id: 0,
             comp_id: 0,
             more: [[false; 2]; 4],
+            slots: orb_engine::frame::DEFAULT_SLOTS,
             meters: HashMap::new(),
             gr_leds: [0; 9],
             vintage: false,
@@ -636,6 +652,41 @@ impl Panel {
         }
     }
 
+    /// This fork: how far below its layout place a control of section `section` named `name` is
+    /// drawn: an effect's section by 90 px a slot, a mixer channel's knob and label of an effect
+    /// by 22 px a slot, from the slot the layout has it in (the default slots) to its slot now.
+    pub fn slot_dy(&self, section: &str, name: &str) -> f32 {
+        let (fx, step) = if section.starts_with("mixer") {
+            (fx_code(name.strip_suffix("_label").unwrap_or(name)), 22.0)
+        } else {
+            (fx_code(section), 90.0)
+        };
+        let Some(fx) = fx else { return 0.0 };
+        let at = |slots: &[u8; 4]| slots.iter().position(|&s| s == fx);
+        match (at(&orb_engine::frame::DEFAULT_SLOTS), at(&self.slots)) {
+            (Some(home), Some(now)) => step * (now as f32 - home as f32),
+            _ => 0.0,
+        }
+    }
+
+    /// This fork: effect `fx` into the slot that holds `from`, swapping places with it (both
+    /// slots sent). Not an effect the engine has, or `from` in no slot: nothing.
+    pub fn swap_slot(&mut self, from: u8, fx: u8) {
+        let (Some(a), Some(b)) = (
+            self.slots.iter().position(|&s| s == from),
+            self.slots.iter().position(|&s| s == fx),
+        ) else {
+            return;
+        };
+        if a == b || !FX_READY.contains(&fx) {
+            return;
+        }
+        self.slots.swap(a, b);
+        for s in [a, b] {
+            self.set_event(&format!("mixer.slot{}", s + 1), self.slots[s] as i32);
+        }
+    }
+
     /// Whether a knob is above 0 (the mixer's DIST, PCF and COMP knobs: on).
     pub fn knob_on(&self, id: &str) -> bool {
         self.knobs
@@ -820,6 +871,13 @@ impl Panel {
             *s = v as u8;
         } else if let Some(n) = self.numbers.get_mut(id) {
             *n = v;
+        } else if let Some(s) = id
+            .strip_prefix("mixer.slot")
+            .and_then(|n| n.parse::<usize>().ok())
+            .and_then(|n| n.checked_sub(1))
+            .filter(|&s| s < 4)
+        {
+            self.slots[s] = v as u8;
         } else if let Some((c, k)) = more_of(id) {
             self.more[c][k] = v != 0;
             self.sync_insert_knobs();
@@ -1902,6 +1960,35 @@ mod tests {
         p.adopt("mixer1.dist_wet", 127);
         assert_eq!(p.knob("mixer2.dist"), KNOB_MAX);
         assert_eq!(p.knob("mixer1.dist"), 0);
+    }
+
+    #[test]
+    fn a_slots_menu_swaps_effects_and_moves_their_controls() {
+        // this fork: COMP into DIST's slot (the second): they swap, both slots sent
+        let mut p = Panel::new();
+        assert_eq!(p.slot_dy("comp", "ratio"), 0.0);
+        p.swap_slot(orb_engine::frame::FX_DIST, orb_engine::frame::FX_COMP);
+        assert_eq!(p.slots, [1, 7, 3, 2]);
+        let set = |id: &str, value| Event::Set {
+            id: id.into(),
+            value,
+        };
+        assert_eq!(p.events, [set("mixer.slot2", 7), set("mixer.slot4", 2)]);
+        // the sections 90 px a slot, the mixer's knobs and labels 22 px
+        assert_eq!(p.slot_dy("comp", "ratio"), -180.0);
+        assert_eq!(p.slot_dy("dist", "amount"), 180.0);
+        assert_eq!(p.slot_dy("mixer3", "comp"), -44.0);
+        assert_eq!(p.slot_dy("mixer3", "dist_label"), 44.0);
+        assert_eq!(p.slot_dy("mixer3", "pan"), 0.0);
+        assert_eq!(p.slot_dy("delay", "pan"), 0.0);
+        // an effect the engine does not have yet: nothing
+        p.events.clear();
+        p.swap_slot(orb_engine::frame::FX_DELAY, orb_engine::frame::FX_RVRB);
+        assert!(p.events.is_empty() && p.slots == [1, 7, 3, 2]);
+        // the engine's slots
+        p.adopt("mixer.slot2", 2);
+        p.adopt("mixer.slot4", 7);
+        assert_eq!(p.slots, orb_engine::frame::DEFAULT_SLOTS);
     }
 
     #[test]
