@@ -61,6 +61,13 @@ pub const LINKS: [(&str, &str, &str); 4] = [
 ];
 /// The version: `YYYY.MMDD.HHMM (<[dev-]hash[-dirty]>)` (`src/version.rs`).
 pub const VERSION: &str = env!("ORB_UI_VERSION");
+/// This fork's release, `MAJOR.MINOR` of the workspace's Cargo version (`1.0`), which the About
+/// box shows before the build's [`VERSION`].
+pub const RELEASE: &str = concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR")
+);
 
 /// The id of the About window of an open (`App::about_serial`).
 pub fn about_window_id(serial: u32) -> egui::Id {
@@ -146,7 +153,8 @@ impl App {
                     });
                 }
                 line(ui, 104.0 + 22.0 * (2 + LINKS.len()) as f32, &|ui| {
-                    ui.label(RichText::new(format!("Version {VERSION}")).color(INK_DIM));
+                    let text = format!("Version {RELEASE}  ·  build {VERSION}");
+                    ui.label(RichText::new(text).color(INK_DIM));
                 });
             });
         if !open {

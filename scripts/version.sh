@@ -3,7 +3,8 @@
 # YYYY.MMDD.HHMM, from SOURCE_DATE_EPOCH (default: now). It is the number the About box shows
 # (`2026.1028.1930 (7bd8876)`, task-102), the file names carry, the macOS bundle has as
 # CFBundleShortVersionString and CFBundleVersion, and the release tag is `v` + it (task-113).
-# The `version` of Cargo.toml (cargo needs one) is shown nowhere.
+# The `version` of Cargo.toml is this fork's release (1.0.0): the About box shows its MAJOR.MINOR
+# before this number (crates/orb-ui/src/about.rs).
 #
 #   SOURCE_DATE_EPOCH=1793215800 scripts/version.sh              # 2026.1028.1930
 #   SOURCE_DATE_EPOCH=1793215800 scripts/version.sh --time       # 2026-10-28 19:30:00
