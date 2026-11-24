@@ -97,5 +97,18 @@ for attempt in 1 2 3; do
 done
 hdiutil convert -quiet "$rw" -format UDZO -o "$dmg"
 rm -f "$rw"
+# The .dmg file shows the app's icon in Finder too (this fork): NSWorkspace writes it into the
+# file's resource fork, which stays on this Mac and its copies (AirDrop, a USB disk) but not
+# through a download. A failure only warns: the image is fine without it.
+osascript -l JavaScript - "$stage/.VolumeIcon.icns" "$dmg" <<'EOF' >/dev/null ||
+ObjC.import('AppKit');
+function run(argv) {
+    const img = $.NSImage.alloc.initWithContentsOfFile(argv[0]);
+    if (img.isNil() || !$.NSWorkspace.sharedWorkspace.setIconForFileOptions(img, argv[1], 0)) {
+        throw new Error('setIcon failed');
+    }
+}
+EOF
+    echo "warning: no icon on $dmg" >&2
 rm -rf "$stage"
 ls -l "$dmg"
