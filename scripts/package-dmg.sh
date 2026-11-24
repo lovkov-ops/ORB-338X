@@ -90,10 +90,20 @@ mnt=$(hdiutil attach -nobrowse -noverify -noautoopen -readwrite "$rw" | awk -F'\
 [ -d "$mnt" ] || { echo "cannot mount $rw" >&2; exit 1; }
 xattr -wx com.apple.FinderInfo \
     0000000000000000040000000000000000000000000000000000000000000000 "$mnt"
-for attempt in 1 2 3; do
-    hdiutil detach -quiet "$mnt" && break
-    [ "$attempt" -lt 3 ] || { echo "hdiutil detach failed" >&2; exit 1; }
-    sleep 5
+# Detaching fails now and then with "Resource busy" while macOS still looks at the new volume
+# (Spotlight, Finder; a release build failed so once): wait longer between tries, and force
+# the last one; `sync` first, so even a forced detach has every write of the volume on disk.
+sync
+for attempt in 1 2 3 4 5 6; do
+    if [ "$attempt" -lt 6 ]; then
+        hdiutil detach -quiet "$mnt" && break
+    else
+        hdiutil detach -quiet -force "$mnt" && break
+        echo "hdiutil detach failed" >&2
+        exit 1
+    fi
+    echo "hdiutil detach: busy, retrying ($attempt)" >&2
+    sleep $((attempt * 5))
 done
 hdiutil convert -quiet "$rw" -format UDZO -o "$dmg"
 rm -f "$rw"
