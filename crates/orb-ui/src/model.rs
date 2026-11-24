@@ -1129,7 +1129,8 @@ impl Panel {
                 }
             }
             _ => {
-                if name == "on" {
+                // an effect's ON, and (this fork) the delays' TAPE and the COMPs' OTT lamps
+                if name == "on" || crate::link::TAPE_OTT.iter().any(|x| x.0 == id) {
                     self.flip(id);
                 }
             }
@@ -1579,6 +1580,8 @@ impl Panel {
             }
             "trigger" | "wind" | "repeat" => push(),
             "led" => on_off(self.led_on(c, now)),
+            // the COMP's RATIO and THRES labels (this fork): BAL and GAIN while its OTT is on
+            "ottlabel" => on_off(self.toggle_on(&format!("{sec}.ott"))),
             // the mixer channel's MUTE LED (this fork): green while it plays
             "chanled" => on_off(self.channel_active(index_of(sec, "mixer").unwrap_or(0).min(3))),
             "grid" => {

@@ -695,6 +695,8 @@ fn effects(b: &mut Builder) {
     b.part("triplet", "vswitch", "switch_fx_0", 49.0, 22.0);
     b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
     b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
+    // this fork: the TAPE's lamp
+    b.part("tape", "toggle", "distlamp_off", 34.5, 50.8);
 
     // the reverb (this fork) and its second one, shown when a slot holds it, in the delay's
     // slot here (the panel moves each to its slot)
@@ -720,6 +722,8 @@ fn effects(b: &mut Builder) {
     b.part("triplet", "vswitch", "switch_fx_0", 49.0, 22.0);
     b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
     b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
+    // this fork: the TAPE's lamp
+    b.part("tape", "toggle", "distlamp_off", 34.5, 50.8);
 
     // DIST, PCF and COMP, and (this fork) their second ones where the first ones are (shown
     // when two slots hold the effect; the panel moves each to its slot)
@@ -833,6 +837,10 @@ fn comp(b: &mut Builder, sfx: &str) {
     }
     b.knob("ratio", KNOB_FX, 10.0, 54.0, 0.3);
     b.knob("threshold", KNOB_FX, 51.0, 54.0, 0.6);
+    // this fork: the OTT's lamp, and the knobs' labels (BAL and GAIN while it is on)
+    b.part("ott", "toggle", "distlamp_off", 34.5, 50.8);
+    b.part("ratio_label", "ottlabel", "complbl_ratio_off", 9.0, 79.4);
+    b.part("thres_label", "ottlabel", "complbl_thres_off", 50.0, 79.4);
 }
 
 /// The `layout.tsv` text: one control per line, panel pixel rectangles.

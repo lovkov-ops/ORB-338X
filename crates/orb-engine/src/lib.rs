@@ -29,6 +29,7 @@ pub mod frame;
 pub mod limiter;
 pub mod load;
 pub mod modfx;
+pub mod ott;
 pub mod pcf;
 pub mod process;
 pub mod reverb;
@@ -36,6 +37,7 @@ pub mod samples;
 pub mod seq;
 pub mod song;
 pub mod tables;
+pub mod tape;
 pub mod tb303;
 #[cfg(test)]
 mod test_cell;

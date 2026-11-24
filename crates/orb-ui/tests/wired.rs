@@ -1696,3 +1696,50 @@ fn the_reverb_reaches_the_engine() {
     assert_eq!(s.mixer.rvrb[1][4], 0);
     assert_eq!(h.app.panel.display("rvrb.type"), Some(2));
 }
+
+/// (this fork) The delays' TAPE and the COMPs' OTT: their lamps reach the engine; with the
+/// OTT on the COMP's knobs read BAL and GAIN.
+#[test]
+fn the_tape_and_ott_lamps_reach_the_engine() {
+    use orb_engine::frame::{FX_COMP, FX_DELAY, OTT, TAPE};
+    use orb_ui::link::{MixerTarget::Global, mixer_target};
+    for (id, g) in [
+        ("delay.tape", TAPE),
+        ("delay_b.tape", TAPE + 1),
+        ("comp.ott", OTT),
+        ("comp_b.ott", OTT + 1),
+    ] {
+        assert_eq!(mixer_target(id), Some(Global(g)), "{id}");
+    }
+    let controls = orb_ui::layout::controls();
+    let ctl = |id: &str| controls.iter().find(|c| c.id == id).unwrap().clone();
+    let mut h = Harness::new();
+    assert_eq!(
+        h.app.panel.part_name(&ctl("comp.ratio_label"), false, 0.0),
+        "complbl_ratio_off"
+    );
+    h.app.panel.press("delay.tape", 0.0);
+    h.app.panel.press("comp.ott", 0.0);
+    // a second delay and a second COMP, the second COMP's OTT on
+    h.app.panel.put_slot(1, FX_DELAY);
+    h.app.panel.put_slot(2, FX_COMP);
+    h.app.panel.press("comp_b.ott", 0.0);
+    h.frame(vec![]);
+    h.calls(2);
+    let s = h.snap();
+    assert_eq!(s.mixer.tape, [1, 0]);
+    assert_eq!(s.mixer.ott, [1, 1]);
+    assert!(h.app.panel.toggle_on("delay.tape") && !h.app.panel.toggle_on("delay_b.tape"));
+    for (id, part) in [
+        ("comp.ratio_label", "complbl_ratio_on"),
+        ("comp.thres_label", "complbl_thres_on"),
+        ("comp_b.thres_label", "complbl_thres_on"),
+    ] {
+        assert_eq!(h.app.panel.part_name(&ctl(id), false, 0.0), part, "{id}");
+    }
+    // the TAPE off again
+    h.app.panel.press("delay.tape", 0.0);
+    h.frame(vec![]);
+    h.calls(2);
+    assert_eq!(h.snap().mixer.tape, [0, 0]);
+}

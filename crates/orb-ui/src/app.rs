@@ -997,7 +997,7 @@ impl App {
                     paint_part(ui, &name, view.rect(x, c.y, 9.0, 16.0));
                 }
             }
-            "led" | "meter" => {
+            "led" | "meter" | "ottlabel" => {
                 let name = self.panel.part_name(c, false, now);
                 paint_part(ui, &name, rect);
             }

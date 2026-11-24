@@ -147,8 +147,9 @@ mod tests {
         // effects' faces and knobs, + 54; the channels' EQ knobs, + 12; the two DISTs' kind
         // lamps, + 16; the chorus's, the flanger's and the phaser's faces, first and second,
         // 11 controls each, + 66, and the channels' sends into them and their labels, + 48; the
-        // reverb's faces, 9 controls each, + 18, its sends and their labels, + 16)
-        assert_eq!(c.len(), 727);
+        // reverb's faces, 9 controls each, + 18, its sends and their labels, + 16; the delays'
+        // TAPE lamps, + 2, the COMPs' OTT lamps and knob labels, + 6)
+        assert_eq!(c.len(), 735);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

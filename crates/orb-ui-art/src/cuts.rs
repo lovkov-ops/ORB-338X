@@ -24,6 +24,8 @@ pub const MOD_FACES: [(&str, usize, &str, [&str; 4]); 3] = [
 /// The DIST's kind lamps' keys (this fork): the well and the label below it.
 pub const DIST_LAMP_W: f32 = 14.0;
 pub const DIST_LAMP_H: f32 = 13.0;
+/// The COMP's RATIO and THRES labels' width (this fork: BAL and GAIN while its OTT is on).
+pub const OTT_LABEL_W: f32 = 24.0;
 
 /// The shapes of group `chain` (`"1.21"`) of mockup `m`.
 pub fn grp<'a>(m: &'a Mockup, chain: &str) -> Vec<&'a Shape> {
@@ -1791,6 +1793,11 @@ fn mixer_and_effects(c: &mut Cuts) {
     c.place("delay.pan", px - 11.0, py - 11.0);
     let (fx, fy) = knob22(c, mf, "17.17", None);
     c.place("delay.feedback", fx - 11.0, fy - 11.0);
+    // this fork: the TAPE's lamp (its well and label the background's), lit as a DIST kind's
+    let well = bbox(&grp(mf, "17.19"));
+    let lamp_at = |w: Bx| (w.x0 + w.w() / 2.0 - DIST_LAMP_W / 2.0, w.y0 - 0.2);
+    let (x, y) = lamp_at(well);
+    c.place("delay.tape", x, y);
     c.background(mf, "delay", "bg_delay", Bx::new(526.0, 150.0, 82.0, 90.0));
     // the reverb (this fork; the mockup has it in the delay's slot): its TYPE display and
     // arrows, its MODE switch, SIZE and DECAY
@@ -1934,6 +1941,31 @@ fn mixer_and_effects(c: &mut Cuts) {
     for (g, id) in [("24.17", "ratio"), ("24.18", "threshold")] {
         let (x, y) = knob22(c, mf, g, None);
         c.place(&format!("comp.{id}"), x - 11.0, y - 11.0);
+    }
+    // this fork: the OTT's lamp, and the RATIO and THRES labels, BAL and GAIN while it is on
+    let (x, y) = lamp_at(bbox(&grp(mf, "24.12")));
+    c.place("comp.ott", x, y);
+    for (g, id, alt) in [("24.10", "ratio", "BAL"), ("24.13", "thres", "GAIN")] {
+        let v = grp(mf, g);
+        let lb = bbox(&v);
+        c.take(&v);
+        let (w, h) = (OTT_LABEL_W, lb.h() + 1.0);
+        let (x, y) = (lb.cx() - w / 2.0, lb.y0 - 0.5);
+        c.parts
+            .push(part(&format!("complbl_{id}_off"), x, y, w, h, &body(&v)));
+        let mut t = crate::svg::Svg::new();
+        crate::font::text(
+            &mut t,
+            lb.cx(),
+            lb.y0 + lb.h() / 2.0,
+            lb.h() - 0.07,
+            crate::font::Anchor::Middle,
+            "#9aa7b8",
+            alt,
+        );
+        c.parts
+            .push(part(&format!("complbl_{id}_on"), x, y, w, h, &t.s));
+        c.place(&format!("comp.{id}_label"), x, y);
     }
     c.background(mf, "comp", "bg_comp", Bx::new(526.0, 420.0, 82.0, 90.0));
     // the second effects (this fork: two slots that hold an effect): the same faces, their

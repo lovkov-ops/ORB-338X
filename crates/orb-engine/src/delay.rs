@@ -109,6 +109,8 @@ pub struct Delay {
     pub write: u32,
     /// `+0x70`: the peak meter of the send bus (display only).
     pub peak: f32,
+    /// This fork: the TAPE while it is on ([`crate::tape`]); none, the original's delay.
+    pub tape: Option<Box<crate::tape::Tape>>,
 }
 
 impl Delay {
@@ -126,6 +128,7 @@ impl Delay {
             length: 0,
             write: 0,
             peak: 0.0,
+            tape: None,
         }
     }
 
@@ -169,6 +172,10 @@ impl SongDevice for Delay {
     /// Slot 6, 0x100100E0: the global line refilled with 1e-6, the gate set.
     fn silence(&mut self) {
         self.process.refill_delay_line();
+        // this fork: the TAPE's memory too
+        if let Some(t) = &mut self.tape {
+            **t = crate::tape::Tape::default();
+        }
     }
 
     /// Slot 9, 0x100100B0: entering song mode saves the live block into the pattern copy,
@@ -224,6 +231,15 @@ impl SendEffect for Delay {
         }
     }
 
+    /// This fork: the TAPE on (from silence in its memory when it was off) or off.
+    fn set_tape(&mut self, on: bool) {
+        if !on {
+            self.tape = None;
+        } else if self.tape.is_none() {
+            self.tape = Some(Box::default());
+        }
+    }
+
     /// Slot 14, 0x1000F940.
     fn process(&mut self, send: &mut Block, l: &mut Block, r: &mut Block, ctx: &BlockContext) {
         if self.live[ENABLED] == 0 {
@@ -255,6 +271,29 @@ impl SendEffect for Delay {
         self.gain = [st(gl), st(gr)];
         let fb = self.feedback as f64;
         let buf = self.process.delay();
+        // this fork: the TAPE, the line read behind its length by the wobble, between two
+        // samples, and what goes back into it colored
+        if let Some(t) = &mut self.tape {
+            let mut w = self.write;
+            let far = (DELAY_MASK - 1) as f64;
+            for i in 0..BLOCK {
+                let d = (self.length as f64 + t.wobble()).clamp(1.0, far);
+                let pos = w as f64 - d;
+                let base = pos.floor();
+                let frac = pos - base;
+                let i0 = (base as i64 as u32) & DELAY_MASK;
+                let (a, b) = (buf.get(i0) as f64, buf.get((i0 + 1) & DELAY_MASK) as f64);
+                let x = a + (b - a) * frac;
+                l[i] = st(x * gl + l[i] as f64);
+                r[i] = st(r[i] as f64 + x * gr);
+                let s = send[i] as f64;
+                send[i] = GUARD;
+                buf.set(w, st(t.color(x * fb + s)));
+                w = (w + 1) & DELAY_MASK;
+            }
+            self.write = w;
+            return;
+        }
         let mut rd = self.write.wrapping_sub(self.length) & DELAY_MASK;
         let mut w = self.write;
         // 0x1000FA34: per sample, the read before the write (they meet when the length is 0)

@@ -1973,6 +1973,81 @@ fn a_reverb() {
     assert_eq!((m.fork(RVRB_SEND + 7), m.rvrb_send[3][1]), (Some(99), 99));
     m.set_fork(RVRB + 9, 7);
     assert_eq!(m.rvrb[1][4], 7);
+    assert_eq!(TAPE, RVRB_SEND + 8);
+}
+
+/// (this fork) The delays' TAPE and the COMPs' OTT: off the original's sound; on, each other
+/// sound, the first's and the second's each their own.
+#[test]
+fn tape_and_ott() {
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        e.frame.devices.mixer.live.channels[0].send = 100;
+        e.frame.devices.mixer.live.comp_id = 2; // channel 1
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 400];
+        e.render(&mut buf, 64 * 400);
+        (buf, e)
+    };
+    let (song, _) = render(&|_| {});
+    // the TAPE: another sound, the delay's line read with the wobble; off again the song
+    let (tape, e) = render(&|e| e.mixer_global(TAPE, 1));
+    assert_ne!(tape, song);
+    assert!(e.frame.devices.mixer.live.tape == [1, 0]);
+    let (off, _) = render(&|e| {
+        e.mixer_global(TAPE, 1);
+        e.mixer_global(TAPE, 0);
+    });
+    assert_eq!(off, song);
+    // the second delay's TAPE: its own
+    let two = |e: &mut Engine| {
+        e.mixer_global(SLOT + 1, FX_DELAY);
+        e.mixer_global(SEND_B, 120);
+    };
+    let (b, _) = render(&two);
+    let (b_tape, e) = render(&|e| {
+        two(e);
+        e.mixer_global(TAPE + 1, 1);
+    });
+    assert_ne!(b_tape, b);
+    assert!(e.frame.delay_b.as_ref().unwrap().tape.is_some());
+    assert!(e.frame.devices.mixer.live.tape[0] == 0);
+    // the OTT on channel 1's COMP: another sound
+    let (ott, _) = render(&|e| e.mixer_global(OTT, 1));
+    assert_ne!(ott, song);
+    // RATIO (its BALANCE) and THRES (its GAIN) change it
+    let (gain, _) = render(&|e| {
+        e.mixer_global(OTT, 1);
+        e.frame
+            .devices
+            .comp
+            .set_param(crate::comp::THRESHOLD as u8, 127);
+    });
+    assert_ne!(gain, ott);
+    // the COMP off: no OTT either (the original's COMP off)
+    let (comp_off, _) = render(&|e| e.frame.devices.comp.set_param(0, 0));
+    let (ott_comp_off, _) = render(&|e| {
+        e.mixer_global(OTT, 1);
+        e.frame.devices.comp.set_param(0, 0);
+    });
+    assert_eq!(ott_comp_off, comp_off);
+    // the second COMP's OTT: its own
+    let comp2 = |e: &mut Engine| {
+        e.mixer_global(SLOT + 2, FX_COMP);
+        e.mixer_global(WET_B + 2, WET_FULL);
+    };
+    let (c2, _) = render(&comp2);
+    let (c2_ott, _) = render(&|e| {
+        comp2(e);
+        e.mixer_global(OTT + 1, 1);
+    });
+    assert_ne!(c2_ott, c2);
+    let mut m = MixerParams::default();
+    assert_eq!((m.tape, m.ott), ([0; 2], [0; 2]));
+    m.set_fork(OTT + 1, 1);
+    assert_eq!((m.fork(OTT + 1), m.ott), (Some(1), [0, 1]));
     assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
-    assert_eq!(FORK_END, RVRB_SEND + 8);
+    assert_eq!(FORK_END, OTT + 2);
 }

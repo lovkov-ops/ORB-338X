@@ -487,3 +487,29 @@ fn an_rbsx_keeps_the_reverb() {
     assert_eq!(h2.app.panel.display("rvrb.type"), Some(2));
     assert!(!h2.app.panel.out_of_slots("rvrb", "size"));
 }
+
+/// This fork: an `.rbsx` keeps the delay's TAPE and the COMP's OTT.
+#[test]
+fn an_rbsx_keeps_the_tape_and_the_ott() {
+    let dir = tempfile::tempdir().unwrap();
+    // a new song (pattern mode: a save keeps the live mixer)
+    let mut h = Harness::new();
+    h.app.panel.press("delay.tape", 0.0);
+    h.app.panel.press("comp.ott", 0.0);
+    h.calls(2);
+    h.calls(2);
+    let snap = *h.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!((snap.mixer.tape, snap.mixer.ott), ([1, 0], [1, 0]));
+    let out = dir.path().join("tape.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    h2.calls(2);
+    h2.calls(2);
+    let snap2 = *h2.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!((snap2.mixer.tape, snap2.mixer.ott), ([1, 0], [1, 0]));
+    assert!(h2.app.panel.toggle_on("delay.tape") && h2.app.panel.toggle_on("comp.ott"));
+}

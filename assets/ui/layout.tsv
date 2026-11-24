@@ -557,6 +557,7 @@ delay.steps_down	delay	repeat	arrow_dec_rest	556.5	181.5	10	8
 delay.triplet	delay	vswitch	switch_fx_0	575	172	9	18
 delay.pan	delay	knob	knob_fx	536	205	22	22
 delay.feedback	delay	knob	knob_fx	577	205	22	22
+delay.tape	delay	toggle	distlamp_off	560.5	200.56	14	13
 rvrb.on	rvrb	toggle	power_14x14_on	530	153	14	14
 rvrb.meter	rvrb	meter	meter_8x12_4	596	153.25	8	14
 rvrb.menu	rvrb	fxmenu	hit_fx_title	549	152	36	15
@@ -584,6 +585,7 @@ delay_b.steps_down	delay_b	repeat	arrow_dec_rest	556.5	181.5	10	8
 delay_b.triplet	delay_b	vswitch	switch_fx_0	575	172	9	18
 delay_b.pan	delay_b	knob	knob_fx	536	205	22	22
 delay_b.feedback	delay_b	knob	knob_fx	577	205	22	22
+delay_b.tape	delay_b	toggle	distlamp_off	560.5	200.56	14	13
 dist.on	dist	toggle	power_14x14_off	530	243	14	14
 dist.meter	dist	meter	meter_8x12_0	596	243.25	8	14
 dist.menu	dist	fxmenu	hit_fx_title	549	242	36	15
@@ -622,6 +624,9 @@ comp.gr8	comp	meter	gr_led_off	584.5	445	7	10
 comp.gr9	comp	meter	gr_led_off	591.5	445	7	10
 comp.ratio	comp	knob	knob_fx	536	475	22	22
 comp.threshold	comp	knob	knob_fx	577	475	22	22
+comp.ott	comp	toggle	distlamp_off	560.5	470.54	14	13
+comp.ratio_label	comp	ottlabel	complbl_ratio_off	535	499.41	24	5
+comp.thres_label	comp	ottlabel	complbl_thres_off	576	499.41	24	5
 dist_b.on	dist_b	toggle	power_14x14_off	530	243	14	14
 dist_b.meter	dist_b	meter	meter_8x12_0	596	243.25	8	14
 dist_b.menu	dist_b	fxmenu	hit_fx_title	549	242	36	15
@@ -660,6 +665,9 @@ comp_b.gr8	comp_b	meter	gr_led_off	584.5	445	7	10
 comp_b.gr9	comp_b	meter	gr_led_off	591.5	445	7	10
 comp_b.ratio	comp_b	knob	knob_fx	536	475	22	22
 comp_b.threshold	comp_b	knob	knob_fx	577	475	22	22
+comp_b.ott	comp_b	toggle	distlamp_off	560.5	470.54	14	13
+comp_b.ratio_label	comp_b	ottlabel	complbl_ratio_off	535	499.41	24	5
+comp_b.thres_label	comp_b	ottlabel	complbl_thres_off	576	499.41	24	5
 cho.on	cho	toggle	power_14x14_on	530	333	14	14
 cho.meter	cho	meter	meter_8x12_4	596	333.25	8	14
 cho.menu	cho	fxmenu	hit_fx_title	549	332	36	15

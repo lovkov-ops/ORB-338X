@@ -343,6 +343,7 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
     }
     ids.push("dist.kind".into());
     ids.push("dist_b.kind".into());
+    ids.extend(TAPE_OTT.iter().map(|x| x.0.to_string()));
     let mut v: Vec<(String, u8)> = ids
         .into_iter()
         .filter_map(|id| match mixer_target(&id) {
@@ -397,6 +398,17 @@ pub fn wet_of(id: &str) -> Option<(usize, usize)> {
     Some((c, k))
 }
 
+/// This fork: the lamps of the delays' TAPE and of the COMPs' OTT, and their controllers.
+pub const TAPE_OTT: [(&str, u8); 4] = {
+    use orb_engine::frame::{OTT, TAPE};
+    [
+        ("delay.tape", TAPE),
+        ("delay_b.tape", TAPE + 1),
+        ("comp.ott", OTT),
+        ("comp_b.ott", OTT + 1),
+    ]
+};
+
 pub fn mixer_target(id: &str) -> Option<MixerTarget> {
     match id {
         "master.fader" => return Some(MixerTarget::Global(0)),
@@ -409,6 +421,10 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
         "dist.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND)),
         "dist_b.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND + 1)),
         _ => {}
+    }
+    // this fork: the delays' TAPE and the COMPs' OTT (their lamps)
+    if let Some(&(_, g)) = TAPE_OTT.iter().find(|x| x.0 == id) {
+        return Some(MixerTarget::Global(g));
     }
     // this fork: a channel's DIST, PCF and COMP wet amounts (the knobs' values above 0)
     if let Some((c, k)) = wet_of(id) {
@@ -1459,6 +1475,11 @@ impl Link {
         }
         panel.adopt("dist.kind", m.dist_kind[0] as i32);
         panel.adopt("dist_b.kind", m.dist_kind[1] as i32);
+        for (id, g) in TAPE_OTT {
+            if let Some(v) = m.fork(g) {
+                panel.adopt(id, v as i32);
+            }
+        }
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {
             let n = c + 1;
@@ -1517,7 +1538,7 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "mixer4.rvrb_b" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "comp_b.ott" && *g == FORK_END - 1)
         );
     }
 }

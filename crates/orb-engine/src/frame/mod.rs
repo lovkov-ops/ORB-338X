@@ -338,6 +338,8 @@ pub trait SendEffect: SongDevice {
     fn stack_word(&self, _out_end: Option<i32>, prev: Option<i32>) -> Option<i32> {
         prev
     }
+    /// Not a slot (this fork): the delay's TAPE on or off ([`crate::tape`]); others: nothing.
+    fn set_tape(&mut self, _on: bool) {}
 }
 
 /// The song's devices, in the roles the mixer gives them.
@@ -553,6 +555,12 @@ pub struct MixerParams {
     /// [`RVRB`]) and each channel's send into it (`rvrb_send[c][inst]`, [`RVRB_SEND`]).
     pub rvrb: [[u8; crate::reverb::PARAMS]; 2],
     pub rvrb_send: [[u8; 2]; 4],
+    /// This fork: the TAPE of the delay (`tape[0]`) and of the second delay (`[1]`), non-zero
+    /// on ([`TAPE`], [`crate::tape`]).
+    pub tape: [u8; 2],
+    /// This fork: the OTT of the COMP (`ott[0]`) and of the second COMP (`[1]`), non-zero on
+    /// ([`OTT`], [`crate::ott`]).
+    pub ott: [u8; 2],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -611,8 +619,13 @@ pub const MOD_SEND: u8 = MOD + 42;
 /// `RVRB_SEND + 2c + inst`.
 pub const RVRB: u8 = MOD_SEND + 24;
 pub const RVRB_SEND: u8 = RVRB + 10;
+/// This fork: the mixer's controllers of the delays' TAPE, `TAPE + inst`, and of the COMPs'
+/// OTT, `OTT + inst` (inst 0 the first, 1 the second; [`MixerParams::tape`],
+/// [`MixerParams::ott`]).
+pub const TAPE: u8 = RVRB_SEND + 8;
+pub const OTT: u8 = TAPE + 2;
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = RVRB_SEND + 8;
+pub const FORK_END: u8 = OTT + 2;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
@@ -628,6 +641,8 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= OTT && is_fork_mixer(ctrl) => Some(self.ott[(ctrl - OTT) as usize]),
+            _ if ctrl >= TAPE && is_fork_mixer(ctrl) => Some(self.tape[(ctrl - TAPE) as usize]),
             _ if ctrl >= RVRB_SEND && is_fork_mixer(ctrl) => {
                 let x = (ctrl - RVRB_SEND) as usize;
                 Some(self.rvrb_send[x / 2][x % 2])
@@ -676,6 +691,8 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= OTT && is_fork_mixer(ctrl) => self.ott[(ctrl - OTT) as usize] = value,
+            _ if ctrl >= TAPE && is_fork_mixer(ctrl) => self.tape[(ctrl - TAPE) as usize] = value,
             _ if ctrl >= RVRB_SEND && is_fork_mixer(ctrl) => {
                 let x = (ctrl - RVRB_SEND) as usize;
                 self.rvrb_send[x / 2][x % 2] = value.min(127);
@@ -748,6 +765,8 @@ impl MixerParams {
         self.mod_send = from.mod_send;
         self.rvrb = from.rvrb;
         self.rvrb_send = from.rvrb_send;
+        self.tape = from.tape;
+        self.ott = from.ott;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -828,6 +847,8 @@ impl Default for MixerParams {
             mod_send: [[[0; 2]; 3]; 4],
             rvrb: [crate::reverb::DEFAULTS; 2],
             rvrb_send: [[0; 2]; 4],
+            tape: [0; 2],
+            ott: [0; 2],
         }
     }
 }
@@ -862,6 +883,8 @@ impl From<&song::Mixer> for MixerParams {
             mod_send: [[[0; 2]; 3]; 4],
             rvrb: [crate::reverb::DEFAULTS; 2],
             rvrb_send: [[0; 2]; 4],
+            tape: [0; 2],
+            ott: [0; 2],
         }
     }
 }
@@ -892,6 +915,8 @@ impl MixerParams {
             mod_send: [[[0; 2]; 3]; 4],
             rvrb: [crate::reverb::DEFAULTS; 2],
             rvrb_send: [[0; 2]; 4],
+            tape: [0; 2],
+            ott: [0; 2],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1221,6 +1246,9 @@ pub struct Frame {
     /// second; side 0 the bus or a split drum machine's left, 1 its right;
     /// [`MixerParams::dist_kind`]).
     kinds: [[[crate::dist_kinds::KindFx; 2]; 2]; 4],
+    /// This fork: each channel's OTTs' memory (`otts[c][comp][side]`, as [`Frame::kinds`];
+    /// [`MixerParams::ott`]).
+    otts: [[[crate::ott::Ott; 2]; 2]; 4],
     /// This fork: the chorus, the flanger and the phaser (`mods[k][inst]`) while a slot holds
     /// one, it is on and a channel sends into it; their send buses and each channel's send
     /// gains into them; their meter bytes.
@@ -1303,6 +1331,7 @@ impl Frame {
             meters_b: [0; 4],
             eqs: Default::default(),
             kinds: Default::default(),
+            otts: Default::default(),
             mods: Default::default(),
             mod_bus: [[[0.0; BLOCK]; 2]; 3],
             mod_gain: [[[0.0; 2]; 3]; 4],
@@ -1398,6 +1427,12 @@ impl Frame {
                     fx.silence();
                 }
             }
+            // and off the COMP its OTT
+            if !comp && p.more[c][1] == 0 {
+                for fx in &mut self.otts[c][0] {
+                    fx.silence();
+                }
+            }
         }
         // 0x100130A4: slot 16 of every insert, in list order (`song+0x1EC`: dist, PCF, comp)
         self.devices.dist.update(&ctx);
@@ -1426,9 +1461,12 @@ impl Frame {
                     *set = v;
                 }
             }
+            db.set_tape(p.tape[1] != 0);
         } else {
             self.delay_b = None;
         }
+        // this fork: the delay's TAPE
+        self.devices.delay.set_tape(p.tape[0] != 0);
         // this fork: the channels' own copies of the PCF and the compressor, made from the
         // song's insert when a channel takes it (so a copy starts where the song's insert is),
         // dropped when it leaves
@@ -1462,6 +1500,11 @@ impl Frame {
                     *sides = [None, None];
                     if k == 0 {
                         for fx in &mut self.kinds[c][1] {
+                            fx.silence();
+                        }
+                    }
+                    if k == 2 {
+                        for fx in &mut self.otts[c][1] {
                             fx.silence();
                         }
                     }
@@ -1630,9 +1673,11 @@ impl Frame {
             let in_slots = self.devices.mixer.live.slots;
             let wet_b = self.devices.mixer.live.wet_b[c];
             let copies_b = &mut self.copies_b[c];
-            // this fork: the DIST's kinds, the DIST's and the second DIST's
+            // this fork: the DIST's kinds, the DIST's and the second DIST's, and the COMPs' OTT
             let kinds = self.devices.mixer.live.dist_kind;
+            let otts = self.devices.mixer.live.ott;
             let [kind_a, kind_b] = &mut self.kinds[c];
+            let [ott_a, ott_b] = &mut self.otts[c];
             let mut seen = [false; 3];
             for fx in in_slots {
                 let Some(k) = [FX_DIST, FX_PCF, FX_COMP].iter().position(|&f| f == fx) else {
@@ -1648,15 +1693,23 @@ impl Frame {
                     } else {
                         &mut *bus
                     };
-                    let kind = (k == 0).then_some(kinds[1]);
-                    run_copy(&mut lc.ins, b, wet_b[k], &ctx, kind, &mut kind_b[0]);
+                    let alt = alt_of(k, kinds[1], otts[1]);
+                    let mem = AltMem {
+                        kind: &mut kind_b[0],
+                        ott: &mut ott_b[0],
+                    };
+                    run_copy(&mut lc.ins, b, wet_b[k], &ctx, alt, mem);
                     if split_now {
                         if right.is_none() {
                             *right = voices::InsertCopy::new(&*lc.ins).map(Box::new);
                         }
                         if let Some(rc) = right {
                             let b = &mut split.wet_r;
-                            run_copy(&mut rc.ins, b, wet_b[k], &ctx, kind, &mut kind_b[1]);
+                            let mem = AltMem {
+                                kind: &mut kind_b[1],
+                                ott: &mut ott_b[1],
+                            };
+                            run_copy(&mut rc.ins, b, wet_b[k], &ctx, alt, mem);
                         }
                     }
                     continue;
@@ -1670,9 +1723,13 @@ impl Frame {
                         &mut *bus
                     };
                     let dry = (wet[k] < WET_FULL).then_some(*b);
-                    let kind = (k == 0).then_some(kinds[0]);
-                    let params = dist_params(&**ins);
-                    run_insert(ins, b, &ctx, kind, &mut kind_a[0]);
+                    let alt = alt_of(k, kinds[0], otts[0]);
+                    let params = ins_params(&**ins);
+                    let mem = AltMem {
+                        kind: &mut kind_a[0],
+                        ott: &mut ott_a[0],
+                    };
+                    run_insert(ins, b, &ctx, alt, mem);
                     // a copy's faults are dropped (the original has no such call), and it
                     // leaves the stack word as it is
                     if let Some(f) = ins.faulted()
@@ -1688,13 +1745,17 @@ impl Frame {
                     }
                     if split_now && let Some(right) = &mut self.right {
                         let dry = (wet[k] < WET_FULL).then_some(split.wet_r);
-                        match kind.filter(|&kd| kd != crate::dist_kinds::CLASSIC) {
-                            // the classic on a copy (its state as ever), the kind on the side
-                            Some(kd) => {
+                        match alt {
+                            // the insert on a copy (its state as ever), the kind or the OTT
+                            // on the side
+                            Some(alt) => {
                                 let mut scratch = split.wet_r;
                                 right.process(k, &mut scratch, &ctx);
-                                let [on, a, sh] = params;
-                                kind_a[1].process(kd, on != 0, a, sh, &mut split.wet_r);
+                                let mem = AltMem {
+                                    kind: &mut kind_a[1],
+                                    ott: &mut ott_a[1],
+                                };
+                                run_alt(alt, params, mem, &mut split.wet_r);
                             }
                             None => right.process(k, &mut split.wet_r, &ctx),
                         }
@@ -1939,40 +2000,72 @@ fn run_copy(
     b: &mut Block,
     wet: u8,
     ctx: &BlockContext,
-    kind: Option<u8>,
-    fx: &mut crate::dist_kinds::KindFx,
+    alt: Option<Alt>,
+    mem: AltMem,
 ) {
     let dry = (wet < WET_FULL).then_some(*b);
-    run_insert(ins, b, ctx, kind, fx);
+    run_insert(ins, b, ctx, alt, mem);
     let _ = ins.faulted();
     if let Some(dry) = &dry {
         mix_wet(b, dry, wet);
     }
 }
 
-/// This fork: a distortion's ENABLED, AMOUNT and SHAPE ([`crate::dist`]; 0 for a placeholder).
-fn dist_params(ins: &dyn InsertEffect) -> [u8; 3] {
-    use crate::dist::{AMOUNT, ENABLED, SHAPE};
+/// This fork: an insert's first three controllers, a distortion's ENABLED, AMOUNT and SHAPE
+/// ([`crate::dist`]), a compressor's ENABLED, AMOUNT and THRESHOLD ([`crate::comp`]); 0 for a
+/// placeholder.
+fn ins_params(ins: &dyn InsertEffect) -> [u8; 3] {
     let l = ins.live();
-    [ENABLED, AMOUNT, SHAPE].map(|i| l.get(i).copied().unwrap_or(0))
+    [0, 1, 2].map(|i| l.get(i).copied().unwrap_or(0))
 }
 
-/// This fork: insert `ins` on `b`. A DIST (`kind` some) of another kind than the classic
-/// ([`crate::dist_kinds`]) runs the classic on a copy of the bus (its meter and its counters
-/// as ever) and its kind, with memory `fx`, on the bus.
+/// This fork: what is heard in place of an insert: a DIST's kind other than the classic
+/// ([`crate::dist_kinds`]), a COMP's OTT ([`crate::ott`]).
+#[derive(Clone, Copy, Debug)]
+enum Alt {
+    Kind(u8),
+    Ott,
+}
+
+/// The alternative of insert k (0 DIST, 1 PCF, 2 COMP) given its DIST kind and its OTT.
+fn alt_of(k: usize, kind: u8, ott: u8) -> Option<Alt> {
+    match k {
+        0 if kind != crate::dist_kinds::CLASSIC => Some(Alt::Kind(kind)),
+        2 if ott != 0 => Some(Alt::Ott),
+        _ => None,
+    }
+}
+
+/// A bus's memory of the alternatives.
+struct AltMem<'a> {
+    kind: &'a mut crate::dist_kinds::KindFx,
+    ott: &'a mut crate::ott::Ott,
+}
+
+/// Alternative `alt` on `b`, the insert's controllers `params` ([`ins_params`]).
+fn run_alt(alt: Alt, params: [u8; 3], mem: AltMem, b: &mut Block) {
+    let [on, x, y] = params;
+    match alt {
+        Alt::Kind(k) => mem.kind.process(k, on != 0, x, y, b),
+        Alt::Ott => mem.ott.process(on != 0, x, y, b),
+    }
+}
+
+/// This fork: insert `ins` on `b`. With an alternative ([`Alt`]) the insert runs on a copy of
+/// the bus (its meter and its counters as ever) and the alternative, with memory `mem`, on the
+/// bus.
 fn run_insert(
     ins: &mut Box<dyn InsertEffect>,
     b: &mut Block,
     ctx: &BlockContext,
-    kind: Option<u8>,
-    fx: &mut crate::dist_kinds::KindFx,
+    alt: Option<Alt>,
+    mem: AltMem,
 ) {
-    match kind.filter(|&k| k != crate::dist_kinds::CLASSIC) {
-        Some(k) => {
+    match alt {
+        Some(alt) => {
             let mut scratch = *b;
             ins.process(&mut scratch, ctx);
-            let [on, a, s] = dist_params(&**ins);
-            fx.process(k, on != 0, a, s, b);
+            run_alt(alt, ins_params(&**ins), mem, b);
         }
         None => ins.process(b, ctx),
     }
@@ -2494,6 +2587,9 @@ impl Engine {
             eq.silence();
         }
         for fx in self.frame.kinds.iter_mut().flatten().flatten() {
+            fx.silence();
+        }
+        for fx in self.frame.otts.iter_mut().flatten().flatten() {
             fx.silence();
         }
         // the chorus, the flanger and the phaser start anew
