@@ -46,7 +46,7 @@ extra features for the two bass synths. Everything the original does, it does to
   like the others.
 - **Hear the note in pitch mode:** while the song is stopped, a key pressed in pitch mode plays
   its note with the synth's current sound.
-- **`.rbsx` songs:** a ReBirth song plus the GENERATE and LFO settings. Plain `.rbs` songs still
+- **`.rbsx` songs:** a ReBirth song plus the GENERATE, LFO, FLIP and effects settings. Plain `.rbs` songs still
   open and save as before; Save As has a button for each format.
 - **The Inter typeface** for the panel's labels, the logo and the windows, and this fork's own
   startup sound.
@@ -62,6 +62,18 @@ extra features for the two bass synths. Everything the original does, it does to
   Linux) work on the selected pattern of the row with the focus, with its steps, length and
   shuffle. The Edit menu and a right click on the lit pattern button have them too. A 303's
   pattern pastes into either 303.
+- **An effects rack of four slots:** each slot's menu puts any of RVRB, DELAY, DIST, PCF, CHO,
+  FLA, PHA and COMP in it (two of the same at most), and each mixer channel's knobs follow the
+  slots. New in it: a reverb, a chorus, a flanger and a phaser; seven more DIST kinds (OD, FUZZ,
+  RECT, BIT, WF, SIN, AMP) picked by its lamps; TAPE on the delay (wow, flutter and darker
+  repeats) and OTT on the COMP (a multiband compressor that lifts the quiet parts too).
+- **The mixer and the master:** an EQ (HI, MID, LO) on every channel, and a LIMIT key with its
+  AMT knob on the master.
+- **FLIP on the 808 and the 909:** the drum machine's other face, with a PAN knob and four
+  effects lamps for every sound, one per slot and named after its effect. A lit lamp sends the
+  sound through that slot; a double click sets that lamp of every sound. With every lamp lit
+  and the pans in the middle the sound is the original's. A **KIT menu** gives one drum
+  machine a kit of its own.
 
 ## Features
 
