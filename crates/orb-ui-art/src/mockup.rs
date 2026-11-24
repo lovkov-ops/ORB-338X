@@ -34,6 +34,10 @@ pub const PANEL_FX: &str = include_str!("../../../assets/mockup/panel_fx.svg");
 /// the panel's).
 pub const FLIP_808: &str = include_str!("../../../assets/mockup/flip_808.svg");
 pub const FLIP_909: &str = include_str!("../../../assets/mockup/flip_909.svg");
+/// (this fork) The user's mixer channel with its C key and the channel's COMP face
+/// (`SVG FILES/mix c.svg`, `comp m.svg`), moved to the first channel's place as the FLIP faces.
+pub const MIX_C: &str = include_str!("../../../assets/mockup/mix_c.svg");
+pub const COMP_M: &str = include_str!("../../../assets/mockup/comp_m.svg");
 
 /// A box in panel pixels: left, top, right, bottom.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -163,6 +167,8 @@ impl Mockup {
                 "mb" => 2,
                 "m8" => 3,
                 "m9" => 4,
+                "mc" => 5,
+                "mm" => 6,
                 _ => 1,
             },
         };
@@ -213,6 +219,16 @@ impl Mockup {
     pub fn flip_909() -> &'static Mockup {
         static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
         M.get_or_init(|| Mockup::parse(FLIP_909, "m9"))
+    }
+
+    pub fn mix_c() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(MIX_C, "mc"))
+    }
+
+    pub fn comp_m() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(COMP_M, "mm"))
     }
 
     pub fn panel_fx() -> &'static Mockup {

@@ -389,6 +389,9 @@ pub struct Snapshot {
     /// This fork: the second DIST's, PCF's and COMP's meter bytes (gain, peak), 0..127
     /// ([`orb_engine::frame::Frame::meters_b`]).
     pub meters_b: [u8; 4],
+    /// This fork: each channel's compressor's gain meter byte
+    /// ([`orb_engine::frame::Frame::meters_ccomp`]).
+    pub meters_ccomp: [u8; 4],
     /// This fork: the chorus's, the flanger's and the phaser's meter bytes, first and second
     /// ([`orb_engine::frame::Frame::meters_mod`]).
     pub meters_mod: [[u8; 2]; 3],
@@ -906,6 +909,7 @@ impl Audio {
         }
         s.master_meters = f.state.master_meter;
         s.meters_b = f.meters_b;
+        s.meters_ccomp = f.meters_ccomp;
         s.meters_mod = f.meters_mod;
         s.meters_rvrb = f.meters_rvrb;
         for (p, d) in s.patterns.iter_mut().zip(&f.devices.channels) {

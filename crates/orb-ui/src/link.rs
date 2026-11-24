@@ -344,6 +344,11 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
     ids.push("dist.kind".into());
     ids.push("dist_b.kind".into());
     ids.extend(TAPE_OTT.iter().map(|x| x.0.to_string()));
+    for c in 1..=4 {
+        for n in CCOMP_NAMES {
+            ids.push(format!("ccomp{c}.{n}"));
+        }
+    }
     let mut v: Vec<(String, u8)> = ids
         .into_iter()
         .filter_map(|id| match mixer_target(&id) {
@@ -409,6 +414,33 @@ pub const TAPE_OTT: [(&str, u8); 4] = {
     ]
 };
 
+/// This fork: a mixer channel's COMP face's controls, in controller order
+/// ([`orb_engine::frame::CCOMP`]).
+pub const CCOMP_NAMES: [&str; 4] = ["on", "ratio", "thres", "ott"];
+
+/// This fork: the channel (0..4) and control (`CCOMP_NAMES`) of a channel COMP face's id
+/// (`ccomp2.ratio`).
+pub fn ccomp_of(id: &str) -> Option<(usize, usize)> {
+    let (sec, name) = id.split_once('.')?;
+    let c = sec
+        .strip_prefix("ccomp")?
+        .parse::<usize>()
+        .ok()?
+        .checked_sub(1)?;
+    let i = CCOMP_NAMES.iter().position(|&n| n == name)?;
+    (c < 4).then_some((c, i))
+}
+
+/// This fork: what a channel COMP face's control `(c, i)` sets on the channel the song's
+/// compressor is on (`comp_id`, 2..5 channel 1..4): the song's compressor's ON, RATIO and THRES
+/// and its OTT, which an `.rbs` keeps; the other channels have their own ([`CCOMP_NAMES`]).
+pub fn song_comp_id(i: usize) -> &'static str {
+    ["comp.on", "comp.ratio", "comp.threshold", "comp.ott"][i.min(3)]
+}
+
+/// The gain-reduction LEDs of the COMP, the second COMP and (this fork) the channels' own.
+type GrLeds = ([u8; 9], [u8; 9], [[u8; 9]; 4]);
+
 pub fn mixer_target(id: &str) -> Option<MixerTarget> {
     match id {
         "master.fader" => return Some(MixerTarget::Global(0)),
@@ -421,6 +453,12 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
         "dist.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND)),
         "dist_b.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND + 1)),
         _ => {}
+    }
+    // this fork: the channels' own compressors
+    if let Some((c, i)) = ccomp_of(id) {
+        return Some(MixerTarget::Global(
+            orb_engine::frame::CCOMP + 4 * c as u8 + i as u8,
+        ));
     }
     // this fork: the delays' TAPE and the COMPs' OTT (their lamps)
     if let Some(&(_, g)) = TAPE_OTT.iter().find(|x| x.0 == id) {
@@ -599,7 +637,7 @@ pub struct Link {
     /// ([`Link::song_mode_blocks`]).
     saved: Option<SavedBlocks>,
     /// The gain-reduction LEDs [`Link::moving`] saw last.
-    shown_gr: Option<([u8; 9], [u8; 9])>,
+    shown_gr: Option<GrLeds>,
     /// The mixer's live parameters the last snapshot had (this fork: what an `.rbsx` keeps of
     /// the effects slots, `rbsx.rs`).
     mixer: orb_engine::frame::MixerParams,
@@ -730,7 +768,7 @@ impl Link {
         let (playing, frames) = (s.playing, s.frames);
         // the compressor's reduction holds its last value in silence: it moves only when it
         // changes
-        let gr = (panel.gr_leds, panel.gr_leds_b);
+        let gr = (panel.gr_leds, panel.gr_leds_b, panel.gr_ccomp);
         let gr_moved = self.shown_gr.replace(gr) != Some(gr);
         playing
             || frames <= mark
@@ -1095,6 +1133,12 @@ impl Link {
             "song.vintage" => return global(21),
             _ => {}
         }
+        // this fork: the COMP face of the channel the song's compressor is on sets that one
+        if let Some((c, i)) = ccomp_of(id)
+            && self.mixer.comp_id as usize == c + 2
+        {
+            return self.set_messages(song_comp_id(i), value);
+        }
         if let Some(t) = mixer_target(id) {
             let data = match t {
                 MixerTarget::Global(i) => vec![i, value as u8],
@@ -1358,6 +1402,10 @@ impl Link {
             panel.meters.insert(id.into(), meter_state(v));
         }
         panel.gr_leds_b = gr_leds(((b[2] as u32 * 4 + 63) / 127) as usize);
+        // and the channels' own compressors'
+        for (c, &v) in s.meters_ccomp.iter().enumerate() {
+            panel.gr_ccomp[c] = gr_leds(((v as u32 * 4 + 63) / 127) as usize);
+        }
         // this fork: the chorus's, the flanger's and the phaser's meters
         for (k, fx) in ["cho", "fla", "pha"].into_iter().enumerate() {
             for (inst, sfx) in ["", "_b"].into_iter().enumerate() {
@@ -1475,6 +1523,22 @@ impl Link {
         }
         panel.adopt("dist.kind", m.dist_kind[0] as i32);
         panel.adopt("dist_b.kind", m.dist_kind[1] as i32);
+        // the channels' COMP faces: the song's compressor on its channel, the others their own
+        for c in 0..4 {
+            for (i, name) in CCOMP_NAMES.into_iter().enumerate() {
+                let v = if m.comp_id as usize == c + 2 {
+                    match i {
+                        3 => Some(m.ott[0]),
+                        _ => live(Device::Compressor, i),
+                    }
+                } else {
+                    Some(m.ccomp[c][i])
+                };
+                if let Some(v) = v {
+                    panel.adopt(&format!("ccomp{}.{name}", c + 1), v as i32);
+                }
+            }
+        }
         for (id, g) in TAPE_OTT {
             if let Some(v) = m.fork(g) {
                 panel.adopt(id, v as i32);
@@ -1538,7 +1602,11 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "comp_b.ott" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "ccomp4.ott" && *g == FORK_END - 1)
+        );
+        assert!(
+            ids.iter()
+                .any(|(id, g)| id == "comp_b.ott" && *g == orb_engine::frame::OTT + 1)
         );
     }
 }

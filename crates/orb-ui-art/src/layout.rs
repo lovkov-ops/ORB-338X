@@ -69,6 +69,14 @@ impl Builder<'_> {
         self.layout.backgrounds.push((bg.to_string(), ox, oy));
     }
 
+    /// A section with no background of its own (this fork: a face the app draws over another
+    /// section's, `ccomp`).
+    fn section_over(&mut self, name: &str, ox: f32, oy: f32) {
+        self.section = name.to_string();
+        self.ox = ox;
+        self.oy = oy;
+    }
+
     fn size(&self, part: &str) -> (f32, f32) {
         *self
             .sizes
@@ -222,6 +230,9 @@ pub fn layout(parts: &[Part]) -> Layout {
     tr909_flip(&mut b);
     for c in 0..4 {
         mixer(&mut b, c);
+    }
+    for c in 0..4 {
+        channel_comp(&mut b, c);
     }
     master(&mut b);
     effects(&mut b);
@@ -646,6 +657,9 @@ fn mixer(b: &mut Builder, c: usize) {
         );
         b.knob(id, KNOB_SMALL, 36.0, 70.0, 0.0);
     }
+    // the C key under LO (this fork): opens the channel's COMP face, lit while its
+    // compressor is on
+    b.part("c", "ccompkey", "mixc_off", 54.5, 100.0);
     for id in ["delay", "dist", "pcf", "comp"] {
         b.part(
             &format!("{id}_b_label"),
@@ -656,6 +670,30 @@ fn mixer(b: &mut Builder, c: usize) {
         );
         b.knob(&format!("{id}_b"), KNOB_SMALL, 36.0, 26.0, 0.0);
     }
+}
+
+/// A mixer channel's COMP face (this fork): its own section over the channel's, which the app
+/// shows instead of the MIX face while the channel's C key has it open: the gain-reduction
+/// LEDs, the ON and OTT lamps, RATIO and THRES, and the back key (the cuts place them; the
+/// background `bg_ccomp` is drawn in place of `bg_mixer`).
+fn channel_comp(b: &mut Builder, c: usize) {
+    b.section_over(&format!("ccomp{}", c + 1), 456.0, 50.0 + 115.0 * c as f32);
+    for i in 0..9 {
+        b.part(
+            &format!("gr{}", i + 1),
+            "meter",
+            "gr_led_off",
+            3.5 + 7.0 * i as f32,
+            25.0,
+        );
+    }
+    b.part("on", "toggle", "ccompon_off", 20.0, 51.0);
+    b.part("ott", "toggle", "ccompott_off", 42.0, 51.0);
+    b.knob("ratio", KNOB_22, 6.0, 66.0, 0.3);
+    b.knob("thres", KNOB_22, 42.0, 66.0, 0.6);
+    b.part("ratio_label", "ottlabel", "ccomplbl_ratio_off", 5.0, 90.4);
+    b.part("thres_label", "ottlabel", "ccomplbl_thres_off", 41.0, 90.4);
+    b.part("back", "trigger", "ccompback_rest", 54.5, 100.0);
 }
 
 fn master(b: &mut Builder) {
@@ -881,7 +919,12 @@ pub fn compose(parts: &[Part], l: &Layout) -> String {
                 || id.ends_with(&format!(".{fx}_label"))
                 || id == format!("bg_{fx}")
         });
-        modfx || id.contains("_b.") || id.ends_with("_b") || id.contains("_b_")
+        modfx
+            || id.contains("_b.")
+            || id.ends_with("_b")
+            || id.contains("_b_")
+            // the channels' COMP faces (this fork) are closed
+            || id.starts_with("ccomp")
     };
     for (name, x, y) in l.backgrounds.iter().filter(|b| !second(&b.0)) {
         s.g_at(*x, *y).raw(&get(name).body).end_g();

@@ -561,6 +561,8 @@ pub struct MixerParams {
     /// This fork: the OTT of the COMP (`ott[0]`) and of the second COMP (`[1]`), non-zero on
     /// ([`OTT`], [`crate::ott`]).
     pub ott: [u8; 2],
+    /// This fork: each channel's compressor (`ccomp[c][p]`, p [`CCOMP_ON`]..; [`CCOMP`]).
+    pub ccomp: [[u8; 4]; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -624,10 +626,23 @@ pub const RVRB_SEND: u8 = RVRB + 10;
 /// [`MixerParams::ott`]).
 pub const TAPE: u8 = RVRB_SEND + 8;
 pub const OTT: u8 = TAPE + 2;
+/// This fork: each channel's own compressor, the COMP face of its MIX section (no effects slot
+/// holds the compressor): `CCOMP + 4c + p`, p [`CCOMP_ON`], [`CCOMP_AMOUNT`] (the RATIO knob),
+/// [`CCOMP_THRES`], [`CCOMP_OTT`] ([`MixerParams::ccomp`]). The channel the song's compressor
+/// is on (`comp_id`) hears the song's insert, with its settings (the original's); another
+/// channel whose ON is set hears its own copy, with these settings.
+pub const CCOMP: u8 = OTT + 2;
+pub const CCOMP_ON: usize = 0;
+pub const CCOMP_AMOUNT: usize = 1;
+pub const CCOMP_THRES: usize = 2;
+pub const CCOMP_OTT: usize = 3;
+/// A channel's compressor at first: off, the song's compressor's ctor values, OTT off.
+pub const CCOMP_DEFAULTS: [u8; 4] = [0, 70, 64, 0];
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = OTT + 2;
-/// The original's slots: the delay, the distortion, the PCF, the compressor.
-pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
+pub const FORK_END: u8 = CCOMP + 16;
+/// The slots at first: the delay, the distortion, the PCF and the reverb (the original's
+/// fourth, the compressor, is each channel's own now, [`CCOMP`]).
+pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_RVRB];
 
 /// This fork: whether `ctrl` is one of this fork's mixer controllers ([`LIMIT`],
 /// [`LIMIT_AMT`], [`WET`].., [`MORE`]..).
@@ -641,6 +656,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= CCOMP && is_fork_mixer(ctrl) => {
+                let x = (ctrl - CCOMP) as usize;
+                Some(self.ccomp[x / 4][x % 4])
+            }
             _ if ctrl >= OTT && is_fork_mixer(ctrl) => Some(self.ott[(ctrl - OTT) as usize]),
             _ if ctrl >= TAPE && is_fork_mixer(ctrl) => Some(self.tape[(ctrl - TAPE) as usize]),
             _ if ctrl >= RVRB_SEND && is_fork_mixer(ctrl) => {
@@ -691,6 +710,11 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= CCOMP && is_fork_mixer(ctrl) => {
+                let x = (ctrl - CCOMP) as usize;
+                let knob = matches!(x % 4, CCOMP_AMOUNT | CCOMP_THRES);
+                self.ccomp[x / 4][x % 4] = if knob { value.min(127) } else { value };
+            }
             _ if ctrl >= OTT && is_fork_mixer(ctrl) => self.ott[(ctrl - OTT) as usize] = value,
             _ if ctrl >= TAPE && is_fork_mixer(ctrl) => self.tape[(ctrl - TAPE) as usize] = value,
             _ if ctrl >= RVRB_SEND && is_fork_mixer(ctrl) => {
@@ -732,7 +756,9 @@ impl MixerParams {
                 self.delay_b[(ctrl - DELAY_B) as usize] = value;
             }
             _ if ctrl >= SLOT && is_fork_mixer(ctrl) => {
-                self.slots[(ctrl - SLOT) as usize] = value.min(FX_COMP);
+                // the compressor is no slot's (each channel's own, [`CCOMP`]): the reverb
+                let v = value.min(FX_COMP);
+                self.slots[(ctrl - SLOT) as usize] = if v == FX_COMP { FX_RVRB } else { v };
             }
             _ if ctrl >= MORE && is_fork_mixer(ctrl) => {
                 let x = (ctrl - MORE) as usize;
@@ -767,6 +793,7 @@ impl MixerParams {
         self.rvrb_send = from.rvrb_send;
         self.tape = from.tape;
         self.ott = from.ott;
+        self.ccomp = from.ccomp;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -849,6 +876,7 @@ impl Default for MixerParams {
             rvrb_send: [[0; 2]; 4],
             tape: [0; 2],
             ott: [0; 2],
+            ccomp: [CCOMP_DEFAULTS; 4],
         }
     }
 }
@@ -885,6 +913,7 @@ impl From<&song::Mixer> for MixerParams {
             rvrb_send: [[0; 2]; 4],
             tape: [0; 2],
             ott: [0; 2],
+            ccomp: [CCOMP_DEFAULTS; 4],
         }
     }
 }
@@ -917,6 +946,7 @@ impl MixerParams {
             rvrb_send: [[0; 2]; 4],
             tape: [0; 2],
             ott: [0; 2],
+            ccomp: [CCOMP_DEFAULTS; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1233,6 +1263,9 @@ pub struct Frame {
     /// This fork: each channel's own copies of the PCF and the compressor ([`Routing::pcf_copy`],
     /// [`Routing::comp_copy`]).
     copies: [[Option<Box<voices::InsertCopy>>; 2]; 4],
+    /// This fork: the 808's and the 909's own compressor's copy for a split drum machine's
+    /// right side ([`CCOMP`]), while the channel hears its own compressor.
+    comp_right: [Option<Box<voices::InsertCopy>>; 2],
     /// This fork: each channel's copies of the second DIST, PCF and COMP (`copies_b[c][k]`:
     /// the bus's, or a split drum machine's left and right sides'), while two slots hold the
     /// insert and the channel hears it ([`MixerParams::wet_b`]).
@@ -1240,6 +1273,9 @@ pub struct Frame {
     /// This fork: the second inserts' meter bytes, each the sum of its channels' copies' (the
     /// loudest gain reduction for the compressor's): DIST, PCF, COMP gain, COMP peak.
     pub meters_b: [u8; 4],
+    /// This fork: each channel's compressor's gain meter byte ([`crate::comp::GAIN_METER`]): the
+    /// song's insert's on the channel it is on, the channel's own copy's on another, 0 off.
+    pub meters_ccomp: [u8; 4],
     /// This fork: each channel's EQ ([`MixerParams::eq`]).
     eqs: [crate::eq::ChannelEq; 4],
     /// This fork: each channel's DIST kinds' memory (`kinds[c][d][side]`: d 0 the DIST, 1 the
@@ -1330,8 +1366,10 @@ impl Frame {
             voice_mix: [voices::VoiceMix::default(); 2],
             right: None,
             copies: Default::default(),
+            comp_right: Default::default(),
             copies_b: Default::default(),
             meters_b: [0; 4],
+            meters_ccomp: [0; 4],
             eqs: Default::default(),
             kinds: Default::default(),
             otts: Default::default(),
@@ -1423,7 +1461,7 @@ impl Frame {
                 pcf,
                 comp,
                 pcf_copy: !pcf && p.more[c][0] != 0,
-                comp_copy: !comp && p.more[c][1] != 0,
+                comp_copy: !comp && p.ccomp[c][CCOMP_ON] != 0,
             };
             // this fork: a channel off the DIST starts its kind anew when it comes back
             if cp.dist == 0 {
@@ -1432,7 +1470,7 @@ impl Frame {
                 }
             }
             // and off the COMP its OTT
-            if !comp && p.more[c][1] == 0 {
+            if !comp && p.ccomp[c][CCOMP_ON] == 0 {
                 for fx in &mut self.otts[c][0] {
                     fx.silence();
                 }
@@ -1473,10 +1511,13 @@ impl Frame {
         self.devices.delay.set_tape(p.tape[0] != 0);
         // this fork: the channels' own copies of the PCF and the compressor, made from the
         // song's insert when a channel takes it (so a copy starts where the song's insert is),
-        // dropped when it leaves
+        // dropped when it leaves. A PCF copy follows the song's PCF; a compressor copy is the
+        // channel's own compressor, with the channel's settings ([`CCOMP`]), and a split drum
+        // machine's right side has one more
         for (c, copies) in self.copies.iter_mut().enumerate() {
             let r = self.state.channels[c].routing;
             let src = [&self.devices.pcf, &self.devices.comp];
+            let own = [1, p.ccomp[c][CCOMP_AMOUNT], p.ccomp[c][CCOMP_THRES]];
             for (k, want) in [r.pcf_copy, r.comp_copy].into_iter().enumerate() {
                 let slot = &mut copies[k];
                 if !want {
@@ -1484,12 +1525,43 @@ impl Frame {
                     continue;
                 }
                 match slot {
-                    // a new copy is the song's insert as this update left it
-                    None => *slot = voices::InsertCopy::new(&**src[k]).map(Box::new),
+                    // a new copy is the song's insert as this update left it (a compressor
+                    // given the channel's settings at once)
+                    None => {
+                        *slot = voices::InsertCopy::new(&**src[k]).map(Box::new);
+                        if k == 1
+                            && let Some(cp) = slot
+                        {
+                            cp.set_params(&own);
+                            cp.ins.update(&ctx);
+                        }
+                    }
                     Some(cp) => {
-                        cp.follow(&**src[k]);
+                        if k == 1 {
+                            cp.set_params(&own);
+                        } else {
+                            cp.follow(&**src[k]);
+                        }
                         cp.ins.update(&ctx);
                     }
+                }
+            }
+            let gain = |ins: &dyn InsertEffect| ins.live().get(crate::comp::GAIN_METER).copied();
+            self.meters_ccomp[c] = if r.comp {
+                gain(&**src[1])
+            } else {
+                copies[1].as_ref().and_then(|cp| gain(&*cp.ins))
+            }
+            .unwrap_or(0);
+            if c >= 2 {
+                let right = &mut self.comp_right[c - 2];
+                if !r.comp_copy || self.voice_mix[c - 2].neutral() {
+                    *right = None;
+                } else if let Some(rc) = right {
+                    rc.set_params(&own);
+                    rc.ins.update(&ctx);
+                } else if let Some(cp) = &copies[1] {
+                    *right = voices::InsertCopy::new(&*cp.ins).map(Box::new);
                 }
             }
         }
@@ -1735,10 +1807,17 @@ impl Frame {
             // this fork: the DIST's kinds, the DIST's and the second DIST's, and the COMPs' OTT
             let kinds = self.devices.mixer.live.dist_kind;
             let otts = self.devices.mixer.live.ott;
+            let ccomp_ott = self.devices.mixer.live.ccomp[c][CCOMP_OTT];
             let [kind_a, kind_b] = &mut self.kinds[c];
             let [ott_a, ott_b] = &mut self.otts[c];
             let mut seen = [false; 3];
-            for fx in in_slots {
+            // the compressor, no slot's, after the slots' inserts (where the original's fourth
+            // slot had it); a split drum machine's after its sets are summed (below)
+            let chain = in_slots
+                .into_iter()
+                .filter(|&fx| fx != FX_COMP)
+                .chain((!split_now).then_some(FX_COMP));
+            for fx in chain {
                 let Some(k) = [FX_DIST, FX_PCF, FX_COMP].iter().position(|&f| f == fx) else {
                     continue;
                 };
@@ -1782,7 +1861,9 @@ impl Frame {
                         &mut *bus
                     };
                     let dry = (wet[k] < WET_FULL).then_some(*b);
-                    let alt = alt_of(k, kinds[0], otts[0]);
+                    // a channel's own compressor has its own OTT
+                    let ott = if k == 2 && !song { ccomp_ott } else { otts[0] };
+                    let alt = alt_of(k, kinds[0], ott);
                     let params = ins_params(&**ins);
                     let mem = AltMem {
                         kind: &mut kind_a[0],
@@ -1890,6 +1971,54 @@ impl Frame {
                             send[j] = st(send[j] as f64 + m);
                         }
                     }
+                }
+            }
+            // this fork: a split drum machine's compressor on its summed sides (the sends were
+            // taken before it): the left side the song's insert or the channel's own copy, the
+            // right side the right inserts' or the own copy's right one
+            if split_now && let Some((ins, song)) = inserts[2].take() {
+                ctx.stack_word = self.stack_word;
+                let ott = if song { otts[0] } else { ccomp_ott };
+                let alt = alt_of(2, kinds[0], ott);
+                let params = ins_params(&**ins);
+                let dry = (wet[2] < WET_FULL).then_some(split.wet_l);
+                let mem = AltMem {
+                    kind: &mut kind_a[0],
+                    ott: &mut ott_a[0],
+                };
+                run_insert(ins, &mut split.wet_l, &ctx, alt, mem);
+                if let Some(f) = ins.faulted()
+                    && song
+                {
+                    return Err(f);
+                }
+                if let Some(dry) = &dry {
+                    mix_wet(&mut split.wet_l, dry, wet[2]);
+                }
+                if song {
+                    self.stack_word = ins.stack_word(self.stack_word);
+                }
+                let mem = AltMem {
+                    kind: &mut kind_a[1],
+                    ott: &mut ott_a[1],
+                };
+                if song {
+                    if let Some(right) = &mut self.right {
+                        let dry = (wet[2] < WET_FULL).then_some(split.wet_r);
+                        match alt {
+                            Some(alt) => {
+                                let mut scratch = split.wet_r;
+                                right.process(2, &mut scratch, &ctx);
+                                run_alt(alt, params, mem, &mut split.wet_r);
+                            }
+                            None => right.process(2, &mut split.wet_r, &ctx),
+                        }
+                        if let Some(dry) = &dry {
+                            mix_wet(&mut split.wet_r, dry, wet[2]);
+                        }
+                    }
+                } else if let Some(rc) = &mut self.comp_right[c - 2] {
+                    run_copy(&mut rc.ins, &mut split.wet_r, wet[2], &ctx, alt, mem);
                 }
             }
             // this fork (not the original): the drum machines' channels (808, 909) as loud as

@@ -713,8 +713,11 @@ impl App {
                 continue;
             }
             let y = y + self.panel.slot_dy(sec, "");
-            // a drum machine's FLIP face (this fork)
-            let name = self.panel.background(name);
+            // a drum machine's FLIP face, a mixer channel's COMP face (this fork)
+            let name = match layout::row_at(x, y) {
+                Some(r) if name == "bg_mixer" && self.panel.ccomp_open[r] => "bg_ccomp",
+                _ => self.panel.background(name),
+            };
             let (w, h) = part_size(name);
             if name == logo_anim::LOGO_PART {
                 // once per app start, from the first frame the logo is drawn
@@ -1010,7 +1013,7 @@ impl App {
                 let down = r.is_pointer_button_down_on() || self.key_held(&c.id);
                 match kind {
                     "repeat" | "wind" => self.repeat(ui, c, &r),
-                    "switch" | "toggle" | "radio" | "trigger" | "grid" | "chanled" => {
+                    "switch" | "toggle" | "radio" | "trigger" | "grid" | "chanled" | "ccompkey" => {
                         // a right click on a pattern button opens the pattern menu instead
                         // (this fork, pattern_clip.rs): it does not select the pattern
                         let menu_click = pattern_button(&c.id).is_some()
@@ -1494,7 +1497,8 @@ fn part_size(name: &str) -> (f32, f32) {
         "wood" => (16.0, 510.0),
         "bg_transport" => (592.0, 50.0),
         logo_anim::LOGO_PART => (logo_anim::LOGO_W, logo_anim::LOGO_H),
-        "bg_pattern" | "bg_mixer" => (70.0, 115.0),
+        // (this fork: a mixer channel's COMP face in place of its MIX face)
+        "bg_pattern" | "bg_mixer" | "bg_ccomp" => (70.0, 115.0),
         "bg_tb303" | "bg_tr808" | "bg_tr909" | "bg_tr808_flip" | "bg_tr909_flip" => (366.0, 115.0),
         "bg_master" => (82.0, 100.0),
         // this fork: the four effects slots, 90 px each
@@ -1588,7 +1592,7 @@ fn save_png(path: &PathBuf, image: &egui::ColorImage) -> Result<(), image::Image
 }
 
 /// The effects a slot can hold (this fork), as an effects slot's title menu lists them.
-const FX_NAMES: [(&str, &str); 8] = [
+const FX_NAMES: [(&str, &str); 7] = [
     ("rvrb", "Reverb"),
     ("delay", "Delay"),
     ("dist", "Distortion"),
@@ -1596,7 +1600,6 @@ const FX_NAMES: [(&str, &str); 8] = [
     ("cho", "Chorus"),
     ("fla", "Flanger"),
     ("pha", "Phaser"),
-    ("comp", "Compressor"),
 ];
 
 /// A choice in an effects slot's menu (this fork).

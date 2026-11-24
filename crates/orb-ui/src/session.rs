@@ -47,9 +47,19 @@ pub fn open_bytes(data: &[u8], label: &str) -> Result<Opened, String> {
     let mut source =
         rbs::Song::parse(data).map_err(|e| format!("{label}: not a valid .rbs song: {e}"))?;
     // the GENERATE settings of an .rbsx leave the song: only an .rbsx save writes them back
-    let generate = crate::rbsx::split(&mut source);
-    let engine = orb_engine::load::convert(&source)
+    let mut generate = crate::rbsx::split(&mut source);
+    let mut engine = orb_engine::load::convert(&source)
         .map_err(|e| format!("{label}: cannot load the song: {e:?}"))?;
+    // (this fork) an older .rbsx: the slots' compressor goes to the channels
+    if let Some(g) = generate.as_mut().filter(|g| g.comp_in_slots) {
+        use orb_engine::comp::{AMOUNT, ENABLED, THRESHOLD};
+        let c = &engine.comp.params;
+        let comp = [c[ENABLED], c[AMOUNT], c[THRESHOLD]];
+        if crate::rbsx::move_comp_to_channels(&mut g.mixer_fx, engine.mixer.comp_id, comp) {
+            engine.comp.params[ENABLED] = 0;
+        }
+        g.comp_in_slots = false;
+    }
     Ok(Opened {
         engine,
         source,

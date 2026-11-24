@@ -33,7 +33,9 @@ const DRUMS: [&str; 2] = ["tr808", "tr909"];
 /// The chunk's tag.
 pub const TAG: [u8; 4] = *b"OGEN";
 /// The first line of the chunk's body: the format and its version.
-const HEADER: &str = "ORB-338X GENERATE 1";
+/// Version 2 (this fork): the compressor is each channel's own, no slot's
+/// ([`move_comp_to_channels`]).
+const HEADER: &str = "ORB-338X GENERATE 2";
 /// The file extension of a song with the GENERATE settings.
 pub const EXTENSION: &str = "rbsx";
 
@@ -73,6 +75,9 @@ pub struct GenState {
     /// song's value or has song-mode events (`crate::link::fork_mixer_ids`): the controller,
     /// its pattern-mode value and its track's events, in controller order.
     pub mixer_fx: Vec<FxSetting>,
+    /// An older file (version 1), whose effects slots held the compressor: `mixer_fx` is
+    /// still to be moved to the channels' compressors ([`move_comp_to_channels`]).
+    pub comp_in_slots: bool,
 }
 
 /// One mixer controller of the effects slots an `.rbsx` keeps ([`GenState::mixer_fx`]): the
@@ -242,7 +247,10 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
         .map(|(k, v)| (k.trim(), v.trim()))
         .collect();
     let get = |name: &str| values.iter().find(|(k, _)| *k == name).map(|(_, v)| *v);
-    let mut state = GenState::default();
+    let mut state = GenState {
+        comp_in_slots: version < 2,
+        ..Default::default()
+    };
     // BAZE 1 first: BAZE 2 is checked against it
     for synth in 0..2 {
         let n = synth + 1;
@@ -352,6 +360,85 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
             .map(String::from);
     }
     Some(state)
+}
+
+/// An older file's effects slots (version 1, where the compressor was one of the slots' effects)
+/// as this version's: the channels that heard the compressor get their own with its settings,
+/// `comp` the song's compressor's ON, AMOUNT and THRES (its RATIO and THRES), and the slot
+/// that held it holds the reverb. The song's channel (`comp_id` 2..5 channel 1..4) keeps the
+/// song's compressor; channels that heard only the second compressor get its settings. The
+/// channels' COMP knobs (the wet amounts), the compressor on more channels and the second
+/// compressor go. True when no slot held the compressor: the song's compressor on a channel
+/// was not heard, and is to be off.
+pub fn move_comp_to_channels(fx: &mut Vec<FxSetting>, comp_id: u8, comp: [u8; 3]) -> bool {
+    use orb_engine::frame::{
+        CCOMP, COMP_B, DEFAULT_SLOTS, FX_COMP, FX_DELAY, FX_DIST, FX_PCF, FX_RVRB, MORE,
+        MixerParams, OTT, SLOT, WET, WET_B,
+    };
+    let new = MixerParams::default();
+    let get = |fx: &[FxSetting], g: u8| {
+        fx.iter()
+            .find(|x| x.0 == g)
+            .map_or_else(|| new.fork(g).unwrap_or(0), |x| x.1)
+    };
+    // the older files' slots: DELAY, DIST, PCF, COMP
+    let old = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
+    let slots: [u8; 4] = std::array::from_fn(|s| {
+        fx.iter()
+            .find(|x| x.0 == SLOT + s as u8)
+            .map_or(old[s], |x| x.1)
+    });
+    let comps = slots.iter().filter(|&&f| f == FX_COMP).count();
+    let ott = [get(fx, OTT), get(fx, OTT + 1)];
+    let comp_b = [get(fx, COMP_B), get(fx, COMP_B + 1), get(fx, COMP_B + 2)];
+    let more: [bool; 4] = std::array::from_fn(|c| get(fx, MORE + 2 * c as u8 + 1) != 0);
+    let wet_b: [u8; 4] = std::array::from_fn(|c| get(fx, WET_B + 3 * c as u8 + 2));
+    let song = |c: usize| comp_id == c as u8 + 2;
+    let mut own = [None; 4];
+    for c in 0..4 {
+        if song(c) {
+            continue;
+        }
+        if comps >= 1 && more[c] && comp[0] != 0 {
+            own[c] = Some([1, comp[1], comp[2], ott[0]]);
+        } else if comps >= 2 && wet_b[c] > 0 && comp_b[0] != 0 {
+            own[c] = Some([1, comp_b[1], comp_b[2], ott[1]]);
+        }
+    }
+    // the older compressor's controllers go; the slots' compressor is the reverb
+    let gone = |g: u8| {
+        (0..4u8).any(|c| g == WET + 3 * c + 2 || g == MORE + 2 * c + 1 || g == WET_B + 3 * c + 2)
+            || (COMP_B..COMP_B + 3).contains(&g)
+            || g == OTT + 1
+            || (CCOMP..CCOMP + 16).contains(&g)
+    };
+    fx.retain(|x| !gone(x.0));
+    for s in 0..4u8 {
+        let at = fx.iter().position(|x| x.0 == SLOT + s);
+        let mut v = at.map_or(old[s as usize], |i| fx[i].1);
+        if v == FX_COMP {
+            v = FX_RVRB;
+        }
+        let mut track = at.map(|i| fx.remove(i).2).unwrap_or_default();
+        for e in &mut track {
+            if e.1 == FX_COMP {
+                e.1 = FX_RVRB;
+            }
+        }
+        if v != DEFAULT_SLOTS[s as usize] || !track.is_empty() {
+            fx.push((SLOT + s, v, track));
+        }
+    }
+    for (c, p) in own.iter().enumerate() {
+        for (i, &v) in p.iter().flatten().enumerate() {
+            let g = CCOMP + 4 * c as u8 + i as u8;
+            if Some(v) != new.fork(g) {
+                fx.push((g, v, Vec::new()));
+            }
+        }
+    }
+    fx.sort_by_key(|x| x.0);
+    comps == 0 && (2..=5).contains(&comp_id)
 }
 
 /// Takes the `OGEN` chunk out of `song` and reads it: the settings it kept, if it had one.
@@ -531,6 +618,7 @@ impl App {
                     .unwrap_or_default()
             }),
             mixer_fx: self.mixer_fx_state(),
+            comp_in_slots: false,
             kits: std::array::from_fn(|k| {
                 self.kit_of(k).map(|kit| match kit {
                     orb_cli::mods::Kit::Standard => orb_cli::mods::STANDARD.to_string(),
@@ -725,7 +813,7 @@ mod tests {
         assert_eq!(body.len() % 2, 0, "an even chunk");
         assert_eq!(decode(&body), Some(st));
         let text = String::from_utf8(body).unwrap();
-        assert!(text.starts_with("ORB-338X GENERATE 1\n"));
+        assert!(text.starts_with("ORB-338X GENERATE 2\n"));
         assert!(text.contains("baze1.scale=IONIAN\n"));
         assert!(text.contains("baze1.random=ACCENT,SLIDE,NOTE\n"));
         assert!(text.contains("baze1.move=+1\n"));
@@ -764,6 +852,57 @@ mod tests {
             decode(old.as_bytes()).map(|s| s.generated),
             Some([true, false])
         );
+    }
+
+    /// (this fork) An older file's compressor of the slots goes to the channels that heard it.
+    #[test]
+    fn an_older_files_compressor_goes_to_the_channels() {
+        use orb_engine::frame::{
+            CCOMP, COMP_B, FX_COMP, FX_PHA, FX_RVRB, MORE, OTT, SLOT, WET, WET_B,
+        };
+        let v1 = b"ORB-338X GENERATE 1\n";
+        assert!(decode(v1).unwrap().comp_in_slots);
+        assert!(!decode(&encode(&GenState::default())).unwrap().comp_in_slots);
+        let song_comp = [1, 90, 30];
+        // the default slots: the song's channel 2 keeps it; channel 3 had it as more, its OTT
+        // on; the COMP knob of channel 2 goes
+        let mut fx = vec![
+            (WET + 3 + 2, 40, vec![]),
+            (MORE + 2 * 2 + 1, 1, vec![]),
+            (OTT, 1, vec![]),
+        ];
+        assert!(!move_comp_to_channels(&mut fx, 3, song_comp));
+        let c3 = CCOMP + 8;
+        let want = vec![
+            (OTT, 1, vec![]),
+            (c3, 1, vec![]),
+            (c3 + 1, 90, vec![]),
+            (c3 + 2, 30, vec![]),
+            (c3 + 3, 1, vec![]),
+        ];
+        assert_eq!(fx, want);
+        // a second COMP: channel 1 heard it, with its own settings; both slots the reverb
+        let mut fx = vec![
+            (SLOT + 1, FX_COMP, vec![(0, FX_COMP), (96, FX_PHA)]),
+            (WET_B + 2, 127, vec![]),
+            (COMP_B + 1, 20, vec![]),
+            (COMP_B + 2, 100, vec![]),
+        ];
+        assert!(!move_comp_to_channels(&mut fx, 0, song_comp));
+        let want = vec![
+            (SLOT + 1, FX_RVRB, vec![(0, FX_RVRB), (96, FX_PHA)]),
+            (CCOMP, 1, vec![]),
+            (CCOMP + 1, 20, vec![]),
+            (CCOMP + 2, 100, vec![]),
+        ];
+        assert_eq!(fx, want);
+        // no slot held it: the song's compressor on channel 1 was not heard
+        let mut fx = vec![(SLOT + 3, FX_PHA, vec![]), (MORE + 1, 1, vec![])];
+        assert!(move_comp_to_channels(&mut fx, 2, song_comp));
+        assert_eq!(fx, vec![(SLOT + 3, FX_PHA, vec![])]);
+        // on the master: as it was
+        let mut fx = vec![(SLOT + 3, FX_PHA, vec![])];
+        assert!(!move_comp_to_channels(&mut fx, 1, song_comp));
     }
 
     #[test]

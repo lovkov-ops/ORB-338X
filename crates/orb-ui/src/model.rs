@@ -301,6 +301,11 @@ pub struct Panel {
     pub gr_leds: [u8; 9],
     /// This fork: the second COMP's ([`Panel::gr_leds`]).
     pub gr_leds_b: [u8; 9],
+    /// This fork: each mixer channel's own compressor's ([`Panel::gr_leds`]).
+    pub gr_ccomp: [[u8; 9]; 4],
+    /// This fork: whether each mixer channel shows its COMP face (its C key opens it, the face's
+    /// back key closes it); the panel's state, no message.
+    pub ccomp_open: [bool; 4],
     /// The song's sound model: the Options menu's "Vintage ReBirth Synth Sound" (GLOB byte 482,
     /// the engine's global byte 21). Changes go through [`Panel::set_vintage`].
     pub vintage: bool,
@@ -350,16 +355,33 @@ pub fn flip_lamp(name: &str) -> Option<(usize, usize)> {
     ((1..12).contains(&k) && s < 4).then_some((k, s))
 }
 
+/// This fork: the slots the layout draws the effects in (the original's), which the panel
+/// moves each effect's face and knobs from to the slot that holds it ([`Panel::slot_dy`]).
+const LAYOUT_SLOTS: [u8; 4] = {
+    use orb_engine::frame::*;
+    [FX_DELAY, FX_DIST, FX_PCF, FX_COMP]
+};
+
+/// This fork: the channel 0..=3 of a mixer channel's section (`mixer2`, its COMP face
+/// `ccomp2`).
+pub fn mixer_channel(sec: &str) -> usize {
+    let n = sec.trim_start_matches("mixer").trim_start_matches("ccomp");
+    n.parse::<usize>()
+        .ok()
+        .and_then(|n| n.checked_sub(1))
+        .unwrap_or(0)
+        .min(3)
+}
+
 /// This fork: the effects a slot may hold, by the engine's codes (`orb_engine::frame::FX_RVRB`
 /// ..), as section and knob names.
 pub const FX_KINDS: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
 
-/// This fork: the effects the engine has so far (a slot's menu offers only these).
-pub const FX_READY: [u8; 8] = {
+/// This fork: the effects a slot may hold (a slot's menu offers only these): not the
+/// compressor, each channel's own (`ccomp`).
+pub const FX_READY: [u8; 7] = {
     use orb_engine::frame::*;
-    [
-        FX_RVRB, FX_DELAY, FX_DIST, FX_PCF, FX_CHO, FX_FLA, FX_PHA, FX_COMP,
-    ]
+    [FX_RVRB, FX_DELAY, FX_DIST, FX_PCF, FX_CHO, FX_FLA, FX_PHA]
 };
 
 /// This fork: the effect code of a section or knob name (`delay`, `dist`, ...).
@@ -420,6 +442,8 @@ impl Panel {
             meters: HashMap::new(),
             gr_leds: [0; 9],
             gr_leds_b: [0; 9],
+            gr_ccomp: [[0; 9]; 4],
+            ccomp_open: [false; 4],
             vintage: false,
             events: Vec::new(),
             solo: [false; 4],
@@ -719,8 +743,8 @@ impl Panel {
         };
         let Some((fx, inst)) = fx else { return 0.0 };
         // the layout has a second instance where the first is; the chorus, the flanger and the
-        // phaser in the PCF's slot
-        let home = orb_engine::frame::DEFAULT_SLOTS
+        // phaser in the PCF's slot (the layout's slots: the original's DELAY, DIST, PCF, COMP)
+        let home = LAYOUT_SLOTS
             .iter()
             .position(|&s| s == fx)
             .or((orb_engine::frame::FX_CHO..=orb_engine::frame::FX_PHA)
@@ -1008,6 +1032,15 @@ impl Panel {
             // (the FLIP face has no instrument switches: their sounds' upper pills choose)
             "tr808" => matches!(c.kind.as_str(), "knob" | "vswitch") && self.flipped(0),
             "tr909" => c.kind == "knob" && c.name() != "flam" && self.flipped(1),
+            // a mixer channel's COMP face (this fork) over its MIX face, but the header's LEDs
+            // and meter
+            sec if sec.starts_with("ccomp") => !self.ccomp_open[mixer_channel(sec)],
+            sec if sec.starts_with("mixer")
+                && self.ccomp_open[mixer_channel(sec)]
+                && !matches!(c.name(), "activity" | "solo" | "meter") =>
+            {
+                true
+            }
             // an effect no slot holds (this fork), its face and its mixer knobs
             sec => self.out_of_slots(sec, c.name()),
         }
@@ -1139,9 +1172,17 @@ impl Panel {
                         self.mute[c] = !self.mute[c];
                         self.apply_channels();
                     }
+                    // the C key (this fork): the channel's COMP face
+                    "c" => self.ccomp_open[c] = true,
                     _ => self.flip(id),
                 }
             }
+            // a channel's COMP face (this fork): ON, OTT, and the back key to the MIX face
+            s if s.starts_with("ccomp") => match name {
+                "back" => self.ccomp_open[mixer_channel(s)] = false,
+                "on" | "ott" => self.flip(id),
+                _ => {}
+            },
             // the master's LIMIT key (this fork, in place of the COMP key)
             "master" if name == "limit" => self.flip(id),
             // a DIST's kind lamp (this fork): the DIST takes that kind
@@ -1594,6 +1635,18 @@ impl Panel {
             }
             "toggle" if c.id == "tr909.flam_button" => on_off(self.flam_button),
             "toggle" => on_off(self.toggle_on(&c.id)),
+            // a mixer channel's C key (this fork): green while the channel's compressor is on,
+            // orange while its OTT is on too
+            "ccompkey" => {
+                let n = mixer_channel(sec) + 1;
+                let on = self.toggle_on(&format!("ccomp{n}.on"));
+                let ott = self.toggle_on(&format!("ccomp{n}.ott"));
+                match (on, ott) {
+                    (false, _) => format!("{fam}off"),
+                    (true, false) => format!("{fam}on"),
+                    (true, true) => format!("{fam}ott"),
+                }
+            }
             "radio" => on_off(self.radio_on(&c.id)),
             "switch" | "hswitch" | "vswitch" => format!("{fam}{}", self.switch_position(&c.id)),
             "trigger" if c.id == "transport.play" => {
@@ -1646,6 +1699,8 @@ impl Panel {
                 let i: usize = name[2..].parse().unwrap_or(1);
                 let leds = if sec == "comp_b" {
                     &self.gr_leds_b
+                } else if sec.starts_with("ccomp") {
+                    &self.gr_ccomp[mixer_channel(sec)]
                 } else {
                     &self.gr_leds
                 };
@@ -2139,21 +2194,23 @@ mod tests {
 
     #[test]
     fn a_slots_menu_swaps_effects_and_moves_their_controls() {
-        use orb_engine::frame::{FX_COMP, FX_DELAY, FX_DIST, FX_PCF};
-        // this fork: the DIST slot (the second) and the COMP slot (the fourth) swap
+        use orb_engine::frame::{FX_COMP, FX_DELAY, FX_DIST, FX_PCF, FX_RVRB};
+        // this fork: the DIST slot (the second) and the reverb's (the fourth) swap; the reverb
+        // is drawn in the delay's place (the first)
         let mut p = Panel::new();
-        assert_eq!(p.slot_dy("comp", "ratio"), 0.0);
+        assert_eq!(p.slot_dy("rvrb", "size"), 270.0);
+        assert_eq!(p.slot_dy("mixer3", "rvrb"), 66.0);
         p.swap_slots(1, 3);
-        assert_eq!(p.slots, [FX_DELAY, FX_COMP, FX_PCF, FX_DIST]);
+        assert_eq!(p.slots, [FX_DELAY, FX_RVRB, FX_PCF, FX_DIST]);
         let set = |id: &str, value| Event::Set {
             id: id.into(),
             value,
         };
-        assert_eq!(p.events, [set("mixer.slot2", 7), set("mixer.slot4", 2)]);
+        assert_eq!(p.events, [set("mixer.slot2", 0), set("mixer.slot4", 2)]);
         // the sections 90 px a slot, the mixer's knobs and labels 22 px
-        assert_eq!(p.slot_dy("comp", "ratio"), -180.0);
+        assert_eq!(p.slot_dy("rvrb", "size"), 90.0);
         assert_eq!(p.slot_dy("dist", "amount"), 180.0);
-        assert_eq!(p.slot_dy("mixer3", "comp"), -44.0);
+        assert_eq!(p.slot_dy("mixer3", "rvrb"), 22.0);
         assert_eq!(p.slot_dy("mixer3", "dist_label"), 44.0);
         assert_eq!(p.slot_dy("mixer3", "pan"), 0.0);
         assert_eq!(p.slot_dy("delay", "pan"), 0.0);
@@ -2161,7 +2218,7 @@ mod tests {
         assert!(p.out_of_slots("delay_b", "pan") && !p.out_of_slots("pcf", "freq"));
         p.events.clear();
         p.put_slot(2, FX_DELAY);
-        assert_eq!(p.slots, [FX_DELAY, FX_COMP, FX_DELAY, FX_DIST]);
+        assert_eq!(p.slots, [FX_DELAY, FX_RVRB, FX_DELAY, FX_DIST]);
         assert_eq!(p.events, [set("mixer.slot3", 1)]);
         assert!(!p.out_of_slots("delay_b", "pan") && p.out_of_slots("pcf", "freq"));
         assert!(p.out_of_slots("mixer2", "pcf_label") && !p.out_of_slots("mixer2", "delay_b"));
@@ -2177,13 +2234,15 @@ mod tests {
         assert!(!p.out_of_slots("dist_b", "amount") && p.out_of_slots("comp_b", "ratio"));
         assert_eq!(p.slot_dy("dist_b", "amount"), 180.0);
         assert_eq!(p.slot_dy("mixer2", "dist_b"), 44.0);
-        p.put_slot(1, FX_COMP);
+        // the compressor is no slot's (each channel's own)
+        assert!(!p.can_put(1, FX_COMP));
+        p.put_slot(1, FX_RVRB);
         // the PCF back
         assert!(p.can_put(0, FX_PCF));
         // the engine's slots
         p.adopt("mixer.slot2", 2);
         p.adopt("mixer.slot3", 3);
-        p.adopt("mixer.slot4", 7);
+        p.adopt("mixer.slot4", 0);
         assert_eq!(p.slots, orb_engine::frame::DEFAULT_SLOTS);
     }
 

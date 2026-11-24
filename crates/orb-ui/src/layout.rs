@@ -149,8 +149,10 @@ mod tests {
         // 11 controls each, + 66, and the channels' sends into them and their labels, + 48; the
         // reverb's faces, 9 controls each, + 18, its sends and their labels, + 16; the delays'
         // TAPE lamps, + 2, the COMPs' OTT lamps and knob labels, + 6; the FLIP faces' four
-        // effects lamps a sound in place of an FX key, + 66)
-        assert_eq!(c.len(), 801);
+        // effects lamps a sound in place of an FX key, + 66; each mixer channel's C key, + 4,
+        // and its COMP face, nine gain-reduction LEDs, ON, OTT, RATIO, THRES, their labels and
+        // the back key, + 64)
+        assert_eq!(c.len(), 869);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

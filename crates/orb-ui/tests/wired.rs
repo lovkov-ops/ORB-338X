@@ -122,9 +122,12 @@ impl Harness {
             .to_vec()
     }
 
+    /// The center of control `id` where a new song draws it (this fork: an effect's controls
+    /// in the slot that holds it, the reverb's in the fourth).
     fn center(id: &str) -> Pos2 {
         let c = layout::controls().into_iter().find(|c| c.id == id).unwrap();
-        Pos2::new(c.x + c.w / 2.0, c.y + c.h / 2.0)
+        let dy = orb_ui::model::Panel::new().slot_dy(&c.section, c.name());
+        Pos2::new(c.x + c.w / 2.0, c.y + dy + c.h / 2.0)
     }
 
     fn center_of(kind: &str, id: &str) -> Pos2 {
@@ -132,7 +135,8 @@ impl Harness {
             .into_iter()
             .find(|c| c.id == id && c.kind == kind)
             .unwrap();
-        Pos2::new(c.x + c.w / 2.0, c.y + c.h / 2.0)
+        let dy = orb_ui::model::Panel::new().slot_dy(&c.section, c.name());
+        Pos2::new(c.x + c.w / 2.0, c.y + dy + c.h / 2.0)
     }
 
     fn move_to(&mut self, p: Pos2) {
@@ -329,9 +333,6 @@ fn param_controls() -> Vec<(String, Device, u8)> {
         ("dist.on", Distortion, 0),
         ("dist.amount", Distortion, 1),
         ("dist.shape", Distortion, 2),
-        ("comp.on", Compressor, 0),
-        ("comp.ratio", Compressor, 1),
-        ("comp.threshold", Compressor, 2),
         ("pcf.on", Pcf, 0),
         ("pcf.freq", Pcf, 1),
         ("pcf.q", Pcf, 2),
@@ -432,7 +433,8 @@ fn every_knob_fader_and_switch_sends_its_device_message_and_the_engine_takes_it(
     for c in layout::controls() {
         if matches!(c.kind.as_str(), "knob" | "fader" | "hswitch" | "vswitch")
             && (c.section.starts_with("tb303")
-                || ["tr808", "tr909", "delay", "dist", "comp", "pcf"].contains(&c.section.as_str()))
+                // (this fork: the song's COMP is set from a channel's COMP face, `ccomp`)
+                || ["tr808", "tr909", "delay", "dist", "pcf"].contains(&c.section.as_str()))
         {
             assert!(
                 listed.contains(&c.id) || OTHER.contains(&c.id.as_str()),
@@ -494,8 +496,8 @@ fn the_mixer_sends_msg_145_and_147() {
             h.take_log(),
             vec![dev(Device::Mixer, 147, &[c, 3, v as u8])]
         );
-        // this fork: DIST, PCF and COMP are knobs, on above 0; DIST sends the original's key,
-        // and each its wet amount (WET + 3c + k), the knob's value
+        // this fork: DIST and PCF are knobs, on above 0; DIST sends the original's key, and
+        // each its wet amount (WET + 3c + k), the knob's value (the COMP is the channel's own)
         let wet = |k: u8, id: &str, h: &Harness| {
             let v = orb_ui::behavior::knob_send(h.app.panel.knob(&format!("mixer{n}.{id}")));
             dev(Device::Mixer, 145, &[WET + 3 * c + k, v as u8])
@@ -507,21 +509,15 @@ fn the_mixer_sends_msg_145_and_147() {
         h.drag(&format!("mixer{n}.dist"), 20.0);
         let w = wet(0, "dist", &h);
         assert_eq!(h.take_log(), vec![w]);
-        // PCF and Comp are exclusive ids: c + 1 and c + 2
+        // the PCF's is an exclusive id: c + 1
         h.drag(&format!("mixer{n}.pcf"), 20.0);
         let w = wet(1, "pcf", &h);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[2, c + 1]), w]);
-        h.drag(&format!("mixer{n}.comp"), 20.0);
-        let w = wet(2, "comp", &h);
-        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, c + 2]), w]);
 
         h.calls(2);
         let m = h.snap().mixer;
         let ch = m.channels[c as usize];
-        assert_eq!(
-            (m.pcf_id, m.comp_id, ch.dist, ch.enabled),
-            (c + 1, c + 2, 1, 1)
-        );
+        assert_eq!((m.pcf_id, ch.dist, ch.enabled), (c + 1, 1, 1));
         assert_eq!(
             (ch.level as i32, ch.pan as i32, ch.send as i32),
             (
@@ -533,8 +529,6 @@ fn the_mixer_sends_msg_145_and_147() {
         // the knobs turned back to 0 turn them off
         h.drag(&format!("mixer{n}.pcf"), -400.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[2, 0])]);
-        h.drag(&format!("mixer{n}.comp"), -400.0);
-        assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[1, 0])]);
         h.drag(&format!("mixer{n}.dist"), -400.0);
         assert_eq!(h.take_log(), vec![dev(Device::Mixer, 147, &[c, 4, 0])]);
     }
@@ -1265,6 +1259,8 @@ fn knob_ids() -> Vec<String> {
     layout::controls()
         .into_iter()
         .filter(|c| c.kind == "knob" && !orb_ui::model::FLIP_FACES.contains(&c.section.as_str()))
+        // the channels' COMP faces (this fork) are closed in a new song
+        .filter(|c| !c.section.starts_with("ccomp"))
         // the mixer's DIST, PCF and COMP knobs (this fork) are the original's keys: off in a
         // new song, and a double click does not set them
         .filter(|c| orb_ui::model::mixer_insert(&c.id).is_none())
@@ -1304,8 +1300,9 @@ fn a_double_click_sets_every_knob_to_its_value_in_a_new_song() {
     let mut h = Harness::new();
     let knobs = knob_ids();
     // (this fork: each 303's SUB knob, + 2; the master's limiter's AMT, + 1; the PCF's four
-    // sliders are knobs, + 4; the channels' EQ knobs, + 12)
-    assert_eq!(knobs.len(), 96);
+    // sliders are knobs, + 4; the channels' EQ knobs, + 12; the reverb in the fourth slot and
+    // the channels' sends into it in place of the COMP, + 4)
+    assert_eq!(knobs.len(), 100);
     for id in &knobs {
         // the panel shows the new empty song: its value is the knob's default
         let new_song = h.app.panel.value(id).unwrap();
@@ -1682,6 +1679,9 @@ fn the_reverb_reaches_the_engine() {
         assert_eq!(mixer_target(id), Some(Global(g)), "{id}");
     }
     let mut h = Harness::new();
+    // a new song's fourth slot holds it (this fork, in place of the COMP): the phaser there
+    assert!(!h.app.panel.out_of_slots("rvrb", "size"));
+    h.app.panel.put_slot(3, orb_engine::frame::FX_PHA);
     assert!(h.app.panel.out_of_slots("rvrb", "size"));
     assert!(h.app.panel.can_put(1, FX_RVRB));
     h.app.panel.put_slot(1, FX_RVRB);
@@ -1708,7 +1708,7 @@ fn the_reverb_reaches_the_engine() {
 /// OTT on the COMP's knobs read BAL and GAIN.
 #[test]
 fn the_tape_and_ott_lamps_reach_the_engine() {
-    use orb_engine::frame::{FX_COMP, FX_DELAY, OTT, TAPE};
+    use orb_engine::frame::{FX_DELAY, OTT, TAPE};
     use orb_ui::link::{MixerTarget::Global, mixer_target};
     for (id, g) in [
         ("delay.tape", TAPE),
@@ -1727,9 +1727,8 @@ fn the_tape_and_ott_lamps_reach_the_engine() {
     );
     h.app.panel.press("delay.tape", 0.0);
     h.app.panel.press("comp.ott", 0.0);
-    // a second delay and a second COMP, the second COMP's OTT on
+    // a second delay; the second COMP's OTT (an older song's) still reaches the engine
     h.app.panel.put_slot(1, FX_DELAY);
-    h.app.panel.put_slot(2, FX_COMP);
     h.app.panel.press("comp_b.ott", 0.0);
     h.frame(vec![]);
     h.calls(2);
@@ -1749,4 +1748,62 @@ fn the_tape_and_ott_lamps_reach_the_engine() {
     h.frame(vec![]);
     h.calls(2);
     assert_eq!(h.snap().mixer.tape, [0, 0]);
+}
+
+/// (this fork) Each mixer channel's own compressor: its C key opens the COMP face in place of
+/// the MIX face, the back key closes it; ON, RATIO, THRES and OTT reach the engine, and the C
+/// key is lit while the compressor is on. On the channel the song's compressor is on
+/// (`comp_id`), the face sets that one.
+#[test]
+fn a_channels_c_key_opens_its_compressor() {
+    use orb_engine::frame::CCOMP;
+    let controls = orb_ui::layout::controls();
+    let ctl = |id: &str| controls.iter().find(|c| c.id == id).unwrap().clone();
+    let mut h = Harness::new();
+    let p = &h.app.panel;
+    assert!(p.hidden(&ctl("ccomp2.ratio")) && !p.hidden(&ctl("mixer2.pan")));
+    assert_eq!(p.part_name(&ctl("mixer2.c"), false, 0.0), "mixc_off");
+    h.click("mixer2.c");
+    assert!(h.take_log().is_empty(), "the face is the panel's");
+    let p = &h.app.panel;
+    assert!(p.ccomp_open[1] && !p.ccomp_open[0]);
+    assert!(!p.hidden(&ctl("ccomp2.ratio")) && p.hidden(&ctl("mixer2.pan")));
+    // the header's LEDs and meter stay the channel's
+    assert!(!p.hidden(&ctl("mixer2.solo")) && !p.hidden(&ctl("mixer2.meter")));
+    h.click("ccomp2.on");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[CCOMP + 4, 1])]);
+    h.drag("ccomp2.ratio", 20.0);
+    let v = orb_ui::behavior::knob_send(h.app.panel.knob("ccomp2.ratio")) as u8;
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[CCOMP + 5, v])]);
+    // the C key green with the compressor on; with the OTT orange, the labels BAL and GAIN
+    let part = |h: &Harness, id: &str| h.app.panel.part_name(&ctl(id), false, 0.0);
+    assert_eq!(part(&h, "mixer2.c"), "mixc_on");
+    assert_eq!(part(&h, "ccomp2.ratio_label"), "ccomplbl_ratio_off");
+    h.click("ccomp2.ott");
+    h.calls(2);
+    h.frame(vec![]);
+    let s = h.snap();
+    assert_eq!(s.mixer.ccomp[1], [1, v, 64, 1]);
+    assert!(s.mixer.ccomp[0][0] == 0);
+    assert_eq!(part(&h, "mixer2.c"), "mixc_ott");
+    assert_eq!(part(&h, "ccomp2.ratio_label"), "ccomplbl_ratio_on");
+    assert_eq!(part(&h, "ccomp2.thres_label"), "ccomplbl_thres_on");
+    h.click("ccomp2.back");
+    assert!(!h.app.panel.ccomp_open[1]);
+    // the song's compressor on channel 3: its face sets the song's
+    h.app.link.as_mut().unwrap().send_value("mixer.comp_id", 4);
+    h.calls(2);
+    h.frame(vec![]);
+    h.take_log();
+    h.click("mixer3.c");
+    h.click("ccomp3.thres");
+    h.take_log();
+    h.drag("ccomp3.thres", 20.0);
+    let v = orb_ui::behavior::knob_send(h.app.panel.knob("ccomp3.thres")) as u8;
+    assert_eq!(h.take_log(), vec![dev(Device::Compressor, 102, &[2, v])]);
+    h.click("ccomp3.ott");
+    assert_eq!(
+        h.take_log(),
+        vec![dev(Device::Mixer, 145, &[orb_engine::frame::OTT, 1])]
+    );
 }

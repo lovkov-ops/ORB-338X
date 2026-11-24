@@ -1426,11 +1426,12 @@ fn an_insert_is_mixed_with_the_channel_by_its_wet_amount() {
     assert!(is_fork_mixer(WET + 11) && WET + 12 == MORE);
 }
 
-/// This fork: the PCF and the compressor also on other channels ([`MORE`]), each such channel
-/// with its own copy; none such, the original's routing as it was.
+/// This fork: the PCF also on other channels ([`MORE`]) and each channel's own compressor
+/// ([`CCOMP`]), each such channel with its own copy; none such, the original's routing as it
+/// was.
 #[test]
 fn the_pcf_and_the_compressor_run_on_more_channels_as_copies() {
-    let render = |pcf_id: u8, comp_id: u8, more: [[u8; 2]; 4]| {
+    let render = |pcf_id: u8, comp_id: u8, more: [u8; 4], ccomp: [[u8; 4]; 4]| {
         let mut d = Devices::implemented(None);
         d.channels[0] = Box::new(Ramp(0));
         d.channels[1] = Box::new(Ramp(7));
@@ -1441,31 +1442,44 @@ fn the_pcf_and_the_compressor_run_on_more_channels_as_copies() {
         let m = &mut e.frame.devices.mixer.live;
         m.pcf_id = pcf_id;
         m.comp_id = comp_id;
-        for (c, k) in more.iter().enumerate() {
-            for (i, &v) in k.iter().enumerate() {
-                e.mixer_global(MORE + 2 * c as u8 + i as u8, v);
+        for (c, &v) in more.iter().enumerate() {
+            e.mixer_global(MORE + 2 * c as u8, v);
+        }
+        for (c, p) in ccomp.iter().enumerate() {
+            for (i, &v) in p.iter().enumerate() {
+                e.mixer_global(CCOMP + 4 * c as u8 + i as u8, v);
             }
         }
         let mut buf = vec![0i16; 2 * 64 * 60];
         e.render(&mut buf, 64 * 60);
         (buf, e)
     };
-    let none = [[0; 2]; 4];
-    // a channel's copy plays as the song's insert would there
-    let (song, _) = render(1, 2, none);
-    let (copy, e) = render(0, 0, [[1, 1], [0, 0], [0, 0], [0, 0]]);
+    let off = [CCOMP_DEFAULTS; 4];
+    // the song's compressor's settings: on, AMOUNT 70, THRESHOLD 20
+    let like_song = [1, 70, 20, 0];
+    let on0 = |p: [u8; 4]| [p, CCOMP_DEFAULTS, CCOMP_DEFAULTS, CCOMP_DEFAULTS];
+    // a channel's copies play as the song's inserts would there
+    let (song, _) = render(1, 2, [0; 4], off);
+    let (copy, e) = render(0, 0, [1, 0, 0, 0], on0(like_song));
     assert_eq!(copy, song);
     let r = e.frame.state.channels[0].routing;
     assert!(r.pcf_copy && r.comp_copy && !r.pcf && !r.comp);
+    // the channel's compressor has its own settings
+    let (own, _) = render(0, 0, [1, 0, 0, 0], on0([1, 127, 20, 0]));
+    assert_ne!(own, song);
     // the song's channel keeps the song's insert, the other gets a copy: both filtered
-    let (both, e) = render(1, 2, [[0, 0], [1, 1], [0, 0], [0, 0]]);
+    let (both, e) = render(1, 2, [0, 1, 0, 0], [off[0], like_song, off[2], off[3]]);
     assert_ne!(both, song);
     let r = e.frame.state.channels.map(|c| c.routing);
     assert!(r[0].pcf && !r[0].pcf_copy && r[1].pcf_copy && r[1].comp_copy);
-    // MORE on the channel the id already chooses: no copy
-    let (same, e) = render(1, 2, [[1, 1], [0, 0], [0, 0], [0, 0]]);
+    // the copies' gain meters, each channel's own
+    assert!(e.frame.meters_ccomp[0] > 0 && e.frame.meters_ccomp[1] > 0);
+    assert_eq!(e.frame.meters_ccomp[2], 0);
+    // MORE or ON on the channel the id already chooses: no copy
+    let (same, e) = render(1, 2, [1, 0, 0, 0], on0([1, 127, 0, 0]));
     assert_eq!(same, song);
-    assert!(!e.frame.state.channels[0].routing.pcf_copy);
+    let r = e.frame.state.channels[0].routing;
+    assert!(!r.pcf_copy && !r.comp_copy);
     assert!(is_fork_mixer(MORE + 7) && MORE + 8 == SLOT);
 }
 
@@ -1502,13 +1516,16 @@ fn the_inserts_run_in_their_slots_order() {
         log.borrow().clone()
     };
     assert_eq!(run(&mut e), ["dist", "pcf", "comp"]);
-    // the compressor on top, the PCF at the bottom
-    for (s, fx) in [FX_COMP, FX_DIST, FX_DELAY, FX_PCF].into_iter().enumerate() {
+    // the PCF on top, the DIST below it: the compressor, no slot's, still last
+    for (s, fx) in [FX_PCF, FX_DIST, FX_DELAY, FX_RVRB].into_iter().enumerate() {
         e.mixer_global(SLOT + s as u8, fx);
     }
-    assert_eq!(e.frame.devices.mixer.live.insert_order(), [2, 0, 1]);
-    assert_eq!(run(&mut e), ["comp", "dist", "pcf"]);
-    assert_eq!(e.frame.devices.mixer.fork_param(SLOT), Some(FX_COMP));
+    assert_eq!(e.frame.devices.mixer.live.insert_order(), [1, 0, 2]);
+    assert_eq!(run(&mut e), ["pcf", "dist", "comp"]);
+    // a slot given the compressor (an older song's) holds the reverb
+    e.mixer_global(SLOT + 3, FX_COMP);
+    assert_eq!(e.frame.devices.mixer.fork_param(SLOT + 3), Some(FX_RVRB));
+    assert_eq!(run(&mut e), ["pcf", "dist", "comp"]);
     assert!(is_fork_mixer(SLOT + 3) && SLOT + 4 == DELAY_B);
 }
 
@@ -1566,7 +1583,7 @@ fn a_second_delay_and_effects_out_of_the_slots() {
     assert!(is_fork_mixer(SEND_B + 3) && SEND_B + 4 == WET_B);
 }
 
-/// This fork: two slots that hold the DIST, the PCF or the COMP run a second one, each channel
+/// This fork: two slots that hold the DIST or the PCF run a second one, each channel
 /// that hears it ([`MixerParams::wet_b`]) its own copy with the second one's controllers; its
 /// meters sum the copies'.
 #[test]
@@ -1581,15 +1598,9 @@ fn a_second_dist_pcf_and_comp() {
         (buf, e)
     };
     let (song, _) = render(&|_| {});
-    for (k, fx) in [FX_DIST, FX_PCF, FX_COMP].into_iter().enumerate() {
+    for (k, fx) in [FX_DIST, FX_PCF].into_iter().enumerate() {
         // two slots hold it: no channel hears the second one, as the song
-        let two = |e: &mut Engine| {
-            if fx == FX_COMP {
-                e.mixer_global(SLOT + 2, FX_COMP);
-            } else {
-                e.mixer_global(SLOT + 3, fx);
-            }
-        };
+        let two = |e: &mut Engine| e.mixer_global(SLOT + 3, fx);
         let (quiet, e) = render(&two);
         assert_eq!(quiet, song, "fx {fx}");
         assert!(e.frame.copies_b[0][k][0].is_none());
@@ -1602,14 +1613,14 @@ fn a_second_dist_pcf_and_comp() {
         assert!(e.frame.copies_b[0][k][0].is_some(), "fx {fx}");
         assert!(e.frame.copies_b[1][k][0].is_none());
         assert_ne!(heard, song, "fx {fx}");
-        let meter = [0, 1, 3][k];
+        let meter = [0, 1][k];
         assert!(
             e.frame.meters_b[meter] > 0,
             "fx {fx}: {:?}",
             e.frame.meters_b
         );
         // its own controllers
-        let first = [DIST_B, PCF_B, COMP_B][k];
+        let first = [DIST_B, PCF_B][k];
         let (other, e) = render(&|e| {
             on(e);
             e.mixer_global(first + 1, 127);
@@ -1619,11 +1630,7 @@ fn a_second_dist_pcf_and_comp() {
         // one slot again: the copies go
         let (_, e) = render(&|e| {
             on(e);
-            if fx == FX_COMP {
-                e.mixer_global(SLOT + 2, FX_PCF);
-            } else {
-                e.mixer_global(SLOT + 3, FX_COMP);
-            }
+            e.mixer_global(SLOT + 3, FX_RVRB);
         });
         assert!(e.frame.copies_b[0][k][0].is_none(), "fx {fx}");
     }
@@ -1915,6 +1922,8 @@ fn a_reverb() {
         let mut d = Devices::implemented(None);
         d.channels[0] = Box::new(Ramp(0));
         let mut e = Engine::new(tables(), d);
+        // the default's fourth slot holds a reverb: the phaser there (no channel sends into it)
+        e.mixer_global(SLOT + 3, FX_PHA);
         setup(&mut e);
         let mut buf = vec![0i16; 2 * 64 * 200];
         e.render(&mut buf, 64 * 200);
@@ -2033,21 +2042,45 @@ fn tape_and_ott() {
         e.frame.devices.comp.set_param(0, 0);
     });
     assert_eq!(ott_comp_off, comp_off);
-    // the second COMP's OTT: its own
-    let comp2 = |e: &mut Engine| {
-        e.mixer_global(SLOT + 2, FX_COMP);
-        e.mixer_global(WET_B + 2, WET_FULL);
-    };
-    let (c2, _) = render(&comp2);
-    let (c2_ott, _) = render(&|e| {
-        comp2(e);
-        e.mixer_global(OTT + 1, 1);
-    });
-    assert_ne!(c2_ott, c2);
     let mut m = MixerParams::default();
     assert_eq!((m.tape, m.ott), ([0; 2], [0; 2]));
     m.set_fork(OTT + 1, 1);
     assert_eq!((m.fork(OTT + 1), m.ott), (Some(1), [0, 1]));
+    assert_eq!(CCOMP, OTT + 2);
+}
+
+/// (this fork) Each channel's own compressor ([`CCOMP`]): ON, AMOUNT, THRES and its OTT; off,
+/// the channel as without one.
+#[test]
+fn a_channels_own_compressor() {
+    let render = |p: [u8; 4]| {
+        let mut d = Devices::implemented(None);
+        d.channels[1] = Box::new(Ramp(3));
+        let mut e = Engine::new(tables(), d);
+        e.frame.devices.mixer.live.comp_id = 0;
+        for (i, &v) in p.iter().enumerate() {
+            e.mixer_global(CCOMP + 4 + i as u8, v);
+        }
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        (buf, e)
+    };
+    let (dry, e) = render(CCOMP_DEFAULTS);
+    assert!(!e.frame.state.channels[1].routing.comp_copy);
+    let (on, e) = render([1, 70, 20, 0]);
+    assert_ne!(on, dry);
+    assert!(e.frame.state.channels[1].routing.comp_copy);
+    assert_eq!(e.frame.devices.mixer.live.ccomp[1], [1, 70, 20, 0]);
+    let (thres, _) = render([1, 70, 100, 0]);
+    assert_ne!(thres, on);
+    let (ott, _) = render([1, 70, 20, 1]);
+    assert_ne!(ott, on);
+    // OTT with the compressor off: nothing
+    let (ott_off, _) = render([0, 70, 20, 1]);
+    assert_eq!(ott_off, dry);
+    let mut m = MixerParams::default();
+    m.set_fork(CCOMP + 4 * 3 + CCOMP_THRES as u8, 200);
+    assert_eq!(m.fork(CCOMP + 4 * 3 + CCOMP_THRES as u8), Some(127));
     assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
-    assert_eq!(FORK_END, OTT + 2);
+    assert_eq!(FORK_END, CCOMP + 16);
 }
