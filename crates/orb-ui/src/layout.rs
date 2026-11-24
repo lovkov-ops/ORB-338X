@@ -134,8 +134,9 @@ mod tests {
         // knob, + 2; the master's LIMIT key and AMT knob in place of its COMP key, + 1; the
         // mixer's slot knobs in place of its keys and their labels, + 16; the slots' menus, + 4;
         // the second delay's face, + 9, and its sends and their labels, + 8; the other second
-        // effects' faces and knobs, + 54; the channels' EQ knobs, + 12)
-        assert_eq!(c.len(), 563);
+        // effects' faces and knobs, + 54; the channels' EQ knobs, + 12; the two DISTs' kind
+        // lamps, + 16)
+        assert_eq!(c.len(), 579);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

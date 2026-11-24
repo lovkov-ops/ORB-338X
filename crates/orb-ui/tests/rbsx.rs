@@ -378,6 +378,9 @@ fn an_rbsx_keeps_the_effects_slots() {
     // and channel 1's EQ: the lows up, the highs down
     h.app.panel.set_knob("mixer1.eq_lo", 1000);
     h.app.panel.set_knob("mixer1.eq_hi", 0);
+    // the DIST's kind RECT, the second DIST's AMP
+    h.app.panel.press("dist.kind3", 0.0);
+    h.app.panel.press("dist_b.kind7", 0.0);
     h.calls(2);
     h.calls(2);
     let moves = [(0, 127), (384, 40)];
@@ -391,6 +394,7 @@ fn an_rbsx_keeps_the_effects_slots() {
     assert_eq!(snap.mixer.slots[0], FX_PCF);
     assert_eq!(snap.mixer.wet_b[1][1], 127);
     assert_eq!(snap.mixer.eq[0], [127, 64, 0]);
+    assert_eq!(snap.mixer.dist_kind, [3, 7]);
     let kept = h.app.gen_state();
     assert!(
         kept.mixer_fx
@@ -420,6 +424,9 @@ fn an_rbsx_keeps_the_effects_slots() {
     assert_eq!(snap2.mixer.wet_b, snap.mixer.wet_b);
     assert_eq!(snap2.mixer.pcf_b, snap.mixer.pcf_b);
     assert_eq!(snap2.mixer.eq, snap.mixer.eq);
+    assert_eq!(snap2.mixer.dist_kind, [3, 7]);
+    assert!(h2.app.panel.radio_on("dist.kind3") && !h2.app.panel.radio_on("dist.kind0"));
+    assert!(h2.app.panel.radio_on("dist_b.kind7"));
     assert_eq!(h2.app.panel.value("mixer1.eq_lo"), Some(127));
     assert_eq!(h2.app.panel.slots, snap.mixer.slots);
     assert!(!h2.app.panel.out_of_slots("pcf_b", "freq"));
@@ -430,5 +437,6 @@ fn an_rbsx_keeps_the_effects_slots() {
     h3.open(&song());
     h3.calls(2);
     assert!(h3.app.gen_state().mixer_fx.is_empty());
+    assert!(h3.app.panel.radio_on("dist.kind0"));
     assert_eq!(h3.app.panel.slots, orb_engine::frame::DEFAULT_SLOTS);
 }

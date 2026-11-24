@@ -1575,6 +1575,25 @@ fn the_second_dist_pcf_and_comp_reach_the_engine() {
         assert_eq!(mixer_target(id), Some(Global(g)), "{id}");
     }
     assert_eq!(mixer_target("pcf_b.meter"), None);
+    // (this fork) the DISTs' kinds, their lamps
+    assert_eq!(
+        mixer_target("dist.kind"),
+        Some(Global(orb_engine::frame::DIST_KIND))
+    );
+    assert_eq!(
+        mixer_target("dist_b.kind"),
+        Some(Global(orb_engine::frame::DIST_KIND + 1))
+    );
+    {
+        let mut h = Harness::new();
+        assert!(h.app.panel.radio_on("dist.kind0"));
+        h.app.panel.press("dist.kind5", 0.0);
+        assert!(h.app.panel.radio_on("dist.kind5") && !h.app.panel.radio_on("dist.kind0"));
+        assert!(!h.app.panel.radio_on("dist_b.kind5"));
+        h.frame(vec![]);
+        h.calls(2);
+        assert_eq!(h.snap().mixer.dist_kind, [5, 0]);
+    }
     // a second PCF in the delay's slot, channel 2 hears it, its pattern one up
     let mut h = Harness::new();
     h.app.panel.put_slot(0, FX_PCF);

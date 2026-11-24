@@ -711,6 +711,16 @@ fn dist(b: &mut Builder, sfx: &str) {
     b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     b.knob("amount", KNOB_FX, 10.0, 27.0, 0.4);
     b.knob("shape", KNOB_FX, 51.0, 27.0, 0.5);
+    // this fork: the kinds' lamps, two rows of four (the classic one lit)
+    for i in 0..8 {
+        let part = if i == 0 {
+            "distlamp_on"
+        } else {
+            "distlamp_off"
+        };
+        let (x, y) = (9.5 + 16.0 * (i % 4) as f32, 22.5 + 15.0 * (i / 4) as f32);
+        b.part(&format!("kind{i}"), "radio", part, x, y);
+    }
 }
 
 fn pcf(b: &mut Builder, sfx: &str) {

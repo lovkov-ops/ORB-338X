@@ -364,6 +364,13 @@ pub fn fx_instance(name: &str) -> Option<(u8, usize)> {
     }
 }
 
+/// This fork: the section and kind of a DIST's kind lamp (`dist_b.kind3` → `("dist_b", 3)`).
+pub fn dist_kind_lamp(id: &str) -> Option<(&str, i32)> {
+    let (sec, name) = id.split_once('.')?;
+    let k: i32 = name.strip_prefix("kind")?.parse().ok()?;
+    (matches!(sec, "dist" | "dist_b") && (0..8).contains(&k)).then_some((sec, k))
+}
+
 /// This fork: the channel (0..4) and the effect (0 PCF, 1 COMP) of a `mixerN.pcf_more` or
 /// `.comp_more` id.
 pub fn more_of(id: &str) -> Option<(usize, usize)> {
@@ -453,6 +460,9 @@ impl Panel {
         p.numbers.insert("delay_b.steps".into(), 3);
         p.numbers.insert("pcf.pattern".into(), 0);
         p.numbers.insert("pcf_b.pattern".into(), 0);
+        // the DISTs' kinds (this fork): the classic one
+        p.numbers.insert("dist.kind".into(), 0);
+        p.numbers.insert("dist_b.kind".into(), 0);
         // the channels' enables (this fork: no control of their own, SOLO and MUTE set them)
         for c in 1..=4 {
             p.toggles.insert(format!("mixer{c}.mute"), true);
@@ -1030,6 +1040,15 @@ impl Panel {
         }
     }
 
+    /// Whether a radio control is lit: a DIST's kind lamp (this fork, `dist.kind3`) when the
+    /// DIST has that kind; others as toggles.
+    pub fn radio_on(&self, id: &str) -> bool {
+        match dist_kind_lamp(id) {
+            Some((sec, k)) => self.numbers.get(&format!("{sec}.kind")).copied() == Some(k),
+            None => self.toggle_on(id),
+        }
+    }
+
     /// The mouse-down action of a toggle, trigger, grid, radio or mode control.
     /// `now` is the time in seconds (for the 303 note flash).
     pub fn press(&mut self, id: &str, now: f64) {
@@ -1076,6 +1095,15 @@ impl Panel {
             }
             // the master's LIMIT key (this fork, in place of the COMP key)
             "master" if name == "limit" => self.flip(id),
+            // a DIST's kind lamp (this fork): the DIST takes that kind
+            "dist" | "dist_b" if dist_kind_lamp(id).is_some() => {
+                let k = dist_kind_lamp(id).map_or(0, |x| x.1);
+                let kind = format!("{sec}.kind");
+                if self.numbers.get(&kind) != Some(&k) {
+                    self.numbers.insert(kind.clone(), k);
+                    self.set_event(&kind, k);
+                }
+            }
             _ => {
                 if name == "on" {
                     self.flip(id);
@@ -1496,7 +1524,7 @@ impl Panel {
             }
             "toggle" if c.id == "tr909.flam_button" => on_off(self.flam_button),
             "toggle" => on_off(self.toggle_on(&c.id)),
-            "radio" => on_off(self.toggle_on(&c.id)),
+            "radio" => on_off(self.radio_on(&c.id)),
             "switch" | "hswitch" | "vswitch" => format!("{fam}{}", self.switch_position(&c.id)),
             "trigger" if c.id == "transport.play" => {
                 if self.transport.playing {

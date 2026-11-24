@@ -124,8 +124,10 @@ pub fn check_parts(parts: &[Part]) -> Vec<String> {
                             px.height()
                         ));
                     }
-                    // a hit area (this fork's `hit_*`, an effects slot's title) draws nothing
-                    if visible(&px) == 0 && !p.name.starts_with("hit_") {
+                    // a hit area (this fork's `hit_*`, an effects slot's title) draws nothing,
+                    // and so does a DIST kind lamp that is off (the background's well)
+                    let blank = p.name.starts_with("hit_") || p.name == "distlamp_off";
+                    if visible(&px) == 0 && !blank {
                         problems.push(format!("{} at {scale}x: nothing drawn", p.name));
                     }
                 }

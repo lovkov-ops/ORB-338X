@@ -13,6 +13,10 @@ use std::collections::{HashMap, HashSet};
 use crate::mockup::{self, Bx, Mockup, Shape};
 use crate::svg::Part;
 
+/// The DIST's kind lamps' keys (this fork): the well and the label below it.
+pub const DIST_LAMP_W: f32 = 14.0;
+pub const DIST_LAMP_H: f32 = 13.0;
+
 /// The shapes of group `chain` (`"1.21"`) of mockup `m`.
 pub fn grp<'a>(m: &'a Mockup, chain: &str) -> Vec<&'a Shape> {
     let want: Vec<usize> = chain.split('.').map(|c| c.parse().unwrap()).collect();
@@ -1733,25 +1737,57 @@ fn mixer_and_effects(c: &mut Cuts) {
     let (fx, fy) = knob22(c, mf, "17.17", None);
     c.place("delay.feedback", fx - 11.0, fy - 11.0);
     c.background(mf, "delay", "bg_delay", Bx::new(526.0, 150.0, 82.0, 90.0));
-    // dist (slot 2, 240..330): its kinds' LEDs stay the background's, the classic one lit
+    // dist (slot 2, 240..330): its kinds' lamps (their wells and labels the background's,
+    // the third's RECT in place of the mockup's SAT); a lamp's key is its well and its label,
+    // lit by the lit LED
     header(c, "dist", "19.23", "19.24");
     title(c, "dist", 240.0);
     for (g, id) in [("19.25", "amount"), ("19.26", "shape")] {
         let (x, y) = knob22(c, mf, g, None);
         c.place(&format!("dist.{id}"), x - 11.0, y - 11.0);
     }
-    let classic = bbox(&grp(mf, "19.6"));
+    let lamp = |i: usize| bbox(&grp(mf, &format!("19.{}", 6 + 2 * i)));
+    let first = lamp(0);
+    let (lx, ly) = (
+        first.x0 + first.w() / 2.0 - DIST_LAMP_W / 2.0,
+        first.y0 - 0.2,
+    );
+    for i in 0..8 {
+        let b = lamp(i);
+        c.place(
+            &format!("dist.kind{i}"),
+            lx + b.x0 - first.x0,
+            ly + b.y0 - first.y0,
+        );
+    }
     let lit = moved(
         &lit_led,
-        classic.x0 - lit_b.x0 - 1.95,
-        classic.y0 - lit_b.y0 - 2.32,
+        first.x0 - lit_b.x0 - 1.95,
+        first.y0 - lit_b.y0 - 2.32,
+    );
+    c.parts
+        .push(part("distlamp_on", lx, ly, DIST_LAMP_W, DIST_LAMP_H, &lit));
+    c.parts
+        .push(Part::new("distlamp_off", DIST_LAMP_W, DIST_LAMP_H, |_| {}));
+    let sat = grp(mf, "19.11");
+    let sb = bbox(&sat);
+    c.take(&sat);
+    let mut rect = crate::svg::Svg::new();
+    crate::font::text(
+        &mut rect,
+        lamp(3).x0 + lamp(3).w() / 2.0,
+        sb.y0 + sb.h() / 2.0,
+        sb.h() - 0.07,
+        crate::font::Anchor::Middle,
+        "#9aa7b8",
+        "RECT",
     );
     c.background_with(
         mf,
         "dist",
         "bg_dist",
         Bx::new(526.0, 240.0, 82.0, 90.0),
-        &lit,
+        &rect.s,
     );
     // pcf (slot 3, 330..420): its sliders are small knobs
     header(c, "pcf", "20.14", "20.15");

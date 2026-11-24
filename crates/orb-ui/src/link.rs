@@ -313,6 +313,8 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
             ids.push(format!("{sec}.{n}"));
         }
     }
+    ids.push("dist.kind".into());
+    ids.push("dist_b.kind".into());
     let mut v: Vec<(String, u8)> = ids
         .into_iter()
         .filter_map(|id| match mixer_target(&id) {
@@ -369,6 +371,9 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
         // this fork: the master's LIMIT key and its AMT knob
         "master.limit" => return Some(MixerTarget::Global(orb_engine::frame::LIMIT)),
         "master.limit_amt" => return Some(MixerTarget::Global(orb_engine::frame::LIMIT_AMT)),
+        // this fork: the DISTs' kinds (their lamps)
+        "dist.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND)),
+        "dist_b.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND + 1)),
         _ => {}
     }
     // this fork: a channel's DIST, PCF and COMP wet amounts (the knobs' values above 0)
@@ -1400,6 +1405,8 @@ impl Link {
                 }
             }
         }
+        panel.adopt("dist.kind", m.dist_kind[0] as i32);
+        panel.adopt("dist_b.kind", m.dist_kind[1] as i32);
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {
             let n = c + 1;
@@ -1458,7 +1465,7 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "mixer4.eq_hi" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "dist_b.kind" && *g == FORK_END - 1)
         );
     }
 }

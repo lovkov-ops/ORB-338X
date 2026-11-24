@@ -22,6 +22,7 @@ pub mod comp;
 pub mod compare;
 pub mod delay;
 pub mod dist;
+pub mod dist_kinds;
 pub mod drums;
 pub mod eq;
 pub mod frame;

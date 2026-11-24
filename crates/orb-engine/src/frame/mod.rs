@@ -541,6 +541,9 @@ pub struct MixerParams {
     /// This fork: each channel's EQ (`eq[c][band]`, band 0 LO, 1 MID, 2 HI; [`EQ`]),
     /// [`crate::eq::NEUTRAL`] 0 dB.
     pub eq: [[u8; 3]; 4],
+    /// This fork: the kind of the DIST (`dist_kind[0]`) and of the second DIST (`[1]`),
+    /// [`crate::dist_kinds::CLASSIC`] the original's ([`DIST_KIND`]).
+    pub dist_kind: [u8; 2],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -585,8 +588,11 @@ const COMP_B_DEFAULTS: [u8; 3] = [1, 70, 64];
 /// [`MixerParams::eq`]): `EQ + 3c + band`. (Above 127: no song file of the original has a
 /// mixer controller there.)
 pub const EQ: u8 = COMP_B + 3;
+/// This fork: the mixer's controller of the DIST's kind (`DIST_KIND`) and of the second DIST's
+/// (`DIST_KIND + 1`), 0..[`crate::dist_kinds::KINDS`] ([`MixerParams::dist_kind`]).
+pub const DIST_KIND: u8 = EQ + 12;
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = EQ + 12;
+pub const FORK_END: u8 = DIST_KIND + 2;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
@@ -602,6 +608,9 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= DIST_KIND && is_fork_mixer(ctrl) => {
+                Some(self.dist_kind[(ctrl - DIST_KIND) as usize])
+            }
             _ if ctrl >= EQ && is_fork_mixer(ctrl) => {
                 let x = (ctrl - EQ) as usize;
                 Some(self.eq[x / 3][x % 3])
@@ -631,6 +640,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= DIST_KIND && is_fork_mixer(ctrl) => {
+                self.dist_kind[(ctrl - DIST_KIND) as usize] =
+                    value.min(crate::dist_kinds::KINDS - 1);
+            }
             _ if ctrl >= EQ && is_fork_mixer(ctrl) => {
                 let x = (ctrl - EQ) as usize;
                 self.eq[x / 3][x % 3] = value.min(127);
@@ -678,6 +691,7 @@ impl MixerParams {
         self.pcf_b = from.pcf_b;
         self.comp_b = from.comp_b;
         self.eq = from.eq;
+        self.dist_kind = from.dist_kind;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -753,6 +767,7 @@ impl Default for MixerParams {
             pcf_b: PCF_B_DEFAULTS,
             comp_b: COMP_B_DEFAULTS,
             eq: [[crate::eq::NEUTRAL; 3]; 4],
+            dist_kind: [crate::dist_kinds::CLASSIC; 2],
         }
     }
 }
@@ -782,6 +797,7 @@ impl From<&song::Mixer> for MixerParams {
             pcf_b: PCF_B_DEFAULTS,
             comp_b: COMP_B_DEFAULTS,
             eq: [[crate::eq::NEUTRAL; 3]; 4],
+            dist_kind: [crate::dist_kinds::CLASSIC; 2],
         }
     }
 }
@@ -807,6 +823,7 @@ impl MixerParams {
             pcf_b: PCF_B_DEFAULTS,
             comp_b: COMP_B_DEFAULTS,
             eq: [[crate::eq::NEUTRAL; 3]; 4],
+            dist_kind: [crate::dist_kinds::CLASSIC; 2],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1132,6 +1149,10 @@ pub struct Frame {
     pub meters_b: [u8; 4],
     /// This fork: each channel's EQ ([`MixerParams::eq`]).
     eqs: [crate::eq::ChannelEq; 4],
+    /// This fork: each channel's DIST kinds' memory (`kinds[c][d][side]`: d 0 the DIST, 1 the
+    /// second; side 0 the bus or a split drum machine's left, 1 its right;
+    /// [`MixerParams::dist_kind`]).
+    kinds: [[[crate::dist_kinds::KindFx; 2]; 2]; 4],
     /// This fork: the second delay (two slots hold the delay), with its own line, and the
     /// controllers it was last given; its send bus, and each channel's send gain into it.
     delay_b: Option<Box<crate::delay::Delay>>,
@@ -1200,6 +1221,7 @@ impl Frame {
             copies_b: Default::default(),
             meters_b: [0; 4],
             eqs: Default::default(),
+            kinds: Default::default(),
             delay_b: None,
             delay_b_set: [0; 5],
             send_b: [GUARD; BLOCK],
@@ -1261,6 +1283,12 @@ impl Frame {
                 pcf_copy: !pcf && p.more[c][0] != 0,
                 comp_copy: !comp && p.more[c][1] != 0,
             };
+            // this fork: a channel off the DIST starts its kind anew when it comes back
+            if cp.dist == 0 {
+                for fx in &mut self.kinds[c][0] {
+                    fx.silence();
+                }
+            }
         }
         // 0x100130A4: slot 16 of every insert, in list order (`song+0x1EC`: dist, PCF, comp)
         self.devices.dist.update(&ctx);
@@ -1323,6 +1351,11 @@ impl Frame {
                 let fx = [FX_DIST, FX_PCF, FX_COMP][k];
                 if p.slots_of(fx) < 2 || p.wet_b[c][k] == 0 {
                     *sides = [None, None];
+                    if k == 0 {
+                        for fx in &mut self.kinds[c][1] {
+                            fx.silence();
+                        }
+                    }
                     continue;
                 }
                 if sides[0].is_none() {
@@ -1455,6 +1488,9 @@ impl Frame {
             let in_slots = self.devices.mixer.live.slots;
             let wet_b = self.devices.mixer.live.wet_b[c];
             let copies_b = &mut self.copies_b[c];
+            // this fork: the DIST's kinds, the DIST's and the second DIST's
+            let kinds = self.devices.mixer.live.dist_kind;
+            let [kind_a, kind_b] = &mut self.kinds[c];
             let mut seen = [false; 3];
             for fx in in_slots {
                 let Some(k) = [FX_DIST, FX_PCF, FX_COMP].iter().position(|&f| f == fx) else {
@@ -1470,13 +1506,15 @@ impl Frame {
                     } else {
                         &mut *bus
                     };
-                    run_copy(&mut lc.ins, b, wet_b[k], &ctx);
+                    let kind = (k == 0).then_some(kinds[1]);
+                    run_copy(&mut lc.ins, b, wet_b[k], &ctx, kind, &mut kind_b[0]);
                     if split_now {
                         if right.is_none() {
                             *right = voices::InsertCopy::new(&*lc.ins).map(Box::new);
                         }
                         if let Some(rc) = right {
-                            run_copy(&mut rc.ins, &mut split.wet_r, wet_b[k], &ctx);
+                            let b = &mut split.wet_r;
+                            run_copy(&mut rc.ins, b, wet_b[k], &ctx, kind, &mut kind_b[1]);
                         }
                     }
                     continue;
@@ -1490,7 +1528,9 @@ impl Frame {
                         &mut *bus
                     };
                     let dry = (wet[k] < WET_FULL).then_some(*b);
-                    ins.process(b, &ctx);
+                    let kind = (k == 0).then_some(kinds[0]);
+                    let params = dist_params(&**ins);
+                    run_insert(ins, b, &ctx, kind, &mut kind_a[0]);
                     // a copy's faults are dropped (the original has no such call), and it
                     // leaves the stack word as it is
                     if let Some(f) = ins.faulted()
@@ -1506,7 +1546,16 @@ impl Frame {
                     }
                     if split_now && let Some(right) = &mut self.right {
                         let dry = (wet[k] < WET_FULL).then_some(split.wet_r);
-                        right.process(k, &mut split.wet_r, &ctx);
+                        match kind.filter(|&kd| kd != crate::dist_kinds::CLASSIC) {
+                            // the classic on a copy (its state as ever), the kind on the side
+                            Some(kd) => {
+                                let mut scratch = split.wet_r;
+                                right.process(k, &mut scratch, &ctx);
+                                let [on, a, sh] = params;
+                                kind_a[1].process(kd, on != 0, a, sh, &mut split.wet_r);
+                            }
+                            None => right.process(k, &mut split.wet_r, &ctx),
+                        }
                         if let Some(dry) = &dry {
                             mix_wet(&mut split.wet_r, dry, wet[k]);
                         }
@@ -1701,12 +1750,47 @@ fn copy_of(
 
 /// This fork: a channel's copy of a second insert on `b`, `wet` of 127 heard ([`mix_wet`]);
 /// its faults are dropped and it leaves the stack word as it is.
-fn run_copy(ins: &mut Box<dyn InsertEffect>, b: &mut Block, wet: u8, ctx: &BlockContext) {
+fn run_copy(
+    ins: &mut Box<dyn InsertEffect>,
+    b: &mut Block,
+    wet: u8,
+    ctx: &BlockContext,
+    kind: Option<u8>,
+    fx: &mut crate::dist_kinds::KindFx,
+) {
     let dry = (wet < WET_FULL).then_some(*b);
-    ins.process(b, ctx);
+    run_insert(ins, b, ctx, kind, fx);
     let _ = ins.faulted();
     if let Some(dry) = &dry {
         mix_wet(b, dry, wet);
+    }
+}
+
+/// This fork: a distortion's ENABLED, AMOUNT and SHAPE ([`crate::dist`]; 0 for a placeholder).
+fn dist_params(ins: &dyn InsertEffect) -> [u8; 3] {
+    use crate::dist::{AMOUNT, ENABLED, SHAPE};
+    let l = ins.live();
+    [ENABLED, AMOUNT, SHAPE].map(|i| l.get(i).copied().unwrap_or(0))
+}
+
+/// This fork: insert `ins` on `b`. A DIST (`kind` some) of another kind than the classic
+/// ([`crate::dist_kinds`]) runs the classic on a copy of the bus (its meter and its counters
+/// as ever) and its kind, with memory `fx`, on the bus.
+fn run_insert(
+    ins: &mut Box<dyn InsertEffect>,
+    b: &mut Block,
+    ctx: &BlockContext,
+    kind: Option<u8>,
+    fx: &mut crate::dist_kinds::KindFx,
+) {
+    match kind.filter(|&k| k != crate::dist_kinds::CLASSIC) {
+        Some(k) => {
+            let mut scratch = *b;
+            ins.process(&mut scratch, ctx);
+            let [on, a, s] = dist_params(&**ins);
+            fx.process(k, on != 0, a, s, b);
+        }
+        None => ins.process(b, ctx),
     }
 }
 
@@ -2224,6 +2308,9 @@ impl Engine {
         self.frame.meters_b = [0; 4];
         for eq in &mut self.frame.eqs {
             eq.silence();
+        }
+        for fx in self.frame.kinds.iter_mut().flatten().flatten() {
+            fx.silence();
         }
         // and the second delay's line
         if let Some(d) = &mut self.frame.delay_b {

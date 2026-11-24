@@ -1662,8 +1662,66 @@ fn a_channels_eq() {
     let mut m = MixerParams::default();
     m.set_fork(EQ + 7, 10);
     assert_eq!((m.fork(EQ + 7), m.eq[2][1]), (Some(10), 10));
-    assert!(is_fork_mixer(EQ + 11) && !is_fork_mixer(EQ + 12));
-    assert_eq!(FORK_END, EQ + 12);
+    assert!(is_fork_mixer(EQ + 11));
+    assert_eq!(DIST_KIND, EQ + 12);
+}
+
+/// (this fork) The DIST's kinds: the classic one is the original's; another is another sound
+/// on the channels that hear the DIST only, with the classic's meter; the second DIST has its
+/// own kind.
+#[test]
+fn a_dist_kind() {
+    use crate::dist_kinds::{CLASSIC, KINDS, RECT};
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        e.frame.devices.mixer.live.channels[0].dist = 1;
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        (buf, e)
+    };
+    let (song, e) = render(&|_| {});
+    let meter = e.frame.devices.dist.live()[crate::dist::METER];
+    assert!(meter > 0);
+    assert_eq!(render(&|e| e.mixer_global(DIST_KIND, CLASSIC)).0, song);
+    let (rect, e) = render(&|e| e.mixer_global(DIST_KIND, RECT));
+    assert_ne!(rect, song);
+    assert_eq!(e.frame.devices.dist.live()[crate::dist::METER], meter);
+    // every kind its own sound
+    let mut all = vec![song.clone()];
+    for k in 1..KINDS {
+        let (b, _) = render(&|e| e.mixer_global(DIST_KIND, k));
+        assert!(!all.contains(&b), "kind {k}");
+        all.push(b);
+    }
+    // a channel without the DIST: as ever
+    let off = |e: &mut Engine| e.frame.devices.mixer.live.channels[0].dist = 0;
+    let (plain, _) = render(&off);
+    let (plain_rect, _) = render(&|e| {
+        off(e);
+        e.mixer_global(DIST_KIND, RECT);
+    });
+    assert_eq!(plain_rect, plain);
+    // the second DIST's kind
+    let two = |e: &mut Engine| {
+        e.mixer_global(SLOT + 3, FX_DIST);
+        e.mixer_global(WET_B, WET_FULL);
+    };
+    let (b_classic, _) = render(&two);
+    let (b_rect, _) = render(&|e| {
+        two(e);
+        e.mixer_global(DIST_KIND + 1, RECT);
+    });
+    assert_ne!(b_rect, b_classic);
+    // a kind past the last is the last
+    let mut m = MixerParams::default();
+    assert_eq!(m.dist_kind, [CLASSIC; 2]);
+    m.set_fork(DIST_KIND + 1, 200);
+    assert_eq!(m.fork(DIST_KIND + 1), Some(KINDS - 1));
+    assert!(is_fork_mixer(DIST_KIND + 1) && !is_fork_mixer(DIST_KIND + 2));
+    assert_eq!(FORK_END, DIST_KIND + 2);
 }
 
 #[test]
