@@ -12,6 +12,9 @@
 #   ORB-338X-<version>-<target>.dmg     x86_64-apple-darwin, aarch64-apple-darwin
 #   ORB-338X-<version>-<x64|arm64>-setup.exe
 #   ORB-338X-<version>-<x86_64|aarch64>.AppImage
+# This fork: the six installers then get names without the version, the same in every release
+# (STABLE below), so https://github.com/lovkov-ops/ORB-338X/releases/latest/download/<name>
+# always gives the latest one (the website's download buttons). The archives keep theirs.
 # SHA256SUMS.txt lists them by name, sorted, in the format of `sha256sum -c`.
 set -euo pipefail
 
@@ -58,6 +61,22 @@ for f in "$dir"/*; do
     }
 done
 [ $fail = 0 ] || exit 1
+
+# the installers' names on the release, by their names from the build
+stable=(
+    "$p-aarch64-apple-darwin.dmg" ORB-338X-install-macOS-AppleSilicon.dmg
+    "$p-x86_64-apple-darwin.dmg" ORB-338X-install-macOS-Intel.dmg
+    "$p-x64-setup.exe" ORB-338X-install-Windows-x64.exe
+    "$p-arm64-setup.exe" ORB-338X-install-Windows-ARM64.exe
+    "$p-x86_64.AppImage" ORB-338X-Linux-x86_64.AppImage
+    "$p-aarch64.AppImage" ORB-338X-Linux-ARM64.AppImage
+)
+for ((i = 0; i < ${#stable[@]}; i += 2)); do
+    mv "$dir/${stable[i]}" "$dir/${stable[i + 1]}"
+    for j in "${!expected[@]}"; do
+        [ "${expected[j]}" = "${stable[i]}" ] && expected[j]=${stable[i + 1]}
+    done
+done
 
 if command -v sha256sum >/dev/null; then
     sum() { sha256sum "$@"; }
