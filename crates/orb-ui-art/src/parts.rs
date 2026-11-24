@@ -761,12 +761,6 @@ fn transport_buttons(out: &mut Vec<Part>) {
             let led = if on { pal::ORANGE } else { LED_OFF_909 };
             led909(s, 7.5, 5.5, led, KEY909_LIGHT);
         }));
-        // the 909's FX keys on its FLIP face (this fork): the same key, lit green
-        out.push(Part::new(format!("fx909_{state}"), 15.0, 13.0, |s| {
-            key909(s, 15.0, 13.0, KEY909_LIGHT);
-            let led = if on { pal::GREEN } else { LED_OFF_909 };
-            led909(s, 7.5, 5.5, led, KEY909_LIGHT);
-        }));
     }
 }
 

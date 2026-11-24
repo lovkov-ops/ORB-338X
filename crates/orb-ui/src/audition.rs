@@ -330,16 +330,32 @@ mod tests {
             // the distortion changes the hit; without its effects the sound is as dry
             let (wet, _) = stereo_hit(is808, 2, VoiceMix::default(), true);
             let mut dry = VoiceMix::default();
-            dry.fx[2] = false;
+            dry.lamps[2] = 0;
             let (d, _) = stereo_hit(is808, 2, dry, true);
             assert!(
                 (wet - l).abs() > l / 20,
                 "808 {is808}: distorted {wet} vs {l}"
             );
             assert!((d - l).abs() < l / 50, "808 {is808}: dry {d} vs {l}");
+            // the lamps by slot (the DIST in the second): its lamp alone distorts, every other
+            // lamp leaves the sound dry
+            let mut only = VoiceMix::default();
+            only.lamps[2] = 0b0010;
+            let (o, _) = stereo_hit(is808, 2, only, true);
+            assert!(
+                (o - wet).abs() < wet / 50,
+                "808 {is808}: DIST lamp {o} vs {wet}"
+            );
+            let mut others = VoiceMix::default();
+            others.lamps[2] = 0b1101;
+            let (n, _) = stereo_hit(is808, 2, others, true);
+            assert!(
+                (n - l).abs() < l / 50,
+                "808 {is808}: no DIST lamp {n} vs {l}"
+            );
             // the sounds still on take the distortion on both sides
             let mut other = VoiceMix::default();
-            other.fx[1] = false;
+            other.lamps[1] = 0;
             other.pan[2] = 0;
             let (wl, wr) = stereo_hit(is808, 2, other, true);
             assert!(

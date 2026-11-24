@@ -1249,6 +1249,9 @@ pub struct Frame {
     /// This fork: each channel's OTTs' memory (`otts[c][comp][side]`, as [`Frame::kinds`];
     /// [`MixerParams::ott`]).
     otts: [[[crate::ott::Ott; 2]; 2]; 4],
+    /// This fork: each drum machine's sets of lamps (not all on) that a sound has, and the
+    /// inserts of their lit slots ([`voices::GroupChain`], `chains[d][set]`, d 0 the 808).
+    chains: [[Option<Box<voices::GroupChain>>; voices::ALL as usize]; 2],
     /// This fork: the chorus, the flanger and the phaser (`mods[k][inst]`) while a slot holds
     /// one, it is on and a channel sends into it; their send buses and each channel's send
     /// gains into them; their meter bytes.
@@ -1332,6 +1335,7 @@ impl Frame {
             eqs: Default::default(),
             kinds: Default::default(),
             otts: Default::default(),
+            chains: Default::default(),
             mods: Default::default(),
             mod_bus: [[[0.0; BLOCK]; 2]; 3],
             mod_gain: [[[0.0; 2]; 3]; 4],
@@ -1537,6 +1541,61 @@ impl Frame {
             }
         }
         self.meters_b = meters.map(|m| m.min(127) as u8);
+        // this fork: a split drum machine's sets of lamps (not all on) and the inserts of their
+        // lit slots the channel hears: their own copies, made from the song's insert, given the
+        // first or the second one's controllers; dropped when no sound has the set
+        for d in 0..2 {
+            let c = d + 2;
+            let mix = self.voice_mix[d];
+            let r = self.state.channels[c].routing;
+            for set in 0..voices::ALL {
+                let used = !mix.neutral() && mix.lamps[1..].iter().any(|&l| l & voices::ALL == set);
+                let slot = &mut self.chains[d][set as usize];
+                if !used {
+                    *slot = None;
+                    continue;
+                }
+                let chain: &mut voices::GroupChain = slot.get_or_insert_with(Default::default);
+                let mut seen = [0usize; 3];
+                for s in 0..4 {
+                    let Some(k) = insert_index(p.slots[s]) else {
+                        chain.ins[s] = [None, None];
+                        continue;
+                    };
+                    let inst = seen[k];
+                    seen[k] += 1;
+                    let hears = if inst == 0 {
+                        [r.dist, r.pcf || r.pcf_copy, r.comp || r.comp_copy][k]
+                    } else {
+                        inst == 1 && p.wet_b[c][k] != 0
+                    };
+                    if set & (1 << s) == 0 || !hears {
+                        chain.ins[s] = [None, None];
+                        chain.kind[s] = Default::default();
+                        chain.ott[s] = Default::default();
+                        continue;
+                    }
+                    let src: &dyn InsertEffect = match k {
+                        0 => &*self.devices.dist,
+                        1 => &*self.devices.pcf,
+                        _ => &*self.devices.comp,
+                    };
+                    for side in &mut chain.ins[s] {
+                        if side.is_none() {
+                            *side = voices::InsertCopy::new(src).map(Box::new);
+                        }
+                        if let Some(cp) = side {
+                            if inst == 0 {
+                                cp.follow(src);
+                            } else {
+                                cp.set_params(p.ins_b(k));
+                            }
+                            cp.ins.update(&ctx);
+                        }
+                    }
+                }
+            }
+        }
         // this fork: the chorus, the flanger and the phaser, made when a slot holds one, it is
         // on and a channel sends into it, dropped (and silent) else
         for k in 0..3 {
@@ -1765,14 +1824,72 @@ impl Frame {
                     }
                 }
             }
-            // this fork: a split drum machine's sides, the wet and the dry buses summed, and its
-            // send, the wet sides' mean (the dry sounds stay out of the delay)
+            // this fork: a split drum machine's other sets of lamps, each through its own copies
+            // of the inserts of its lit slots, in the slots' order
+            if split_now {
+                let slots = self.devices.mixer.live.slots;
+                let wb = self.devices.mixer.live.wet_b[c];
+                for set in 0..voices::ALL as usize {
+                    if split.used & (1 << set) == 0 {
+                        continue;
+                    }
+                    let Some(chain) = &mut self.chains[c - 2][set] else {
+                        continue;
+                    };
+                    let chain: &mut voices::GroupChain = chain;
+                    let [pl, pr] = &mut split.parts[set];
+                    let mut seen = [0usize; 3];
+                    for (s, &fx) in slots.iter().enumerate() {
+                        let Some(k) = insert_index(fx) else {
+                            continue;
+                        };
+                        let inst = seen[k].min(1);
+                        seen[k] += 1;
+                        let w = if inst == 0 { wet[k] } else { wb[k] };
+                        let alt = alt_of(k, kinds[inst], otts[inst]);
+                        for (side, b) in [&mut *pl, &mut *pr].into_iter().enumerate() {
+                            let Some(cp) = &mut chain.ins[s][side] else {
+                                continue;
+                            };
+                            let mem = AltMem {
+                                kind: &mut chain.kind[s][side],
+                                ott: &mut chain.ott[s][side],
+                            };
+                            run_copy(&mut cp.ins, b, w, &ctx, alt, mem);
+                        }
+                    }
+                }
+            }
+            // this fork: a split drum machine's sides, every set's buses summed, and each slot's
+            // send source: the mean of the sides of the sets whose lamp of the slot is on (the
+            // sounds with every lamp on: the wet sides')
             if split_now {
                 for j in 0..BLOCK {
                     let (wl, wr) = (split.wet_l[j], split.wet_r[j]);
-                    split.wet_l[j] = st(wl as f64 + split.dry_l[j] as f64);
-                    split.wet_r[j] = st(wr as f64 + split.dry_r[j] as f64);
-                    split.dry_l[j] = st((wl as f64 + wr as f64) * 0.5);
+                    let mean = st((wl as f64 + wr as f64) * 0.5);
+                    for s in &mut split.sends {
+                        s[j] = mean;
+                    }
+                }
+                for set in 0..voices::ALL as usize {
+                    if split.used & (1 << set) == 0 {
+                        continue;
+                    }
+                    let [pl, pr] = split.parts[set];
+                    for j in 0..BLOCK {
+                        let (a, b) = (pl[j] as f64, pr[j] as f64);
+                        split.wet_l[j] = st(split.wet_l[j] as f64 + a);
+                        split.wet_r[j] = st(split.wet_r[j] as f64 + b);
+                    }
+                    for (s, send) in split.sends.iter_mut().enumerate() {
+                        if set & (1 << s) == 0 {
+                            continue;
+                        }
+                        for j in 0..BLOCK {
+                            let m = (pl[j] as f64 + pr[j] as f64) * 0.5;
+                            send[j] = st(send[j] as f64 + m);
+                        }
+                    }
                 }
             }
             // this fork (not the original): the drum machines' channels (808, 909) as loud as
@@ -1782,7 +1899,8 @@ impl Frame {
                 let g = self.drum_gain[c - 2];
                 if g != 1.0 {
                     let bufs: Vec<&mut Block> = if split_now {
-                        vec![&mut split.wet_l, &mut split.wet_r, &mut split.dry_l]
+                        let [s0, s1, s2, s3] = &mut split.sends;
+                        vec![&mut split.wet_l, &mut split.wet_r, s0, s1, s2, s3]
                     } else {
                         vec![&mut *bus]
                     };
@@ -1800,18 +1918,23 @@ impl Frame {
                 if split_now {
                     eq.process(0, &mut split.wet_l);
                     eq.process(1, &mut split.wet_r);
-                    eq.process(2, &mut split.dry_l);
+                    for (s, send) in split.sends.iter_mut().enumerate() {
+                        eq.process(2 + s, send);
+                    }
                 } else {
                     eq.process(0, bus);
                 }
             }
-            // the channel's left and right signals and its send source: the bus for every
-            // channel the original's way
-            let (bl, br, bs): (&Block, &Block, &Block) = if split_now {
-                (&split.wet_l, &split.wet_r, &split.dry_l)
+            // the channel's left and right signals and its send sources (this fork: each slot's):
+            // the bus for every channel the original's way
+            let (bl, br, srcs): (&Block, &Block, [&Block; 4]) = if split_now {
+                let [s0, s1, s2, s3] = &split.sends;
+                (&split.wet_l, &split.wet_r, [s0, s1, s2, s3])
             } else {
-                (&*bus, &*bus, &*bus)
+                (&*bus, &*bus, [&*bus; 4])
             };
+            let slots = self.devices.mixer.live.slots;
+            let src = |fx: u8, inst: usize| srcs[slot_of(&slots, fx, inst).unwrap_or(0)];
             // 0x100135FA: the channel's peak meter
             let v = abs_bits(bl[mi]).max(abs_bits(br[mi]));
             if v > ch.peak {
@@ -1819,13 +1942,13 @@ impl Frame {
             }
             // 0x10013650: send += bus * sendGain
             let sg = ch.send as f64;
-            for (s, &b) in self.state.send.iter_mut().zip(bs.iter()) {
+            for (s, &b) in self.state.send.iter_mut().zip(src(FX_DELAY, 0).iter()) {
                 *s = st(b as f64 * sg + *s as f64);
             }
             // this fork: and into the second delay
             if self.delay_b.is_some() {
                 let sg = self.send_b_gain[c] as f64;
-                for (s, &b) in self.send_b.iter_mut().zip(bs.iter()) {
+                for (s, &b) in self.send_b.iter_mut().zip(src(FX_DELAY, 1).iter()) {
                     *s = st(b as f64 * sg + *s as f64);
                 }
             }
@@ -1836,6 +1959,7 @@ impl Frame {
                         continue;
                     }
                     let sg = self.mod_gain[c][k][inst] as f64;
+                    let bs = src(FX_CHO + k as u8, inst);
                     for (s, &b) in self.mod_bus[k][inst].iter_mut().zip(bs.iter()) {
                         *s = st(b as f64 * sg + *s as f64);
                     }
@@ -1847,6 +1971,7 @@ impl Frame {
                     continue;
                 }
                 let sg = self.rvrb_gain[c][inst] as f64;
+                let bs = src(FX_RVRB, inst);
                 for (s, &b) in self.rvrb_bus[inst].iter_mut().zip(bs.iter()) {
                     *s = st(b as f64 * sg + *s as f64);
                 }
@@ -2025,6 +2150,21 @@ fn ins_params(ins: &dyn InsertEffect) -> [u8; 3] {
 enum Alt {
     Kind(u8),
     Ott,
+}
+
+/// This fork: the insert (0 DIST, 1 PCF, 2 COMP) effect `fx` of a slot is; none for a send.
+fn insert_index(fx: u8) -> Option<usize> {
+    [FX_DIST, FX_PCF, FX_COMP].iter().position(|&f| f == fx)
+}
+
+/// This fork: the slot that holds the `inst`th (0 the first) of effect `fx`.
+fn slot_of(slots: &[u8; 4], fx: u8, inst: usize) -> Option<usize> {
+    slots
+        .iter()
+        .enumerate()
+        .filter(|x| *x.1 == fx)
+        .nth(inst)
+        .map(|x| x.0)
 }
 
 /// The alternative of insert k (0 DIST, 1 PCF, 2 COMP) given its DIST kind and its OTT.
@@ -2582,6 +2722,7 @@ impl Engine {
         // this fork: the channels' copies of the inserts start anew from the reset ones
         self.frame.copies = Default::default();
         self.frame.copies_b = Default::default();
+        self.frame.chains = Default::default();
         self.frame.meters_b = [0; 4];
         for eq in &mut self.frame.eqs {
             eq.silence();

@@ -514,24 +514,23 @@ fn tr808(b: &mut Builder) {
 
 /// The 808's FLIP face (this fork): its own section over the 808's, which the app shows
 /// instead of the 808's knobs while FLIP is on: KIT (the kit menu) in the AC column, a PAN knob
-/// and an FX key in every sound's column (pan`i`, fx`i`, the panel's instrument index).
+/// and four effects lamps in every sound's column (pan`k`, fx`k`_`i`: the panel's instrument
+/// index, the effects slot), each lamp with its slot's effect's name (the cuts place them).
 fn tr808_flip(b: &mut Builder) {
     b.section("tr808f", "bg_tr808_flip", INSTR_X, 280.0);
     b.part("kit", "kit", "sel_22x14", col808(0) - 11.0, 1.0);
     for c in 1..12 {
         b.knob(&format!("pan{c}"), KNOB_808_RED, col808(c) - 6.5, 9.0, 0.5);
-        b.part(
-            &format!("fx{c}"),
-            "toggle",
-            "flip_off",
-            col808(c) - 8.5,
-            30.5,
-        );
+        for i in 0..4 {
+            let y = 32.5 + 7.0 * i as f32;
+            let id = format!("fx{c}_{i}");
+            b.part(&id, "toggle", "flip808lamp_on", col808(c) - 12.0, y);
+        }
     }
 }
 
 /// The 909's FLIP face (this fork), as the 808's: KIT for the accent's header, a PAN knob and
-/// an FX key in the middle of every sound's group.
+/// four effects lamps in the middle of every sound's group.
 fn tr909_flip(b: &mut Builder) {
     b.section("tr909f", "bg_tr909_flip", INSTR_X, 395.0);
     b.part("kit", "kit", "sel_22x14", 4.0, 2.0);
@@ -539,13 +538,11 @@ fn tr909_flip(b: &mut Builder) {
     for g in 1..12 {
         let x = column_909(g, 2);
         b.knob(&format!("pan{g}"), KNOB_909, x - half, KNOB_Y_909[0], 0.5);
-        b.part(
-            &format!("fx{g}"),
-            "toggle",
-            "fx909_off",
-            x - 7.5,
-            KNOB_Y_909[1],
-        );
+        for i in 0..4 {
+            let y = 41.5 + 7.0 * i as f32;
+            let id = format!("fx{g}_{i}");
+            b.part(&id, "toggle", "flip909lamp_on", x - 12.0, y);
+        }
     }
 }
 

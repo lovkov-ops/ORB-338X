@@ -1492,12 +1492,12 @@ fn the_songs_automation_moves_a_knob_on_after_a_double_click() {
     assert!(seen.len() > 3, "the cutoff moved: {seen:?}");
 }
 
-/// (this fork) A double click on an FX key of a FLIP face (egui's, as on the knobs) sets every
-/// sound's effects switch of the drum machine as the first click left that key: an FX on turns
-/// all off, one off all on. A single click changes only its own sound, and so does each of two
-/// clicks slower than a double click.
+/// (this fork) A double click on an effects lamp of a FLIP face (egui's, as on the knobs) sets
+/// that slot's lamp of every sound of the drum machine as the first click left that lamp: one
+/// on turns all off, one off all on. A single click changes only its own lamp, and so does
+/// each of two clicks slower than a double click.
 #[test]
-fn a_double_click_on_an_fx_key_sets_every_sound() {
+fn a_double_click_on_an_fx_lamp_sets_every_sound() {
     let mut h = Harness::new();
     // frames of 16 ms: a click takes 3
     let frames = |h: &mut Harness, n: usize| {
@@ -1505,34 +1505,41 @@ fn a_double_click_on_an_fx_key_sets_every_sound() {
             h.frame(vec![]);
         }
     };
+    let lit = |m: &orb_engine::frame::voices::VoiceMix, i: usize, s: usize| m.lamps[i] & 1 << s;
     for (dev, k) in [("tr808", 0), ("tr909", 1)] {
         h.click(&format!("{dev}.flip"));
         let wait = |h: &mut Harness| frames(h, 40);
         wait(&mut h);
-        let fx = |i: usize| format!("{dev}f.fx{i}");
+        let fx = |i: usize| format!("{dev}f.fx{i}_1");
         // too slow (0.5 s): two clicks, the sound as it was
         h.click(&fx(2));
         frames(&mut h, 28);
         h.click(&fx(2));
         let m = h.app.panel.voice_mix(k);
-        assert!(m.fx[2] && m.fx[3], "{dev}: two slow clicks");
+        assert!(
+            m.lamps[2] == 0b1111 && m.lamps[3] == 0b1111,
+            "{dev}: two slow clicks"
+        );
         wait(&mut h);
         h.click(&fx(3));
         h.click(&fx(3));
         let m = h.app.panel.voice_mix(k);
-        assert!(m.fx[1..12].iter().all(|&f| !f), "{dev}: all off");
+        assert!(
+            m.lamps[1..12].iter().all(|&l| l == 0b1101),
+            "{dev}: all off"
+        );
         wait(&mut h);
         h.click(&fx(5));
         let m = h.app.panel.voice_mix(k);
         assert!(
-            m.fx[5] && !m.fx[4] && !m.fx[6],
-            "{dev}: one click, one sound"
+            lit(&m, 5, 1) != 0 && lit(&m, 4, 1) == 0 && lit(&m, 6, 1) == 0,
+            "{dev}: one click, one lamp"
         );
         wait(&mut h);
         h.click(&fx(1));
         h.click(&fx(1));
         let m = h.app.panel.voice_mix(k);
-        assert!(m.fx[1..12].iter().all(|&f| f), "{dev}: all on");
+        assert!(m.lamps[1..12].iter().all(|&l| l == 0b1111), "{dev}: all on");
     }
 }
 

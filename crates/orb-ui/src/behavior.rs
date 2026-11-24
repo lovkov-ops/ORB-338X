@@ -178,6 +178,10 @@ pub fn tr909_step_value(c: u8, accent_row: bool, flam_on: bool, m: Mods) -> u8 {
 /// The TR-808 instrument under a point of its section, from the legend row
 /// (x 10..274, y 71..85: 12 cells of 22 px) or the upper labels (x 78..184, y 43..55: the
 /// slots 3..7).
+/// How much lower the 808's upper name pills (LC..MA) are on its FLIP face (this fork): under
+/// the effects lamps.
+pub const FLIP_UPPER_DY_808: f32 = 17.0;
+
 pub fn tr808_hit(x: f32, y: f32) -> Option<usize> {
     // this fork: the name pills, one per column (orb-ui-art's COL808_*: twelve 29.5 px columns
     // from x 6), the legend's at y 75.5..84.5, LC..MA's over LT..CP at y 46..55

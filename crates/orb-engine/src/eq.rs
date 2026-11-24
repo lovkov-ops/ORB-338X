@@ -20,8 +20,8 @@ const MID_Q: f64 = 0.7;
 /// The sample rate.
 const RATE: f64 = 44_100.0;
 /// The buses a channel's EQ runs on: the bus (or a split drum machine's left side), the right
-/// side and the delay send of a split drum machine.
-pub const SIDES: usize = 3;
+/// side and the four slots' send sources of a split drum machine.
+pub const SIDES: usize = 6;
 
 /// The gain in dB of controller value `v` (0 -12 dB, [`NEUTRAL`] 0 dB, 127 +12 dB).
 pub fn gain_db(v: u8) -> f64 {

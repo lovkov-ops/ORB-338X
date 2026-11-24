@@ -1169,7 +1169,7 @@ fn drum_knob(c: &mut Cuts, m: &Mockup, name: &str, g: &str) {
 /// Drum machine A, both faces: knobs, the instrument switches, FLIP, the name pills, the steps;
 /// on the FLIP face (mockup 2) the pans and the effects keys.
 fn tr808(c: &mut Cuts) {
-    let (m, m2) = (Mockup::panel_1(), Mockup::panel_2());
+    let (m, m8) = (Mockup::panel_1(), Mockup::flip_808());
     drum_knob(c, m, "knob_808_red", "4.21");
     drum_knob(c, m, "knob_808_white", "4.23");
     for (i, id) in KNOBS_808.iter().enumerate() {
@@ -1202,7 +1202,7 @@ fn tr808(c: &mut Cuts) {
     let b = bbox(&flip);
     c.parts
         .push(part("flip_off", b.x0, b.y0, b.w(), b.h(), &body(&flip)));
-    let flip_on = grp(m2, "4.37");
+    let flip_on = grp(m8, "0.32");
     c.parts
         .push(part("flip_on", b.x0, b.y0, b.w(), b.h(), &body(&flip_on)));
     c.take(&flip);
@@ -1223,8 +1223,7 @@ fn tr808(c: &mut Cuts) {
         let b = bbox(&v);
         c.take(&v);
         c.place(&format!("tr808.step{}", i + 1), b.x0, b.y0);
-        let v2 = grp(m2, &format!("4.{}", 50 + i));
-        c.take(&v2);
+        c.take(&grp(m8, &format!("0.{}", 85 + i)));
     }
     // the name pills: chosen, the red veil of the mockup's chosen BD over each
     let veil_v = grp(m, "4.5.1");
@@ -1249,24 +1248,33 @@ fn tr808(c: &mut Cuts) {
         ));
     }
     c.take(&veil_v);
-    c.take(&grp(m2, "4.5.1"));
-    // the FLIP face: the pans and the effects keys
+    c.take(&grp(m8, "0.5.1"));
+    // the FLIP face (assets/mockup/flip_808.svg): the pans and the effects lamps
     for k in 1..=11 {
-        let g = format!("4.{}", 20 + k);
-        let (cx, cy) = center(&grp(m2, &format!("{g}.1")));
-        c.take(&grp(m2, &g));
+        let g = format!("0.{}", 20 + k);
+        let (cx, cy) = center(&grp(m8, &format!("{g}.1")));
+        c.take(&grp(m8, &g));
         c.place(&format!("tr808f.pan{k}"), cx - 6.5, cy - 6.5);
-        let fx = grp(m2, &format!("4.{}", 38 + k));
-        let b = bbox(&fx);
-        c.take(&fx);
-        c.place(&format!("tr808f.fx{k}"), b.x0, b.y0);
     }
-    for s in 0..5 {
-        c.take(&grp(m2, &format!("4.{}", 32 + s)));
-    }
+    let lamps = |k: usize| match k {
+        1 => "0.34".to_string(),
+        _ => format!("0.{}", 39 + 5 * (k - 2)),
+    };
+    let labels = |k: usize, i: usize| match k {
+        1 => format!("0.3.{}", 2 + i),
+        _ => format!("0.{}", 35 + 5 * (k - 2) + i),
+    };
+    let look = FlipLook {
+        name: "flip808",
+        on: "0.34.1",
+        off: "0.34.0",
+        label_dx: 6.0,
+        color: "#e9edf2",
+    };
+    flip_lamps(c, m8, "tr808f", &look, &lamps, &labels);
     let face = Bx::new(90.0, 280.0, 366.0, 115.0);
     c.background(m, "_808", "bg_tr808", face);
-    c.background(m2, "_808-flipped", "bg_tr808_flip", face);
+    c.background(m8, "_808-flipped", "bg_tr808_flip", face);
 }
 
 /// The 909's names by the mockup's lower pill groups 5.16 ... (RC first, then BD .. CC).
@@ -1287,7 +1295,7 @@ const NAMES_909: [(usize, &str); 11] = [
 /// Drum machine B, both faces: knobs (placed by the nearest of the mockup's), FLIP, flam, the
 /// header and name pills, the steps; on the FLIP face the pans and the effects keys.
 fn tr909(c: &mut Cuts) {
-    let (m, m2) = (Mockup::panel_1(), Mockup::panel_2());
+    let (m, m9) = (Mockup::panel_1(), Mockup::flip_909());
     drum_knob(c, m, "knob_909", "5.27");
     let mut centers = Vec::new();
     for g in 27..=54 {
@@ -1301,7 +1309,7 @@ fn tr909(c: &mut Cuts) {
     let b = bbox(&flip);
     c.parts
         .push(part("flip909_off", b.x0, b.y0, b.w(), b.h(), &body(&flip)));
-    let flip_on = grp(m2, "5.40");
+    let flip_on = grp(m9, "0.40");
     c.parts.push(part(
         "flip909_on",
         b.x0,
@@ -1326,39 +1334,26 @@ fn tr909(c: &mut Cuts) {
     c.parts
         .push(part("toggle_flam_off", fb.x0, fb.y0, fb.w(), fb.h(), &off));
     c.take(&flam);
-    c.take(&grp(m2, "5.39"));
-    c.take(&grp(m2, "5.38"));
+    c.take(&grp(m9, "0.39"));
+    c.take(&grp(m9, "0.38"));
     c.place("tr909.flam_button", fb.x0, fb.y0);
-    // the effects keys of the FLIP face: on green, off dim
-    let fx_on = grp(m2, "5.41");
-    let fx_off = grp(m2, "5.42");
-    let (bon, boff) = (bbox(&fx_on), bbox(&fx_off));
-    c.parts.push(part(
-        "fx909_on",
-        bon.x0,
-        bon.y0,
-        bon.w(),
-        bon.h(),
-        &body(&fx_on),
-    ));
-    c.parts.push(part(
-        "fx909_off",
-        boff.x0,
-        boff.y0,
-        boff.w(),
-        boff.h(),
-        &body(&fx_off),
-    ));
+    // the FLIP face (assets/mockup/flip_909.svg): the pans and the effects lamps
     for k in 1..=11 {
-        let g = format!("5.{}", 26 + k);
-        let (cx, cy) = center(&grp(m2, &format!("{g}.1")));
-        c.take(&grp(m2, &g));
+        let g = format!("0.{}", 26 + k);
+        let (cx, cy) = center(&grp(m9, &format!("{g}.1")));
+        c.take(&grp(m9, &g));
         c.place(&format!("tr909f.pan{k}"), cx - 6.5, cy - 6.5);
-        let fx = grp(m2, &format!("5.{}", 40 + k));
-        let b = bbox(&fx);
-        c.take(&fx);
-        c.place(&format!("tr909f.fx{k}"), b.x0, b.y0);
     }
+    let lamps = |k: usize| format!("0.{}", 45 + 5 * (k - 1));
+    let labels = |k: usize, i: usize| format!("0.{}", 41 + 5 * (k - 1) + i);
+    let look = FlipLook {
+        name: "flip909",
+        on: "0.45.1",
+        off: "0.45.0",
+        label_dx: 6.3,
+        color: "#1a1b1d",
+    };
+    flip_lamps(c, m9, "tr909f", &look, &lamps, &labels);
     // the steps: the light (a) and darker (b) keys, unlit, and their LED in each value's
     // color (orange, red, green) taken from a key that shows it
     let led_of = |g: usize| grp(m, &format!("5.{g}.2"));
@@ -1379,7 +1374,7 @@ fn tr909(c: &mut Cuts) {
         let b = bbox(&v);
         c.take(&v);
         c.place(&format!("tr909.step{}", i + 1), b.x0, b.y0);
-        c.take(&grp(m2, &format!("5.{}", 52 + i)));
+        c.take(&grp(m9, &format!("0.{}", 96 + i)));
     }
     // the header pill of the accent, chosen: orange with dark letters
     let head = grp(m, "5.4");
@@ -1405,11 +1400,87 @@ fn tr909(c: &mut Cuts) {
         ));
     }
     c.take(&grp(m, "5.17.1"));
-    c.take(&grp(m2, "5.17.1"));
+    c.take(&grp(m9, "0.17.1"));
     let face = Bx::new(90.0, 395.0, 366.0, 115.0);
     c.background(m, "_909", "bg_tr909", face);
-    c.background(m2, "_909-flipped", "bg_tr909_flip", face);
+    c.background(m9, "_909-flipped", "bg_tr909_flip", face);
 }
+
+/// The FLIP lamps' box (this fork): a lamp and the label right of it, as wide as a label fits.
+pub const FLIP_LAMP_W: f32 = 25.0;
+pub const FLIP_LAMP_H: f32 = 7.0;
+
+/// How a drum machine's FLIP lamps look: their parts' names (`{name}lamp_on`, `_off`,
+/// `{name}lbl_{fx}`), the mockup's lit and unlit lamp, the label's distance from the lamp's
+/// left and its color.
+struct FlipLook {
+    name: &'static str,
+    on: &'static str,
+    off: &'static str,
+    label_dx: f32,
+    color: &'static str,
+}
+
+/// The FLIP face's effects lamps (this fork): four under every sound (`fx{k}_{i}`, one per
+/// effects slot, top to bottom), from mockup groups `lamps(k)` (its `.i` the lamps) and
+/// `labels(k, i)`. The parts: the lamp lit and unlit at the left of its box, and the label of
+/// every effect (the app draws the one its slot holds over the lamp).
+fn flip_lamps(
+    c: &mut Cuts,
+    m: &Mockup,
+    sec: &str,
+    look: &FlipLook,
+    lamps: &dyn Fn(usize) -> String,
+    labels: &dyn Fn(usize, usize) -> String,
+) {
+    let at = |b: Bx| (b.x0 - 1.0, b.cy() - FLIP_LAMP_H / 2.0);
+    for (state, g) in [("on", look.on), ("off", look.off)] {
+        let v = grp(m, g);
+        let (x, y) = at(bbox(&v));
+        let name = format!("{}lamp_{state}", look.name);
+        c.parts
+            .push(part(&name, x, y, FLIP_LAMP_W, FLIP_LAMP_H, &body(&v)));
+    }
+    for fx in FLIP_LABELS {
+        let mut t = crate::svg::Svg::new();
+        let yc = FLIP_LAMP_H / 2.0;
+        let cap = 2.81;
+        let x = 1.0 + look.label_dx;
+        crate::font::text(
+            &mut t,
+            x,
+            yc,
+            cap,
+            crate::font::Anchor::Start,
+            look.color,
+            fx.1,
+        );
+        let name = format!("{}lbl_{}", look.name, fx.0);
+        c.parts
+            .push(part(&name, 0.0, 0.0, FLIP_LAMP_W, FLIP_LAMP_H, &t.s));
+    }
+    for k in 1..=11 {
+        for i in 0..4 {
+            let v = grp(m, &format!("{}.{i}", lamps(k)));
+            let (x, y) = at(bbox(&v));
+            c.take(&v);
+            c.take(&grp(m, &labels(k, i)));
+            c.place(&format!("{sec}.fx{k}_{i}"), x, y);
+        }
+    }
+}
+
+/// The FLIP lamps' labels: the effects' names (the app's) and what the label says.
+const FLIP_LABELS: [(&str, &str); 8] = [
+    ("rvrb", "RVRB"),
+    ("delay", "DLY"),
+    ("dist", "DIST"),
+    ("pcf", "PCF"),
+    ("cho", "CHO"),
+    ("fla", "FLA"),
+    ("pha", "PHA"),
+    ("comp", "COMP"),
+];
 
 /// A display's top-left corner so that its first digit's cell is the mockup's: `seg` the
 /// first digit's segments, `w` the display's width, `n` its digits (the app draws the digits

@@ -1021,8 +1021,8 @@ impl App {
                                 self.panel.press(&c.id, now);
                             }
                         }
-                        // an FX key of a FLIP face (this fork): a double click, as on the
-                        // knobs, sets every sound of the drum machine
+                        // an effects lamp of a FLIP face (this fork): a double click, as
+                        // on the knobs, sets the lamp of that slot of every sound
                         if r.double_clicked()
                             && crate::model::FLIP_FACES.contains(&c.section.as_str())
                             && c.name().starts_with("fx")
@@ -1060,6 +1060,10 @@ impl App {
                     name = format!("{key}_scale");
                 }
                 paint_part(ui, &name, rect);
+                // an effects lamp of a FLIP face (this fork): the name of its slot's effect
+                if let Some(label) = self.panel.flip_label(c) {
+                    paint_part(ui, &label, rect);
+                }
             }
         }
     }
@@ -1081,14 +1085,17 @@ impl App {
         }
     }
 
-    /// A double click on an FX key of a FLIP face (this fork; egui's double click, as the
-    /// knobs take it): every sound of the drum machine as the first click left this one, all
-    /// on or all off. Each click switched the key, so it is back as it was: the first click
-    /// left it the other way.
+    /// A double click on an effects lamp of a FLIP face (this fork; egui's double click, as
+    /// the knobs take it): that slot's lamp of every sound of the drum machine as the first
+    /// click left this one, all on or all off. Each click switched the lamp, so it is back as
+    /// it was: the first click left it the other way.
     fn fx_double_click(&mut self, c: &Ctl) {
         let k = usize::from(c.section == "tr909f");
+        let Some((_, slot)) = crate::model::flip_lamp(c.name()) else {
+            return;
+        };
         let on = !self.panel.toggle_on(&c.id);
-        self.panel.set_all_fx(k, on);
+        self.panel.set_all_fx(k, slot, on);
     }
 
     /// The 808's mod window: the current kit's `splash.jpg` (the embedded standard mod's for the
@@ -1366,9 +1373,15 @@ impl App {
         // the 909's FLIP face has KIT over the accent's column (this fork): its header row
         // starts at BD
         let x9 = if self.panel.flipped(1) { 26.0 } else { 4.0 };
+        // the 808's FLIP face has the upper pills (LC..MA) lower, under its effects lamps
+        let dy8 = if self.panel.flipped(0) {
+            behavior::FLIP_UPPER_DY_808
+        } else {
+            0.0
+        };
         let areas: [Area; 4] = [
             (true, o8, [6.0, 75.0, 354.0, 10.0], "legend808"),
-            (true, o8, [94.5, 45.5, 147.5, 10.0], "upper808"),
+            (true, o8, [94.5, 45.5 + dy8, 147.5, 10.0], "upper808"),
             (false, o9, [x9, 4.0, 362.0 - x9, 10.0], "legend909"),
             (false, o9, [26.0, 75.0, 336.0, 10.0], "names909"),
         ];
@@ -1387,6 +1400,7 @@ impl App {
             };
             let (sx, sy) = (p.x - o.0, p.y - o.1);
             let hit = if is808 {
+                let sy = if sy < 75.0 { sy - dy8 } else { sy };
                 behavior::tr808_hit(sx, sy)
             } else {
                 behavior::tr909_hit(sx, sy)
@@ -1410,7 +1424,7 @@ impl App {
             "AC", "BD", "SD", "LT", "MT", "HT", "RS", "CP", "CB", "CY", "OH", "CH",
         ];
         let (name, y) = if upper {
-            (["LC", "MC", "HC", "CL", "MA"][i - 3], 46.0)
+            (["LC", "MC", "HC", "CL", "MA"][i - 3], 46.0 + dy8)
         } else {
             (names[i], 75.0)
         };

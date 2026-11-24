@@ -227,7 +227,7 @@ fn every_shipped_rbs_song_still_opens_with_an_empty_menu() {
 }
 
 /// (this fork) An .rbsx keeps the drum machines' FLIP faces: which shows, the sounds' pans and
-/// effects switches and a machine's own kit; they come back with the song, and the engine
+/// effects lamps and a machine's own kit; they come back with the song, and the engine
 /// takes the mix.
 #[test]
 fn an_rbsx_keeps_the_flip_faces_and_a_machines_kit() {
@@ -235,7 +235,7 @@ fn an_rbsx_keeps_the_flip_faces_and_a_machines_kit() {
     let mut h = Harness::new();
     h.open(&song());
     h.app.panel.press("tr909.flip", 0.0);
-    h.app.panel.press("tr909f.fx2", 0.0);
+    h.app.panel.press("tr909f.fx2_3", 0.0);
     h.app.panel.set_knob("tr808f.pan3", 0);
     h.app.use_kit_of(
         0,
@@ -245,7 +245,9 @@ fn an_rbsx_keeps_the_flip_faces_and_a_machines_kit() {
     h.calls(2);
     assert!(h.app.doc.modified);
     let kept = h.app.gen_state();
-    assert!(kept.flip[1] && !kept.voice_mix[1].fx[2] && kept.voice_mix[0].pan[3] == 0);
+    let lamps = kept.voice_mix[1].lamps;
+    assert!(kept.flip[1] && lamps[2] == 0b0111 && lamps[3] == 0b1111);
+    assert!(kept.voice_mix[0].pan[3] == 0);
     assert!(kept.kits[0].is_some());
     let out = dir.path().join("flip.rbsx");
     h.app.command(Cmd::SaveAs);

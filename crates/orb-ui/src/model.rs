@@ -342,6 +342,14 @@ pub fn mixer_insert(id: &str) -> Option<(usize, &str)> {
     matches!(name, "dist" | "pcf" | "comp").then_some((c, name))
 }
 
+/// This fork: a FLIP face's effects lamp's sound (1..12) and slot (0..4) by its name
+/// (`fx3_1`).
+pub fn flip_lamp(name: &str) -> Option<(usize, usize)> {
+    let (k, s) = name.strip_prefix("fx")?.split_once('_')?;
+    let (k, s) = (k.parse().ok()?, s.parse().ok()?);
+    ((1..12).contains(&k) && s < 4).then_some((k, s))
+}
+
 /// This fork: the effects a slot may hold, by the engine's codes (`orb_engine::frame::FX_RVRB`
 /// ..), as section and knob names.
 pub const FX_KINDS: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
@@ -997,7 +1005,8 @@ impl Panel {
         match c.section.as_str() {
             "tr808f" => !self.flipped(0),
             "tr909f" => !self.flipped(1),
-            "tr808" => c.kind == "knob" && self.flipped(0),
+            // (the FLIP face has no instrument switches: their sounds' upper pills choose)
+            "tr808" => matches!(c.kind.as_str(), "knob" | "vswitch") && self.flipped(0),
             "tr909" => c.kind == "knob" && c.name() != "flam" && self.flipped(1),
             // an effect no slot holds (this fork), its face and its mixer knobs
             sec => self.out_of_slots(sec, c.name()),
@@ -1013,28 +1022,44 @@ impl Panel {
         }
     }
 
-    /// Every sound's effects switch of drum machine `k` on or off (a double click on an FX key).
-    pub fn set_all_fx(&mut self, k: usize, on: bool) {
+    /// Slot `slot`'s effects lamp of every sound of drum machine `k` on or off (a double click
+    /// on a lamp).
+    pub fn set_all_fx(&mut self, k: usize, slot: usize, on: bool) {
         let sec = FLIP_FACES[k.min(1)];
         for i in 1..12 {
-            self.toggles.insert(format!("{sec}.fx{i}"), on);
+            self.toggles.insert(format!("{sec}.fx{i}_{slot}"), on);
         }
     }
 
-    /// Drum machine `k`'s sounds' pans and effects switches as its FLIP face sets them.
+    /// Drum machine `k`'s sounds' pans and effects lamps as its FLIP face sets them.
     pub fn voice_mix(&self, k: usize) -> VoiceMix {
         let sec = FLIP_FACES[k.min(1)];
         let mut m = VoiceMix::default();
         for i in 1..12 {
             let pan = behavior::knob_send(self.knob(&format!("{sec}.pan{i}")));
             m.pan[i] = pan.clamp(0, 127) as u8;
-            m.fx[i] = self
-                .toggles
-                .get(&format!("{sec}.fx{i}"))
-                .copied()
-                .unwrap_or(true);
+            m.lamps[i] = (0..4)
+                .filter(|s| {
+                    self.toggles
+                        .get(&format!("{sec}.fx{i}_{s}"))
+                        .copied()
+                        .unwrap_or(true)
+                })
+                .fold(0, |b, s| b | 1 << s);
         }
         m
+    }
+
+    /// The label part drawn over an effects lamp of a FLIP face (this fork): the name of the
+    /// effect its slot holds (`flip808lbl_dist`).
+    pub fn flip_label(&self, c: &crate::layout::Ctl) -> Option<String> {
+        if !FLIP_FACES.contains(&c.section.as_str()) {
+            return None;
+        }
+        let (_, slot) = flip_lamp(c.name())?;
+        let kind = FX_KINDS.get(self.slots[slot] as usize)?;
+        let look = c.part.split("lamp_").next()?;
+        Some(format!("{look}lbl_{kind}"))
     }
 
     // ---- toggles and presses ------------------------------------------------------------
@@ -1752,7 +1777,7 @@ mod tests {
     }
 
     /// (this fork) FLIP shows a drum machine's other face: its knobs hide (the 909's FLAM
-    /// stays) and the face's PAN knobs and FX keys show; they make the sounds' mix.
+    /// stays) and the face's PAN knobs and effects lamps show; they make the sounds' mix.
     #[test]
     fn flip_shows_the_pans_and_effects_switches() {
         let mut p = Panel::new();
@@ -1771,16 +1796,27 @@ mod tests {
         assert_eq!(p.background("bg_tr808"), "bg_tr808_flip");
         p.press("tr909.flip", 0.0);
         assert!(p.hidden(&ctl("tr909.bd_tune")) && !p.hidden(&ctl("tr909.flam")));
-        p.press("tr808f.fx3", 0.0);
+        assert!(
+            p.hidden(&ctl("tr808.slot3_switch")),
+            "no instrument switches"
+        );
+        p.press("tr808f.fx3_1", 0.0);
         p.set_knob("tr909f.pan2", 0);
         let (m8, m9) = (p.voice_mix(0), p.voice_mix(1));
-        assert!(!m8.fx[3] && m8.fx[2] && m8.pan[3] == 64);
-        assert!(m9.pan[2] == 0 && m9.fx[2]);
+        assert!(m8.lamps[3] == 0b1101 && m8.lamps[2] == 0b1111 && m8.pan[3] == 64);
+        assert!(m9.pan[2] == 0 && m9.lamps[2] == 0b1111);
+        // a slot's lamp of every sound at once (a double click)
+        p.set_all_fx(1, 2, false);
+        assert!(p.voice_mix(1).lamps.iter().skip(1).all(|&l| l == 0b1011));
+        // each lamp says the effect its slot holds
+        let lbl = p.flip_label(&ctl("tr909f.fx4_2"));
+        assert_eq!(lbl.as_deref(), Some("flip909lbl_pcf"));
         p.press("tr808.flip", 0.0);
         assert!(
-            !p.flipped(0) && !p.voice_mix(0).fx[3],
+            !p.flipped(0) && p.voice_mix(0).lamps[3] == 0b1101,
             "the mix stays without the face"
         );
+        assert!(!p.hidden(&ctl("tr808.slot3_switch")));
     }
 
     /// (this fork) SOLO and MUTE set the channels' enables: soloed ones play alone, muted or

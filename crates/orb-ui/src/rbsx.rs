@@ -25,7 +25,7 @@ use crate::lfo;
 use crate::palette::{INK, INK_DIM, SLATE_DARK, SLATE_LINE};
 use crate::random::{MOVES, PARAMS};
 use crate::scale::{KEYS, SCALES, ScaleKeys};
-use orb_engine::frame::voices::VoiceMix;
+use orb_engine::frame::voices::{self, VoiceMix};
 
 /// The drum machines' names in the chunk (this fork's FLIP faces).
 const DRUMS: [&str; 2] = ["tr808", "tr909"];
@@ -205,17 +205,15 @@ pub fn encode(state: &GenState) -> Vec<u8> {
         lines.push(format!("mixer{n}.solo={}", state.mix_solo[c] as u8));
         lines.push(format!("mixer{n}.mute={}", state.mix_mute[c] as u8));
     }
-    // the drum machines' FLIP faces: 11 pans (0..127) and 11 effects switches, BD first
+    // the drum machines' FLIP faces: 11 pans (0..127) and 11 sounds' effects lamps (bit s the
+    // lamp of slot s, 0..15), BD first
     for (k, dev) in DRUMS.into_iter().enumerate() {
         let m = &state.voice_mix[k];
         let pans: Vec<String> = m.pan[1..12].iter().map(|p| p.to_string()).collect();
-        let fx: Vec<&str> = m.fx[1..12]
-            .iter()
-            .map(|&f| if f { "1" } else { "0" })
-            .collect();
+        let lamps: Vec<String> = m.lamps[1..12].iter().map(|l| l.to_string()).collect();
         lines.push(format!("{dev}.flip={}", state.flip[k] as u8));
         lines.push(format!("{dev}.pan={}", pans.join(",")));
-        lines.push(format!("{dev}.fx={}", fx.join(",")));
+        lines.push(format!("{dev}.lamps={}", lamps.join(",")));
         lines.push(format!(
             "{dev}.kit={}",
             state.kits[k].as_deref().unwrap_or("")
@@ -337,9 +335,16 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
                 }
             }
         }
-        if let Some(v) = get(&format!("{dev}.fx")) {
+        if let Some(v) = get(&format!("{dev}.lamps")) {
+            for (i, l) in v.split(',').take(11).enumerate() {
+                if let Ok(l) = l.trim().parse::<u8>() {
+                    m.lamps[i + 1] = l & voices::ALL;
+                }
+            }
+        } else if let Some(v) = get(&format!("{dev}.fx")) {
+            // the older files: one FX key a sound, on as every lamp on
             for (i, f) in v.split(',').take(11).enumerate() {
-                m.fx[i + 1] = f.trim() != "0";
+                m.lamps[i + 1] = if f.trim() == "0" { 0 } else { voices::ALL };
             }
         }
         state.kits[k] = get(&format!("{dev}.kit"))
@@ -628,7 +633,10 @@ impl App {
                 if crate::behavior::knob_send(self.panel.knob(&id)) != m.pan[i] as i32 {
                     self.panel.put_knob(&id, to(m.pan[i]));
                 }
-                self.panel.put_toggle(&format!("{sec}.fx{i}"), m.fx[i]);
+                for s in 0..4 {
+                    let on = m.lamps[i] & (1 << s) != 0;
+                    self.panel.put_toggle(&format!("{sec}.fx{i}_{s}"), on);
+                }
             }
             if let Some(name) = &state.kits[k] {
                 let kit = self.kit_for(name);
@@ -674,7 +682,8 @@ mod tests {
         };
         st.flip[1] = true;
         st.voice_mix[0].pan[3] = 10;
-        st.voice_mix[1].fx[11] = false;
+        st.voice_mix[1].lamps[11] = 0;
+        st.voice_mix[0].lamps[2] = 0b0101;
         st.voice_mix[1].pan[1] = 127;
         st.kits[1] = Some("PBE2".into());
         st.sub = [0, 90];
@@ -687,6 +696,26 @@ mod tests {
             (orb_engine::frame::PCF_B + 4, 30, vec![]),
         ];
         st
+    }
+
+    /// The older files' FX keys (one a sound): on as every lamp on, off as none.
+    #[test]
+    fn an_older_files_fx_keys_light_every_lamp_or_none() {
+        let st = sample();
+        let text = String::from_utf8(encode(&st)).unwrap();
+        let lamps = |dev: &str| {
+            let line = text
+                .lines()
+                .find(|l| l.starts_with(&format!("{dev}.lamps=")));
+            line.unwrap().to_string()
+        };
+        let old = text
+            .replace(&lamps("tr808"), "tr808.fx=1,0,1,1,1,1,1,1,1,1,1")
+            .replace(&lamps("tr909"), "");
+        let got = decode(old.as_bytes()).unwrap();
+        let m = &got.voice_mix[0];
+        assert!(m.lamps[1] == voices::ALL && m.lamps[2] == 0 && m.lamps[11] == voices::ALL);
+        assert_eq!(got.voice_mix[1].lamps, [voices::ALL; 12], "no key: all on");
     }
 
     #[test]
@@ -718,7 +747,8 @@ mod tests {
         // (this fork) the FLIP faces
         assert!(text.contains("tr808.flip=0\ntr808.pan=64,64,10,64,"));
         assert!(text.contains("tr909.flip=1\ntr909.pan=127,64,"));
-        assert!(text.contains("tr909.fx=1,1,1,1,1,1,1,1,1,1,0\ntr909.kit=PBE2\n"));
+        assert!(text.contains("tr808.lamps=15,5,15,15,15,15,15,15,15,15,15\n"));
+        assert!(text.contains("tr909.lamps=15,15,15,15,15,15,15,15,15,15,0\ntr909.kit=PBE2\n"));
         assert!(text.contains("mixer4.solo=0\nmixer4.mute=1\n"));
         // (this fork) the sub-oscillators
         assert!(text.contains("baze1.sub=0\nbaze1.sub.track=\n"));

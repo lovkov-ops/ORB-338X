@@ -29,6 +29,11 @@ pub const TB303: &str = include_str!("../../../assets/mockup/303.svg");
 /// The user's panel with the effects rack (this fork), 624 x 510: the master's LIMIT key and
 /// AMT knob are cut from it (`cuts::mixer_and_effects`).
 pub const PANEL_FX: &str = include_str!("../../../assets/mockup/panel_fx.svg");
+/// (this fork) The user's FLIP faces of the 808 and the 909 (`SVG FILES/808 flip.svg`,
+/// `909 flip.svg`), moved to their places on the panel (the face group translated, the view
+/// the panel's).
+pub const FLIP_808: &str = include_str!("../../../assets/mockup/flip_808.svg");
+pub const FLIP_909: &str = include_str!("../../../assets/mockup/flip_909.svg");
 
 /// A box in panel pixels: left, top, right, bottom.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -154,7 +159,12 @@ impl Mockup {
             shapes: Vec::new(),
             grad: 0,
             prefix: prefix.to_string(),
-            doc: if prefix == "mb" { 2 } else { 1 },
+            doc: match prefix {
+                "mb" => 2,
+                "m8" => 3,
+                "m9" => 4,
+                _ => 1,
+            },
         };
         let root = tree.root();
         for (i, n) in root.children().iter().enumerate() {
@@ -193,6 +203,16 @@ impl Mockup {
     pub fn tb303() -> &'static Mockup {
         static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
         M.get_or_init(|| Mockup::parse(TB303, "m3"))
+    }
+
+    pub fn flip_808() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(FLIP_808, "m8"))
+    }
+
+    pub fn flip_909() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(FLIP_909, "m9"))
     }
 
     pub fn panel_fx() -> &'static Mockup {

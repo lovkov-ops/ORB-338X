@@ -1,17 +1,19 @@
 //! This fork (not the original): a drum machine's sounds each with their own pan and their own
-//! effects switch (the panel's FLIP face).
+//! lamps, one for each effects slot (the panel's FLIP face).
 //!
 //! The original renders all of a drum machine's voices into one mono channel bus, which goes
 //! through the channel's inserts (distortion, PCF, compressor), its delay send and its pan. Here,
 //! while a drum machine's [`VoiceMix`] is not neutral, its voices are rendered one by one
-//! ([`super::ChannelDevice::process_voices`]) into four buses: the voices with their effects on
-//! into a left and a right "wet" bus, the others into a left and a right "dry" bus, each voice
-//! by its own pan. The wet buses go through the inserts (the left one through the song's
-//! inserts, the right one through a copy of them, [`RightInserts`]) and into the delay send;
-//! the dry ones go around both. Then the channel's level and pan apply as for every channel.
+//! ([`super::ChannelDevice::process_voices`]) into a left and a right bus for each set of lamps
+//! ([`SplitBuses`]), each voice by its own pan. The voices with every lamp on go through the
+//! inserts as the channel's sound does (the left side through the song's inserts, the right
+//! one through a copy of them, [`RightInserts`]); the voices of another set go through their
+//! own copies of the inserts in their lit slots ([`GroupChain`]), around the others. Each slot's
+//! send effect hears the voices whose lamp of that slot is on. Then the channel's level and
+//! pan apply as for every channel.
 //!
 //! The pan is a balance: in the middle both sides take the voice whole, so a neutral mix (every
-//! pan in the middle, every effect on) is the original's sound, and the engine then takes the
+//! pan in the middle, every lamp on) is the original's sound, and the engine then takes the
 //! original's path, bit for bit.
 
 use super::{BLOCK, Block, BlockContext, Devices, InsertEffect};
@@ -19,27 +21,31 @@ use super::{BLOCK, Block, BlockContext, Devices, InsertEffect};
 /// The pan in the middle (the panel's knob at its default).
 pub const PAN_CENTER: u8 = 64;
 
-/// A drum machine's sounds' pans and effects switches, by the panel's instrument index
+/// Every slot's lamp on (bit s the slot s, top to bottom).
+pub const ALL: u8 = 0b1111;
+
+/// A drum machine's sounds' pans and slot lamps, by the panel's instrument index
 /// (1 BD .. 11; 0, the accent, has no sound of its own and is not used).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VoiceMix {
     /// 0 left .. 64 the middle .. 127 right.
     pub pan: [u8; 12],
-    /// Off: the sound goes around the channel's inserts and its delay send.
-    pub fx: [bool; 12],
+    /// The lamps (bit s the effects slot s): off, the sound goes around that slot's insert, or
+    /// does not go into its send effect.
+    pub lamps: [u8; 12],
 }
 
 impl Default for VoiceMix {
     fn default() -> Self {
         VoiceMix {
             pan: [PAN_CENTER; 12],
-            fx: [true; 12],
+            lamps: [ALL; 12],
         }
     }
 }
 
 impl VoiceMix {
-    /// Every pan in the middle and every effect on: the original's sound.
+    /// Every pan in the middle and every lamp on: the original's sound.
     pub fn neutral(&self) -> bool {
         *self == VoiceMix::default()
     }
@@ -59,12 +65,16 @@ impl VoiceMix {
     }
 }
 
-/// The four buses of a split drum machine.
+/// The buses of a split drum machine: the left and right of the voices with every lamp on
+/// (`wet_l`, `wet_r`, then the channel's sides), of each other set of lamps (`parts[set]`),
+/// and each slot's send source (`sends[s]`, made when the sets are summed).
 pub struct SplitBuses {
     pub wet_l: Block,
     pub wet_r: Block,
-    pub dry_l: Block,
-    pub dry_r: Block,
+    pub parts: [[Block; 2]; ALL as usize],
+    /// The sets of `parts` a voice went into (bit set).
+    pub used: u16,
+    pub sends: [Block; 4],
 }
 
 impl SplitBuses {
@@ -72,19 +82,22 @@ impl SplitBuses {
         SplitBuses {
             wet_l: [0.0; BLOCK],
             wet_r: [0.0; BLOCK],
-            dry_l: [0.0; BLOCK],
-            dry_r: [0.0; BLOCK],
+            parts: [[[0.0; BLOCK]; 2]; ALL as usize],
+            used: 0,
+            sends: [[0.0; BLOCK]; 4],
         }
     }
 
     /// Adds instrument `inst`'s voice block `v` by `mix`.
     pub fn add(&mut self, mix: &VoiceMix, inst: usize, v: &Block) {
         let (gl, gr) = mix.gains(inst);
-        let fx = mix.fx.get(inst).copied().unwrap_or(true);
-        let (l, r) = if fx {
+        let set = mix.lamps.get(inst).copied().unwrap_or(ALL) & ALL;
+        let (l, r) = if set == ALL {
             (&mut self.wet_l, &mut self.wet_r)
         } else {
-            (&mut self.dry_l, &mut self.dry_r)
+            self.used |= 1 << set;
+            let [l, r] = &mut self.parts[set as usize];
+            (l, r)
         };
         for ((a, b), &x) in l.iter_mut().zip(r.iter_mut()).zip(v.iter()) {
             *a = (*a as f64 + x as f64 * gl) as f32;
@@ -183,6 +196,17 @@ impl RightInserts {
     }
 }
 
+/// This fork: the inserts a set of a split drum machine's lamps (not all on) goes through:
+/// for each slot its lamp of holds an insert the channel hears, that insert's copies on the
+/// left and the right side (made from the song's insert, given the first or the second one's
+/// controllers), and the DIST kinds' and the OTT's memory of each.
+#[derive(Default)]
+pub struct GroupChain {
+    pub ins: [[Option<Box<InsertCopy>>; 2]; 4],
+    pub kind: [[crate::dist_kinds::KindFx; 2]; 4],
+    pub ott: [[crate::ott::Ott; 2]; 4],
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,20 +222,24 @@ mod tests {
         assert_eq!(m.gains(1), (0.0, 1.0));
         assert!(!m.neutral());
         let mut m = VoiceMix::default();
-        m.fx[3] = false;
+        m.lamps[3] = 0b0101;
         assert!(!m.neutral());
     }
 
     #[test]
-    fn a_sound_without_effects_goes_to_the_dry_buses() {
+    fn a_sound_goes_to_the_buses_of_its_lamps() {
         let mut m = VoiceMix::default();
-        m.fx[2] = false;
+        m.lamps[2] = 0;
         m.pan[2] = 0;
+        m.lamps[3] = 0b0110;
         let mut b = SplitBuses::new();
         let v = [0.5f32; BLOCK];
         b.add(&m, 1, &v);
         b.add(&m, 2, &v);
+        b.add(&m, 3, &v);
         assert_eq!((b.wet_l[0], b.wet_r[0]), (0.5, 0.5));
-        assert_eq!((b.dry_l[0], b.dry_r[0]), (0.5, 0.0));
+        assert_eq!((b.parts[0][0][0], b.parts[0][1][0]), (0.5, 0.0));
+        assert_eq!(b.parts[6][1][0], 0.5);
+        assert_eq!(b.used, 1 | 1 << 6);
     }
 }
