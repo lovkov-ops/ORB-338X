@@ -732,6 +732,69 @@ fn export_writes_the_file_orb_render_writes() {
     }
 }
 
+/// (this fork) The export plays the 808's and the 909's FLIP faces, which the `.rbs` bytes do
+/// not carry: a sound panned or taken off an effect (its lamp off) changes the file, which is
+/// then the one `orb render` writes for the song with that mix; a neutral face exports bit for
+/// bit as before.
+#[test]
+fn export_plays_the_flip_faces() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = root().join("tests/songs/shipped/Calm.rbs");
+    let mut h = Harness::new();
+    h.open(&src);
+    assert!(h.app.panel.voice_mix(0).neutral() && h.app.panel.voice_mix(1).neutral());
+    let export = |h: &mut Harness, name: &str| {
+        let out = dir.path().join(name);
+        h.app.command(Cmd::Export);
+        h.app.chosen(Mode::Export, out.clone());
+        assert!(h.app.exporting());
+        h.finish_export();
+        assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+        std::fs::read(out).unwrap()
+    };
+    let render = |mix: [orb_engine::frame::voices::VoiceMix; 2]| {
+        let mut song = load_song(&src).unwrap_or_else(|_| panic!("source"));
+        song.voice_mix = mix;
+        let s = Renderer::new(ModOpts::default())
+            .render("x", &song, DEFAULT_IDLE_BLOCKS)
+            .unwrap_or_else(|orb_cli::Fail(_, m)| panic!("{m}"));
+        orb_engine::frame::export::wav_bytes(&s)
+    };
+    let neutral = export(&mut h, "neutral.wav");
+    assert!(neutral.len() > 1000, "the export is empty");
+    assert!(
+        neutral == render(Default::default()),
+        "a neutral face changes the export"
+    );
+
+    // the 808's BD hard left, the 909's SD around the second slot (its lamp off)
+    let center = h.app.panel.knob("tr808f.pan1");
+    h.app.panel.set_knob("tr808f.pan1", 0);
+    h.app.panel.press("tr909f.fx2_1", 0.0);
+    h.frame(vec![]);
+    let mix = [h.app.panel.voice_mix(0), h.app.panel.voice_mix(1)];
+    assert!(mix[0].pan[1] == 0 && mix[1].lamps[2] == 0b1101, "{mix:?}");
+    let flipped = export(&mut h, "flipped.wav");
+    assert!(
+        flipped != neutral,
+        "the FLIP faces are not heard in the export"
+    );
+    assert!(
+        flipped == render(mix),
+        "the export differs from orb render's with the mix"
+    );
+
+    // back to the middle and on: the export is the neutral one again
+    h.app.panel.set_knob("tr808f.pan1", center);
+    h.app.panel.press("tr909f.fx2_1", 0.0);
+    h.frame(vec![]);
+    assert!(h.app.panel.voice_mix(0).neutral() && h.app.panel.voice_mix(1).neutral());
+    assert!(
+        export(&mut h, "again.wav") == neutral,
+        "the neutral export changed"
+    );
+}
+
 #[test]
 fn export_is_not_offered_in_pattern_mode_and_its_errors_are_shown() {
     let mut h = Harness::new();

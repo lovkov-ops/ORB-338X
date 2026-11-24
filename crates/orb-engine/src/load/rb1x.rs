@@ -367,6 +367,7 @@ pub fn load_1x(song: &Song1x) -> Result<Loaded, LoadError> {
         sub: [0; 2],
         sub_events: Default::default(),
         fork_tracks: Vec::new(),
+        voice_mix: Default::default(),
     };
     Ok(Loaded {
         song: out,

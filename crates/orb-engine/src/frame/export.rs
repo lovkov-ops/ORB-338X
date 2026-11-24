@@ -145,6 +145,10 @@ pub fn export_song(
     for t in &song.fork_tracks {
         engine.fork_track(t.device, t.ctrl, t.value, &t.events);
     }
+    // and the drum machines' FLIP faces (a neutral mix takes the original's path)
+    for (k, d) in [Device::Tr808, Device::Tr909].into_iter().enumerate() {
+        engine.voice_mix(d, song.voice_mix[k]);
+    }
     Ok(export(
         engine,
         ExportRange::from(&song.globals),

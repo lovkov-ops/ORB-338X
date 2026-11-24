@@ -741,7 +741,8 @@ impl App {
 
     /// Starts the export of the loop to `path` (the format is its extension) on its own thread:
     /// the song as saved is rendered by `orb render`'s code (`orb_cli::render`), so the file is
-    /// the one `orb render` writes for the saved song.
+    /// the one `orb render` writes for the saved song, with this fork's settings an `.rbs` does
+    /// not hold (the 303s' SUB, the 808's and the 909's FLIP faces).
     pub fn export_to(&mut self, path: &Path) {
         self.action(|s| s.export_to_inner(path));
     }
@@ -772,7 +773,8 @@ impl App {
             }
             Ok(song)
         });
-        // this fork: the 303s' sub-oscillators, which the .rbs bytes do not carry
+        // this fork: the 303s' sub-oscillators and the drum machines' FLIP faces (each sound's
+        // pan and effects switch), which the .rbs bytes do not carry
         let song = song.map(|mut song| {
             let g = self.gen_state();
             song.sub = g.sub;
@@ -798,6 +800,8 @@ impl App {
                         }
                     }))
                     .collect();
+            // and the drum machines' FLIP faces
+            song.voice_mix = g.voice_mix;
             song
         });
         let song = match song {

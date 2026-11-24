@@ -465,6 +465,11 @@ pub struct Song {
     /// [`crate::frame::LIMIT`] and [`crate::frame::LIMIT_AMT`]) as the app keeps them, which
     /// [`crate::frame::export::export_song`] applies ([`crate::frame::Engine::fork_track`]).
     pub fork_tracks: Vec<ForkTrack>,
+    /// This fork: the pans and effects lamps of the 808's and the 909's sounds (the panel's
+    /// FLIP faces), which no song file of the original carries either. The load leaves them
+    /// neutral; [`crate::frame::export::export_song`] applies them
+    /// ([`crate::frame::Engine::voice_mix`]).
+    pub voice_mix: [crate::frame::voices::VoiceMix; 2],
 }
 
 /// This fork: a controller this fork adds to a device, as an `.rbsx` song keeps it: its value
