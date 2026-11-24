@@ -1701,7 +1701,7 @@ fn mixer_and_effects(c: &mut Cuts) {
             let v = grp(mf, &at(g_eq));
             let kb = bbox(&v);
             c.take(&v);
-            c.place(&format!("{sec}.eq_{band}"), kb.cx() - 6.0, kb.cy() - 6.0);
+            c.place(&format!("{sec}.eq_{band}"), kb.cx() - 7.0, kb.cy() - 7.0);
         }
         // the slots' knobs (the default kinds: DELAY's send, DIST, PCF, COMP) and their labels
         for (slot, &(knob_g, label_g)) in n.knobs.iter().enumerate() {
@@ -1709,7 +1709,7 @@ fn mixer_and_effects(c: &mut Cuts) {
             let kb = bbox(&grp(mf, &format!("{g}.{knob_g}.1")));
             c.take(&v);
             let id = ["delay", "dist", "pcf", "comp"][slot];
-            c.place(&format!("{sec}.{id}"), kb.cx() - 6.0, kb.cy() - 6.0);
+            c.place(&format!("{sec}.{id}"), kb.cx() - 7.0, kb.cy() - 7.0);
             let lv = grp(mf, &at(label_g));
             let lb = bbox(&lv);
             c.take(&lv);
@@ -1784,11 +1784,11 @@ fn mixer_and_effects(c: &mut Cuts) {
         .push(part("mixsw_limit_on", b.x0, b.y0, b.w(), b.h(), &on));
     c.take(&v);
     c.place("master.limit", b.x0, b.y0);
-    // the AMT knob: the small knob (the 303 LFO rows'), centered on the drawn one's body
+    // the AMT knob: the small knob (14 x 14), centered on the drawn one's body
     let amt = grp(mf, "16.20");
     let ab = bbox(&grp(mf, "16.20.1"));
     c.take(&amt);
-    c.place("master.limit_amt", ab.cx() - 6.0, ab.cy() - 6.0);
+    c.place("master.limit_amt", ab.cx() - 7.0, ab.cy() - 7.0);
     c.background(mf, "master", "bg_master", Bx::new(526.0, 50.0, 82.0, 100.0));
 
     // the effects slots, 82 x 90 each under the master (this fork: the user's panel with the
@@ -1822,7 +1822,7 @@ fn mixer_and_effects(c: &mut Cuts) {
         let v = grp(mf, g);
         let kb = bbox(&grp(mf, &format!("{g}.1")));
         c.take(&v);
-        c.place(id, kb.cx() - 6.0, kb.cy() - 6.0);
+        c.place(id, kb.cx() - 7.0, kb.cy() - 7.0);
     };
     // a vertical switch: the handle up (0, the delay's) or down (1, the PCF's)
     let sw = grp(m, "15.15");

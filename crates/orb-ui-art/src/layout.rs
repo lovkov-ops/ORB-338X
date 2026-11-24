@@ -182,6 +182,9 @@ const KNOB_808_WHITE: usize = 2;
 const KNOB_909: usize = 3;
 const KNOB_LFO: usize = 5;
 const KNOB_FX: usize = 6;
+/// The mixer's, the master's and the effects' small knobs (this fork; the 303's LFO knobs are
+/// [`KNOB_LFO`]).
+const KNOB_SMALL: usize = 7;
 /// The instruments' column (the original's and the mockup's 90: 4 px between it and the
 /// pattern sections, the focus bar in them).
 const INSTR_X: f32 = 90.0;
@@ -613,13 +616,13 @@ fn mixer(b: &mut Builder, c: usize) {
             31.0,
             34.0,
         );
-        b.knob(id, KNOB_LFO, 36.0, 26.0 + 22.0 * k as f32, v);
+        b.knob(id, KNOB_SMALL, 36.0, 26.0 + 22.0 * k as f32, v);
     }
     // the EQ's HI, MID and LO knobs (this fork), 0 dB in the middle
     for (k, band) in ["hi", "mid", "lo"].into_iter().enumerate() {
         b.pan(
             &format!("eq_{band}"),
-            KNOB_LFO,
+            KNOB_SMALL,
             54.0,
             37.0 + 22.0 * k as f32,
             0.5,
@@ -631,7 +634,7 @@ fn mixer(b: &mut Builder, c: usize) {
     // the effect
     for id in ["rvrb", "rvrb_b"] {
         b.part(&format!("{id}_label"), "label", "mixlbl_rvrb", 31.0, 34.0);
-        b.knob(id, KNOB_LFO, 36.0, 26.0, 0.0);
+        b.knob(id, KNOB_SMALL, 36.0, 26.0, 0.0);
     }
     for id in ["cho", "fla", "pha", "cho_b", "fla_b", "pha_b"] {
         b.part(
@@ -641,7 +644,7 @@ fn mixer(b: &mut Builder, c: usize) {
             31.0,
             34.0,
         );
-        b.knob(id, KNOB_LFO, 36.0, 70.0, 0.0);
+        b.knob(id, KNOB_SMALL, 36.0, 70.0, 0.0);
     }
     for id in ["delay", "dist", "pcf", "comp"] {
         b.part(
@@ -651,7 +654,7 @@ fn mixer(b: &mut Builder, c: usize) {
             31.0,
             34.0,
         );
-        b.knob(&format!("{id}_b"), KNOB_LFO, 36.0, 26.0, 0.0);
+        b.knob(&format!("{id}_b"), KNOB_SMALL, 36.0, 26.0, 0.0);
     }
 }
 
@@ -663,7 +666,7 @@ fn master(b: &mut Builder) {
     // this fork: the LIMIT key and its AMT knob in place of the COMP key (cuts.rs puts them
     // where the user's panel has them)
     b.part("limit", "toggle", "mixsw_limit_off", 7.0, 82.0);
-    b.knob("limit_amt", KNOB_LFO, 48.0, 83.0, 0.0);
+    b.knob("limit_amt", KNOB_SMALL, 48.0, 83.0, 0.0);
 }
 
 /// An effect's header (2..20): the on/off button and the meter 2 px from its edges.
@@ -760,7 +763,7 @@ fn modfx(b: &mut Builder, sec: &str, disp: &str, knobs: [&str; 4]) {
     );
     b.part("mode", "vswitch", "switch_fx_0", 49.0, 22.0);
     for (i, id) in knobs.into_iter().enumerate() {
-        b.knob(id, KNOB_LFO, 4.0 + 19.0 * i as f32, 60.0, 0.5);
+        b.knob(id, KNOB_SMALL, 4.0 + 19.0 * i as f32, 60.0, 0.5);
     }
 }
 
@@ -802,7 +805,7 @@ fn pcf(b: &mut Builder, sfx: &str) {
         (42.0, "amt", 0.5),
         (61.0, "dec", 0.4),
     ] {
-        b.knob(id, KNOB_LFO, x, 60.0, v);
+        b.knob(id, KNOB_SMALL, x, 60.0, v);
     }
 }
 

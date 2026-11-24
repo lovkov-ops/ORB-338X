@@ -35,7 +35,7 @@ pub struct KnobDesign {
     pub outline: &'static str,
 }
 
-pub const KNOBS: [KnobDesign; 7] = [
+pub const KNOBS: [KnobDesign; 8] = [
     KnobDesign {
         // (this fork: 10% under the original 30 px, the same look)
         name: "knob_303",
@@ -165,6 +165,26 @@ pub const KNOBS: [KnobDesign; 7] = [
         arc: pal::AMBER,
         track: "#00000040",
         outline: "",
+    },
+    // The mixer's, the master's and the effects' small knobs (this fork, `panel FX.svg`'s):
+    // dark slate with a dark rim, a light pointer and the amber arc.
+    KnobDesign {
+        name: "knob_small",
+        w: 14.0,
+        h: 14.0,
+        cx: 7.0,
+        cy: 7.0,
+        ring_r: 6.4,
+        ring_w: 0.9,
+        body_r: 5.5,
+        ptr0: 1.4,
+        ptr1: 4.4,
+        ptr_w: 1.1,
+        body: "#2c3542",
+        pointer: pal::INK,
+        arc: pal::AMBER,
+        track: "#00000021",
+        outline: "#0b0d11",
     },
 ];
 
