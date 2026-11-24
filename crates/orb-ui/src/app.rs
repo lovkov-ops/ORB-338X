@@ -1481,7 +1481,9 @@ fn part_size(name: &str) -> (f32, f32) {
         "bg_master" => (82.0, 100.0),
         // this fork: the four effects slots, 90 px each
         "bg_delay" | "bg_delay_b" | "bg_dist" | "bg_dist_b" | "bg_pcf" | "bg_pcf_b" | "bg_comp"
-        | "bg_comp_b" => (82.0, 90.0),
+        | "bg_comp_b" | "bg_cho" | "bg_cho_b" | "bg_fla" | "bg_fla_b" | "bg_pha" | "bg_pha_b" => {
+            (82.0, 90.0)
+        }
         _ => panic!("no size for background {name}"),
     }
 }

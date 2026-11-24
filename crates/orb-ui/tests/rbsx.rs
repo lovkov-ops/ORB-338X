@@ -381,6 +381,10 @@ fn an_rbsx_keeps_the_effects_slots() {
     // the DIST's kind RECT, the second DIST's AMP
     h.app.panel.press("dist.kind3", 0.0);
     h.app.panel.press("dist_b.kind7", 0.0);
+    // a flanger in the COMP's slot, channel 3 sends into it, its TYPE jet
+    h.app.panel.put_slot(3, orb_engine::frame::FX_FLA);
+    h.app.panel.set_knob("mixer3.fla", 700);
+    h.app.panel.arrow("fla.type_up");
     h.calls(2);
     h.calls(2);
     let moves = [(0, 127), (384, 40)];
@@ -395,6 +399,8 @@ fn an_rbsx_keeps_the_effects_slots() {
     assert_eq!(snap.mixer.wet_b[1][1], 127);
     assert_eq!(snap.mixer.eq[0], [127, 64, 0]);
     assert_eq!(snap.mixer.dist_kind, [3, 7]);
+    assert_eq!(snap.mixer.mods[1][0][1], 2);
+    assert!(snap.mixer.mod_send[2][1][0] > 0);
     let kept = h.app.gen_state();
     assert!(
         kept.mixer_fx
@@ -425,6 +431,9 @@ fn an_rbsx_keeps_the_effects_slots() {
     assert_eq!(snap2.mixer.pcf_b, snap.mixer.pcf_b);
     assert_eq!(snap2.mixer.eq, snap.mixer.eq);
     assert_eq!(snap2.mixer.dist_kind, [3, 7]);
+    assert_eq!(snap2.mixer.mods, snap.mixer.mods);
+    assert_eq!(snap2.mixer.mod_send, snap.mixer.mod_send);
+    assert_eq!(h2.app.panel.display("fla.type"), Some(2));
     assert!(h2.app.panel.radio_on("dist.kind3") && !h2.app.panel.radio_on("dist.kind0"));
     assert!(h2.app.panel.radio_on("dist_b.kind7"));
     assert_eq!(h2.app.panel.value("mixer1.eq_lo"), Some(127));

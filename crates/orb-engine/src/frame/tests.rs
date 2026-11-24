@@ -1720,8 +1720,8 @@ fn a_dist_kind() {
     assert_eq!(m.dist_kind, [CLASSIC; 2]);
     m.set_fork(DIST_KIND + 1, 200);
     assert_eq!(m.fork(DIST_KIND + 1), Some(KINDS - 1));
-    assert!(is_fork_mixer(DIST_KIND + 1) && !is_fork_mixer(DIST_KIND + 2));
-    assert_eq!(FORK_END, DIST_KIND + 2);
+    assert!(is_fork_mixer(DIST_KIND + 1));
+    assert_eq!(MOD, DIST_KIND + 2);
 }
 
 #[test]
@@ -1829,4 +1829,79 @@ fn shared_modes_keep_the_settings_across_the_switch() {
             );
         }
     }
+}
+
+/// (this fork) The chorus, the flanger and the phaser: not heard until a slot holds one and a
+/// channel sends into it; each its own sound, metered; a second one with its own controllers.
+#[test]
+fn a_chorus_flanger_and_phaser() {
+    use crate::modfx::{MODE, TYPE};
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        (buf, e)
+    };
+    let (song, _) = render(&|_| {});
+    let mut heard = Vec::new();
+    for k in 0..3u8 {
+        let fx = FX_CHO + k;
+        // in the PCF's slot (the PCF is then not heard: it had no channel), no send: the song
+        let slot = |e: &mut Engine| e.mixer_global(SLOT + 2, fx);
+        let (quiet, e) = render(&slot);
+        assert_eq!(quiet, song, "fx {fx}");
+        assert!(e.frame.mods[k as usize][0].is_none());
+        // a send from channel 1, but no slot holds it: the song
+        let send = |e: &mut Engine| e.mixer_global(MOD_SEND + 2 * k, 100);
+        assert_eq!(render(&send).0, song, "fx {fx}");
+        let on = |e: &mut Engine| {
+            slot(e);
+            send(e);
+        };
+        let (b, e) = render(&on);
+        assert_ne!(b, song, "fx {fx}");
+        assert!(e.frame.meters_mod[k as usize][0] > 0, "fx {fx}");
+        assert!(!heard.contains(&b));
+        heard.push(b.clone());
+        // switched off: the song
+        let first = MOD + 14 * k;
+        assert_eq!(
+            render(&|e| {
+                on(e);
+                e.mixer_global(first, 0);
+            })
+            .0,
+            song
+        );
+        // mono, another TYPE: other sounds
+        let (mono, _) = render(&|e| {
+            on(e);
+            e.mixer_global(first + MODE as u8, 1);
+        });
+        assert_ne!(mono, b, "fx {fx}");
+        let (other, _) = render(&|e| {
+            on(e);
+            e.mixer_global(first + TYPE as u8, if k == 2 { 12 } else { 3 });
+        });
+        assert_ne!(other, b, "fx {fx}");
+        // a second one in the DIST's slot, its own send
+        let (two, e) = render(&|e| {
+            on(e);
+            e.mixer_global(SLOT + 1, fx);
+            e.mixer_global(MOD_SEND + 2 * k + 1, 100);
+        });
+        assert!(e.frame.mods[k as usize][1].is_some());
+        assert_ne!(two, b, "fx {fx}");
+    }
+    let mut m = MixerParams::default();
+    assert_eq!(m.mods[2][1], crate::modfx::DEFAULTS[2]);
+    m.set_fork(MOD_SEND + 23, 99);
+    assert_eq!((m.fork(MOD_SEND + 23), m.mod_send[3][2][1]), (Some(99), 99));
+    m.set_fork(MOD + 41, 7);
+    assert_eq!(m.mods[2][1][6], 7);
+    assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
+    assert_eq!(FORK_END, MOD_SEND + 24);
 }

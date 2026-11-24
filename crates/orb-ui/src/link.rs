@@ -258,7 +258,7 @@ fn gr_leds(n: usize) -> [u8; 9] {
 
 /// This fork: the second effects' sections, the mixer controller of their first control, and
 /// their controls' names in controller order.
-pub const SECOND_FX: [(&str, u8, &[&str]); 4] = [
+pub const SECOND_FX: [(&str, u8, &[&str]); 10] = [
     (
         "delay_b",
         orb_engine::frame::DELAY_B,
@@ -279,7 +279,25 @@ pub const SECOND_FX: [(&str, u8, &[&str]); 4] = [
         orb_engine::frame::COMP_B,
         &["on", "ratio", "threshold"],
     ),
+    // the chorus, the flanger and the phaser, first and second (not second effects of the
+    // original's, but their controls the same way)
+    ("cho", orb_engine::frame::MOD, CHO_NAMES),
+    ("cho_b", orb_engine::frame::MOD + 7, CHO_NAMES),
+    ("fla", orb_engine::frame::MOD + 14, FLA_NAMES),
+    ("fla_b", orb_engine::frame::MOD + 21, FLA_NAMES),
+    ("pha", orb_engine::frame::MOD + 28, PHA_NAMES),
+    ("pha_b", orb_engine::frame::MOD + 35, PHA_NAMES),
 ];
+
+/// This fork: the chorus's, the flanger's and the phaser's controls in controller order
+/// ([`orb_engine::modfx::ON`]..).
+const CHO_NAMES: &[&str] = &["on", "type", "mode", "delay", "rate", "depth", "voices"];
+const FLA_NAMES: &[&str] = &["on", "type", "mode", "delay", "rate", "depth", "fdbk"];
+const PHA_NAMES: &[&str] = &["on", "stages", "mode", "tone", "rate", "depth", "fdbk"];
+
+/// This fork: the channels' knobs of the chorus, the flanger and the phaser (their sends), in
+/// controller order ([`orb_engine::frame::MOD_SEND`]).
+const MOD_KNOBS: [&str; 6] = ["cho", "cho_b", "fla", "fla_b", "pha", "pha_b"];
 
 /// This fork: the panel id of each of this fork's mixer controllers that an `.rbsx` keeps by
 /// name (all but the master's limiter's, `rbsx.rs`), in controller order: the inserts' wet
@@ -301,7 +319,10 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
             "eq_lo",
             "eq_mid",
             "eq_hi",
-        ] {
+        ]
+        .into_iter()
+        .chain(MOD_KNOBS)
+        {
             ids.push(format!("mixer{c}.{n}"));
         }
     }
@@ -350,7 +371,10 @@ fn second_fx(id: &str) -> Option<u8> {
         "dist_b" => Some(WET_B + 3 * c),
         "pcf_b" => Some(WET_B + 3 * c + 1),
         "comp_b" => Some(WET_B + 3 * c + 2),
-        _ => None,
+        _ => MOD_KNOBS
+            .iter()
+            .position(|&n| n == name)
+            .map(|i| orb_engine::frame::MOD_SEND + 6 * c + i as u8),
     }
 }
 
@@ -1308,6 +1332,15 @@ impl Link {
             panel.meters.insert(id.into(), meter_state(v));
         }
         panel.gr_leds_b = gr_leds(((b[2] as u32 * 4 + 63) / 127) as usize);
+        // this fork: the chorus's, the flanger's and the phaser's meters
+        for (k, fx) in ["cho", "fla", "pha"].into_iter().enumerate() {
+            for (inst, sfx) in ["", "_b"].into_iter().enumerate() {
+                let v = s.meters_mod[k][inst];
+                panel
+                    .meters
+                    .insert(format!("{fx}{sfx}.meter"), meter_state(v));
+            }
+        }
         let step = |d: Device, i: usize| {
             live(d, i)
                 .filter(|&b| s.playing && b < 16)
@@ -1398,7 +1431,10 @@ impl Link {
         for c in 0..4 {
             for fx in [
                 "delay_b", "dist_b", "pcf_b", "comp_b", "eq_lo", "eq_mid", "eq_hi",
-            ] {
+            ]
+            .into_iter()
+            .chain(MOD_KNOBS)
+            {
                 let id = format!("mixer{}.{fx}", c + 1);
                 if let Some(v) = second_fx(&id).and_then(|g| m.fork(g)) {
                     panel.adopt(&id, v as i32);
@@ -1465,7 +1501,7 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "dist_b.kind" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "mixer4.pha_b" && *g == FORK_END - 1)
         );
     }
 }

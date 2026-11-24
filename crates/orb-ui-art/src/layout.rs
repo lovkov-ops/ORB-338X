@@ -630,6 +630,18 @@ fn mixer(b: &mut Builder, c: usize) {
     }
     // the second effects' knobs (this fork: the delay's send, the others' wet amounts, 0
     // off), shown when two slots hold the effect
+    // the chorus's, the flanger's and the phaser's sends (this fork), shown when a slot holds
+    // the effect
+    for id in ["cho", "fla", "pha", "cho_b", "fla_b", "pha_b"] {
+        b.part(
+            &format!("{id}_label"),
+            "label",
+            &format!("mixlbl_{}", id.trim_end_matches("_b")),
+            31.0,
+            34.0,
+        );
+        b.knob(id, KNOB_LFO, 36.0, 70.0, 0.0);
+    }
     for id in ["delay", "dist", "pcf", "comp"] {
         b.part(
             &format!("{id}_b_label"),
@@ -697,6 +709,39 @@ fn effects(b: &mut Builder) {
         dist(b, sfx);
         pcf(b, sfx);
         comp(b, sfx);
+    }
+    // the chorus, the flanger and the phaser (this fork) and their second ones, shown when a
+    // slot holds them, in the PCF's slot here (the panel moves each to its slot)
+    for sfx in ["", "_b"] {
+        for (sec, _, disp, knobs) in crate::cuts::MOD_FACES {
+            modfx(b, &format!("{sec}{sfx}"), disp, knobs);
+        }
+    }
+}
+
+/// A chorus's, flanger's or phaser's face (this fork): as the PCF's.
+fn modfx(b: &mut Builder, sec: &str, disp: &str, knobs: [&str; 4]) {
+    b.section(sec, &format!("bg_{sec}"), 526.0, 330.0);
+    fx_header(b, true, 4);
+    b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
+    b.display(disp, 10.0, 23.0, 18.0, 2, "01");
+    b.part(
+        &format!("{disp}_up"),
+        "repeat",
+        "arrow_inc_rest",
+        29.0,
+        22.0,
+    );
+    b.part(
+        &format!("{disp}_down"),
+        "repeat",
+        "arrow_dec_rest",
+        29.0,
+        31.0,
+    );
+    b.part("mode", "vswitch", "switch_fx_0", 49.0, 22.0);
+    for (i, id) in knobs.into_iter().enumerate() {
+        b.knob(id, KNOB_LFO, 4.0 + 19.0 * i as f32, 60.0, 0.5);
     }
 }
 
@@ -800,9 +845,18 @@ pub fn compose(parts: &[Part], l: &Layout) -> String {
     };
     let mut s = Svg::new();
     s.rect(0.0, 0.0, PANEL_W, PANEL_H, 0.0, pal::BG);
-    // the demo has one of each effect: the second ones' faces and knobs (this fork) are left
-    // out
-    let second = |id: &str| id.contains("_b.") || id.ends_with("_b") || id.contains("_b_");
+    // the demo has the original's effects, one of each: the second ones' faces and knobs and
+    // the chorus's, the flanger's and the phaser's (this fork) are left out
+    let second = |id: &str| {
+        let modfx = ["cho", "fla", "pha"].iter().any(|fx| {
+            id.starts_with(&format!("{fx}."))
+                || id.starts_with(&format!("{fx}_b."))
+                || id.ends_with(&format!(".{fx}"))
+                || id.ends_with(&format!(".{fx}_label"))
+                || id == format!("bg_{fx}")
+        });
+        modfx || id.contains("_b.") || id.ends_with("_b") || id.contains("_b_")
+    };
     for (name, x, y) in l.backgrounds.iter().filter(|b| !second(&b.0)) {
         s.g_at(*x, *y).raw(&get(name).body).end_g();
     }

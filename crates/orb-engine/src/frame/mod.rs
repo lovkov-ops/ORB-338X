@@ -544,6 +544,11 @@ pub struct MixerParams {
     /// This fork: the kind of the DIST (`dist_kind[0]`) and of the second DIST (`[1]`),
     /// [`crate::dist_kinds::CLASSIC`] the original's ([`DIST_KIND`]).
     pub dist_kind: [u8; 2],
+    /// This fork: the chorus's, the flanger's and the phaser's controllers (`mods[k][inst]`, k
+    /// [`crate::modfx::CHO`].., inst 0 the first, 1 the second; [`MOD`]).
+    pub mods: [[[u8; crate::modfx::PARAMS]; 2]; 3],
+    /// This fork: each channel's send into them (`mod_send[c][k][inst]`, [`MOD_SEND`]).
+    pub mod_send: [[[u8; 2]; 3]; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -591,8 +596,14 @@ pub const EQ: u8 = COMP_B + 3;
 /// This fork: the mixer's controller of the DIST's kind (`DIST_KIND`) and of the second DIST's
 /// (`DIST_KIND + 1`), 0..[`crate::dist_kinds::KINDS`] ([`MixerParams::dist_kind`]).
 pub const DIST_KIND: u8 = EQ + 12;
+/// This fork: the mixer's controllers of the chorus, the flanger and the phaser:
+/// `MOD + 7 * (2k + inst) + p`, k 0 CHO, 1 FLA, 2 PHA, inst 0 the first, 1 the second, p the
+/// effect's controller ([`crate::modfx::ON`]..).
+pub const MOD: u8 = DIST_KIND + 2;
+/// This fork: the mixer's controller of channel c's send into them, `MOD_SEND + 6c + 2k + inst`.
+pub const MOD_SEND: u8 = MOD + 42;
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = DIST_KIND + 2;
+pub const FORK_END: u8 = MOD_SEND + 24;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
@@ -608,6 +619,14 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= MOD_SEND && is_fork_mixer(ctrl) => {
+                let x = (ctrl - MOD_SEND) as usize;
+                Some(self.mod_send[x / 6][x % 6 / 2][x % 2])
+            }
+            _ if ctrl >= MOD && is_fork_mixer(ctrl) => {
+                let x = (ctrl - MOD) as usize;
+                Some(self.mods[x / 14][x % 14 / 7][x % 7])
+            }
             _ if ctrl >= DIST_KIND && is_fork_mixer(ctrl) => {
                 Some(self.dist_kind[(ctrl - DIST_KIND) as usize])
             }
@@ -640,6 +659,14 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= MOD_SEND && is_fork_mixer(ctrl) => {
+                let x = (ctrl - MOD_SEND) as usize;
+                self.mod_send[x / 6][x % 6 / 2][x % 2] = value.min(127);
+            }
+            _ if ctrl >= MOD && is_fork_mixer(ctrl) => {
+                let x = (ctrl - MOD) as usize;
+                self.mods[x / 14][x % 14 / 7][x % 7] = value.min(127);
+            }
             _ if ctrl >= DIST_KIND && is_fork_mixer(ctrl) => {
                 self.dist_kind[(ctrl - DIST_KIND) as usize] =
                     value.min(crate::dist_kinds::KINDS - 1);
@@ -692,6 +719,8 @@ impl MixerParams {
         self.comp_b = from.comp_b;
         self.eq = from.eq;
         self.dist_kind = from.dist_kind;
+        self.mods = from.mods;
+        self.mod_send = from.mod_send;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -768,6 +797,8 @@ impl Default for MixerParams {
             comp_b: COMP_B_DEFAULTS,
             eq: [[crate::eq::NEUTRAL; 3]; 4],
             dist_kind: [crate::dist_kinds::CLASSIC; 2],
+            mods: crate::modfx::DEFAULTS.map(|d| [d; 2]),
+            mod_send: [[[0; 2]; 3]; 4],
         }
     }
 }
@@ -798,6 +829,8 @@ impl From<&song::Mixer> for MixerParams {
             comp_b: COMP_B_DEFAULTS,
             eq: [[crate::eq::NEUTRAL; 3]; 4],
             dist_kind: [crate::dist_kinds::CLASSIC; 2],
+            mods: crate::modfx::DEFAULTS.map(|d| [d; 2]),
+            mod_send: [[[0; 2]; 3]; 4],
         }
     }
 }
@@ -824,6 +857,8 @@ impl MixerParams {
             comp_b: COMP_B_DEFAULTS,
             eq: [[crate::eq::NEUTRAL; 3]; 4],
             dist_kind: [crate::dist_kinds::CLASSIC; 2],
+            mods: crate::modfx::DEFAULTS.map(|d| [d; 2]),
+            mod_send: [[[0; 2]; 3]; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1153,6 +1188,13 @@ pub struct Frame {
     /// second; side 0 the bus or a split drum machine's left, 1 its right;
     /// [`MixerParams::dist_kind`]).
     kinds: [[[crate::dist_kinds::KindFx; 2]; 2]; 4],
+    /// This fork: the chorus, the flanger and the phaser (`mods[k][inst]`) while a slot holds
+    /// one, it is on and a channel sends into it; their send buses and each channel's send
+    /// gains into them; their meter bytes.
+    mods: [[Option<Box<crate::modfx::ModFx>>; 2]; 3],
+    mod_bus: [[Block; 2]; 3],
+    mod_gain: [[[f32; 2]; 3]; 4],
+    pub meters_mod: [[u8; 2]; 3],
     /// This fork: the second delay (two slots hold the delay), with its own line, and the
     /// controllers it was last given; its send bus, and each channel's send gain into it.
     delay_b: Option<Box<crate::delay::Delay>>,
@@ -1222,6 +1264,10 @@ impl Frame {
             meters_b: [0; 4],
             eqs: Default::default(),
             kinds: Default::default(),
+            mods: Default::default(),
+            mod_bus: [[[0.0; BLOCK]; 2]; 3],
+            mod_gain: [[[0.0; 2]; 3]; 4],
+            meters_mod: [[0; 2]; 3],
             delay_b: None,
             delay_b_set: [0; 5],
             send_b: [GUARD; BLOCK],
@@ -1269,6 +1315,17 @@ impl Frame {
             } else {
                 st((pg[0] as f64 + pg[1] as f64) * tb * VINTAGE_SEND + VINTAGE_OFFSET)
             };
+            // this fork: the sends into the chorus, the flanger and the phaser, as the delay's
+            for (k, g) in self.mod_gain[c].iter_mut().enumerate() {
+                for (inst, g) in g.iter_mut().enumerate() {
+                    let ts = t[p.mod_send[c][k][inst] as usize] as f64;
+                    *g = if !self.vintage {
+                        st(t[lev] as f64 * ts + OFFSET as f64)
+                    } else {
+                        st((pg[0] as f64 + pg[1] as f64) * ts * VINTAGE_SEND + VINTAGE_OFFSET)
+                    };
+                }
+            }
             // this fork: the channel's EQ
             self.eqs[c].set(p.eq[c]);
             // 0x10012D1A..0x10012D96: the meter byte, then the peak decays
@@ -1385,6 +1442,25 @@ impl Frame {
             }
         }
         self.meters_b = meters.map(|m| m.min(127) as u8);
+        // this fork: the chorus, the flanger and the phaser, made when a slot holds one, it is
+        // on and a channel sends into it, dropped (and silent) else
+        for k in 0..3 {
+            let fx = FX_CHO + k as u8;
+            for inst in 0..2 {
+                let on = p.slots_of(fx) > inst
+                    && p.mods[k][inst][crate::modfx::ON] != 0
+                    && (0..4).any(|c| p.mod_send[c][k][inst] != 0);
+                if !on {
+                    self.mods[k][inst] = None;
+                    self.mod_bus[k][inst] = [0.0; BLOCK];
+                    self.meters_mod[k][inst] = 0;
+                    continue;
+                }
+                let m =
+                    self.mods[k][inst].get_or_insert_with(|| Box::new(crate::modfx::ModFx::new(k)));
+                self.meters_mod[k][inst] = m.meter();
+            }
+        }
         // 0x100130D7: 2 * T[master] + 1e-6
         self.state.master_target =
             st(MASTER_SCALE as f64 * t[p.master as usize] as f64 + OFFSET as f64);
@@ -1626,6 +1702,18 @@ impl Frame {
                     *s = st(b as f64 * sg + *s as f64);
                 }
             }
+            // and into the chorus, the flanger and the phaser
+            for k in 0..3 {
+                for inst in 0..2 {
+                    if self.mods[k][inst].is_none() {
+                        continue;
+                    }
+                    let sg = self.mod_gain[c][k][inst] as f64;
+                    for (s, &b) in self.mod_bus[k][inst].iter_mut().zip(bs.iter()) {
+                        *s = st(b as f64 * sg + *s as f64);
+                    }
+                }
+            }
             // 0x100136B7: smoothing, n = old*0.93 + target*0.07 stored as f32; the ramp steps
             // from the stored old value by (n_unrounded - old)/32 every two samples
             let old_l = ch.gain_l as f64;
@@ -1659,6 +1747,17 @@ impl Frame {
         // this fork: the second delay, on its own send bus
         if let Some(db) = &mut self.delay_b {
             db.process(&mut self.send_b, l, r, &ctx);
+        }
+        // this fork: the chorus, the flanger and the phaser, each on its send bus
+        let mods = self.devices.mixer.live.mods;
+        for (k, row) in self.mods.iter_mut().enumerate() {
+            for (inst, m) in row.iter_mut().enumerate() {
+                if let Some(m) = m {
+                    let bus = &mut self.mod_bus[k][inst];
+                    m.process(&mods[k][inst], bus, l, r);
+                    *bus = [0.0; BLOCK];
+                }
+            }
         }
         // 0x10013883: the compressor on the master
         if self.state.master_comp {
@@ -2312,6 +2411,10 @@ impl Engine {
         for fx in self.frame.kinds.iter_mut().flatten().flatten() {
             fx.silence();
         }
+        // the chorus, the flanger and the phaser start anew
+        self.frame.mods = Default::default();
+        self.frame.mod_bus = [[[0.0; BLOCK]; 2]; 3];
+        self.frame.meters_mod = [[0; 2]; 3];
         // and the second delay's line
         if let Some(d) = &mut self.frame.delay_b {
             d.silence();

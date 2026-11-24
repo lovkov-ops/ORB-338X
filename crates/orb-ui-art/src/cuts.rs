@@ -13,6 +13,14 @@ use std::collections::{HashMap, HashSet};
 use crate::mockup::{self, Bx, Mockup, Shape};
 use crate::svg::Part;
 
+/// The chorus's, the flanger's and the phaser's faces (this fork): the section, its mockup
+/// group, its display's id and its knobs' ids.
+pub const MOD_FACES: [(&str, usize, &str, [&str; 4]); 3] = [
+    ("cho", 21, "type", ["delay", "rate", "depth", "voices"]),
+    ("fla", 22, "type", ["delay", "rate", "depth", "fdbk"]),
+    ("pha", 23, "stages", ["tone", "rate", "depth", "fdbk"]),
+];
+
 /// The DIST's kind lamps' keys (this fork): the well and the label below it.
 pub const DIST_LAMP_W: f32 = 14.0;
 pub const DIST_LAMP_H: f32 = 13.0;
@@ -1619,6 +1627,21 @@ fn mixer_and_effects(c: &mut Cuts) {
             );
         }
     }
+    // the channels' knobs of the chorus, the flanger and the phaser (this fork): where the
+    // PCF's are (the panel moves each to its slot)
+    let pcf: Vec<(String, (f32, f32))> = c
+        .places
+        .iter()
+        .filter(|(k, _)| {
+            k.starts_with("mixer") && (k.ends_with(".pcf") || k.ends_with(".pcf_label"))
+        })
+        .map(|(k, &at)| (k.clone(), at))
+        .collect();
+    for (k, at) in pcf {
+        for fx in ["cho", "fla", "pha"] {
+            c.place(&k.replacen(".pcf", &format!(".{fx}"), 1), at.0, at.1);
+        }
+    }
     c.background(
         mf,
         "mix-303-a",
@@ -1805,6 +1828,31 @@ fn mixer_and_effects(c: &mut Cuts) {
         small_knob(c, &format!("20.{}", 18 + i), &format!("pcf.{id}"));
     }
     c.background(mf, "pcf", "bg_pcf", Bx::new(526.0, 330.0, 82.0, 90.0));
+    // the chorus, the flanger and the phaser (this fork; the mockup has them in the PCF's
+    // slot): faces as the PCF's, the display their TYPE (the phaser's STAGES)
+    for (sec, g, disp, knobs) in MOD_FACES {
+        let at = |i: usize| format!("{g}.{i}");
+        header(c, sec, &at(14), &at(15));
+        title(c, sec, 330.0);
+        let d = digits_of(&at(5), 2);
+        c.take(&d);
+        let (x, y) = display_at(&d[..7], 18.0, 2);
+        c.place(&format!("{sec}.{disp}"), x, y);
+        arrows(c, sec, &at(16), disp);
+        let v = grp(mf, &at(17));
+        let b = bbox(&v);
+        c.take(&v);
+        c.place(&format!("{sec}.mode"), b.x0, b.y0);
+        for (i, id) in knobs.into_iter().enumerate() {
+            small_knob(c, &at(18 + i), &format!("{sec}.{id}"));
+        }
+        c.background(
+            mf,
+            sec,
+            &format!("bg_{sec}"),
+            Bx::new(526.0, 330.0, 82.0, 90.0),
+        );
+    }
     // comp (slot 4, 420..510): the gain-reduction LEDs (well and light)
     header(c, "comp", "24.14", "24.15");
     title(c, "comp", 420.0);
@@ -1841,7 +1889,7 @@ fn mixer_and_effects(c: &mut Cuts) {
     // the second effects (this fork: two slots that hold an effect): the same faces, their
     // controls and their mixer knobs where the first ones' are (the panel moves them to the
     // slot that holds them)
-    const FX: [&str; 4] = ["delay", "dist", "pcf", "comp"];
+    const FX: [&str; 7] = ["delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
     for fx in FX {
         let mut bg = c
             .parts

@@ -28,6 +28,7 @@ pub mod eq;
 pub mod frame;
 pub mod limiter;
 pub mod load;
+pub mod modfx;
 pub mod pcf;
 pub mod process;
 pub mod samples;

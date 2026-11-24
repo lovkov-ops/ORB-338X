@@ -347,7 +347,10 @@ pub fn mixer_insert(id: &str) -> Option<(usize, &str)> {
 pub const FX_KINDS: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
 
 /// This fork: the effects the engine has so far (a slot's menu offers only these).
-pub const FX_READY: [u8; 4] = orb_engine::frame::DEFAULT_SLOTS;
+pub const FX_READY: [u8; 7] = {
+    use orb_engine::frame::*;
+    [FX_DELAY, FX_DIST, FX_PCF, FX_CHO, FX_FLA, FX_PHA, FX_COMP]
+};
 
 /// This fork: the effect code of a section or knob name (`delay`, `dist`, ...).
 pub fn fx_code(name: &str) -> Option<u8> {
@@ -427,6 +430,12 @@ impl Panel {
                     // (this fork: the mixer's DIST, PCF and COMP knobs start off)
                     let v = match c.name() {
                         "shuffle" | "delay" | "limit_amt" => 0,
+                        // this fork: the channels' sends into the chorus, flanger and phaser
+                        "cho" | "fla" | "pha" | "cho_b" | "fla_b" | "pha_b"
+                            if c.section.starts_with("mixer") =>
+                        {
+                            0
+                        }
                         _ if mixer_insert(&c.id).is_some() => 0,
                         _ => 500,
                     };
@@ -460,6 +469,12 @@ impl Panel {
         p.numbers.insert("delay_b.steps".into(), 3);
         p.numbers.insert("pcf.pattern".into(), 0);
         p.numbers.insert("pcf_b.pattern".into(), 0);
+        // the chorus's and the flanger's TYPE, the phaser's STAGES (this fork)
+        for sfx in ["", "_b"] {
+            p.numbers.insert(format!("cho{sfx}.type"), 1);
+            p.numbers.insert(format!("fla{sfx}.type"), 1);
+            p.numbers.insert(format!("pha{sfx}.stages"), 6);
+        }
         // the DISTs' kinds (this fork): the classic one
         p.numbers.insert("dist.kind".into(), 0);
         p.numbers.insert("dist_b.kind".into(), 0);
@@ -692,10 +707,14 @@ impl Panel {
             (fx_instance(section), 90.0)
         };
         let Some((fx, inst)) = fx else { return 0.0 };
-        // the layout has a second instance where the first is
+        // the layout has a second instance where the first is; the chorus, the flanger and the
+        // phaser in the PCF's slot
         let home = orb_engine::frame::DEFAULT_SLOTS
             .iter()
-            .position(|&s| s == fx);
+            .position(|&s| s == fx)
+            .or((orb_engine::frame::FX_CHO..=orb_engine::frame::FX_PHA)
+                .contains(&fx)
+                .then_some(2));
         match (home, self.slot_of(fx, inst)) {
             (Some(home), Some(now)) => step * (now as f32 - home as f32),
             _ => 0.0,
@@ -1324,6 +1343,19 @@ impl Panel {
             ("delay" | "delay_b", "steps") => {
                 let id = format!("{sec}.steps");
                 let v = (self.numbers[&id] + d).clamp(1, 32);
+                self.numbers.insert(id.clone(), v);
+                (id, v)
+            }
+            // the chorus's and the flanger's TYPE, the phaser's STAGES (this fork)
+            ("cho" | "cho_b" | "fla" | "fla_b", "type") => {
+                let id = format!("{sec}.type");
+                let v = (self.numbers[&id] + d).clamp(1, 4);
+                self.numbers.insert(id.clone(), v);
+                (id, v)
+            }
+            ("pha" | "pha_b", "stages") => {
+                let id = format!("{sec}.stages");
+                let v = (self.numbers[&id] + 2 * d).clamp(2, 12);
                 self.numbers.insert(id.clone(), v);
                 (id, v)
             }
@@ -2262,8 +2294,9 @@ mod tests {
             .into_iter()
             .filter(|c| matches!(c.kind.as_str(), "switch" | "hswitch" | "vswitch"))
             .collect();
-        // (this fork: the second delay's 3/16 and the second PCF's mode, + 2)
-        assert_eq!(switches.len(), 12);
+        // (this fork: the second delay's 3/16 and the second PCF's mode, + 2; the chorus's, the
+        // flanger's and the phaser's MODE, first and second, + 6)
+        assert_eq!(switches.len(), 18);
         for c in &switches {
             if c.id == "transport.mode" {
                 // the mode switch shows a flag, not a controller value

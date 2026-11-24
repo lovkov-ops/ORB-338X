@@ -92,6 +92,13 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
     v.push(("bg_dist_b", 526.0, 240.0));
     v.push(("bg_pcf_b", 526.0, 330.0));
     v.push(("bg_comp_b", 526.0, 420.0));
+    // the chorus, the flanger and the phaser (this fork) and their second ones, drawn where a
+    // slot holds them
+    for bg in [
+        "bg_cho", "bg_fla", "bg_pha", "bg_cho_b", "bg_fla_b", "bg_pha_b",
+    ] {
+        v.push((bg, 526.0, 330.0));
+    }
     v
 }
 
@@ -135,8 +142,9 @@ mod tests {
         // mixer's slot knobs in place of its keys and their labels, + 16; the slots' menus, + 4;
         // the second delay's face, + 9, and its sends and their labels, + 8; the other second
         // effects' faces and knobs, + 54; the channels' EQ knobs, + 12; the two DISTs' kind
-        // lamps, + 16)
-        assert_eq!(c.len(), 579);
+        // lamps, + 16; the chorus's, the flanger's and the phaser's faces, first and second,
+        // 11 controls each, + 66, and the channels' sends into them and their labels, + 48)
+        assert_eq!(c.len(), 693);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

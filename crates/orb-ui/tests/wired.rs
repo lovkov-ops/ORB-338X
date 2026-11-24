@@ -1271,6 +1271,8 @@ fn knob_ids() -> Vec<String> {
         // the second effects' (this fork) are hidden while one slot holds each effect
         .filter(|c| orb_ui::model::fx_instance(&c.section).is_none_or(|(_, i)| i == 0))
         .filter(|c| !c.section.starts_with("mixer") || !c.name().ends_with("_b"))
+        // and the effects no slot holds in a new song (the chorus, the flanger, the phaser)
+        .filter(|c| !orb_ui::model::Panel::new().out_of_slots(&c.section, c.name()))
         .map(|c| c.id)
         .collect()
 }
@@ -1609,4 +1611,47 @@ fn the_second_dist_pcf_and_comp_reach_the_engine() {
     h.frame(vec![]);
     assert!(!h.app.panel.out_of_slots("pcf_b", "freq"));
     assert_eq!(h.app.panel.display("pcf_b.pattern"), Some(before + 1));
+}
+
+/// (this fork) The chorus, the flanger and the phaser: a slot's menu puts one in, the
+/// channel's knob in that slot sends into it, its face's display, switch and knobs reach the
+/// engine; a second one has its own.
+#[test]
+fn the_chorus_flanger_and_phaser_reach_the_engine() {
+    use orb_engine::frame::{FX_CHO, FX_PHA, MOD, MOD_SEND};
+    use orb_ui::link::{MixerTarget::Global, mixer_target};
+    for (id, g) in [
+        ("cho.on", MOD),
+        ("cho.voices", MOD + 6),
+        ("cho_b.type", MOD + 8),
+        ("fla.fdbk", MOD + 20),
+        ("pha.stages", MOD + 29),
+        ("pha_b.fdbk", MOD + 41),
+        ("mixer1.cho", MOD_SEND),
+        ("mixer2.fla_b", MOD_SEND + 9),
+        ("mixer4.pha_b", MOD_SEND + 23),
+    ] {
+        assert_eq!(mixer_target(id), Some(Global(g)), "{id}");
+    }
+    let mut h = Harness::new();
+    assert!(h.app.panel.out_of_slots("cho", "delay"));
+    assert!(h.app.panel.can_put(2, FX_CHO));
+    h.app.panel.put_slot(2, FX_CHO);
+    assert!(!h.app.panel.out_of_slots("cho", "delay"));
+    assert!(h.app.panel.out_of_slots("pcf", "freq"));
+    h.app.panel.set_knob("mixer1.cho", 800);
+    h.app.panel.arrow("cho.type_up");
+    // a phaser in two slots: the second one's STAGES down
+    h.app.panel.put_slot(0, FX_PHA);
+    h.app.panel.put_slot(1, FX_PHA);
+    assert!(!h.app.panel.can_put(3, FX_PHA));
+    h.app.panel.arrow("pha_b.stages_down");
+    h.frame(vec![]);
+    h.calls(2);
+    let s = h.snap();
+    assert_eq!(s.mixer.slots[..3], [FX_PHA, FX_PHA, FX_CHO]);
+    assert!(s.mixer.mod_send[0][0][0] > 0);
+    assert_eq!(s.mixer.mods[0][0][1], 2);
+    assert_eq!(s.mixer.mods[2][1][1], 4);
+    assert_eq!(h.app.panel.display("cho.type"), Some(2));
 }
