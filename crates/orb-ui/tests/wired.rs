@@ -826,13 +826,14 @@ fn the_303_step_editor_edits_the_pattern_as_the_original() {
     h.click("tb303_1.key4");
     assert_eq!(
         h.take_log(),
-        [[0, 0, 0, 2], [0, 1, 0, 4]].map(|d| dev(Device::Tb303_1, 45, &d))
+        // (this fork: step 2 was a rest, its key makes it a note)
+        [[0, 0, 0, 2], [0, 1, 0, 4], [0, 1, 5, 0]].map(|d| dev(Device::Tb303_1, 45, &d))
     );
     h.calls(2);
     let pat = h.engine_patterns(0);
     // step 1: the flags set above, and the note 2 the pitch-mode key wrote over the 7
     assert_eq!(&pat[2..8], &[2, 1, 1, 1, 1, 0]);
-    assert_eq!(&pat[8..14], &[4, 0, 0, 0, 0, 1], "step 2 key 4");
+    assert_eq!(&pat[8..14], &[4, 0, 0, 0, 0, 0], "step 2 key 4");
     // The other 303 is untouched
     assert_eq!(
         h.engine_patterns(1)[2..8],

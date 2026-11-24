@@ -220,6 +220,8 @@ pub struct Synth303 {
     pub edit: u8,
     pub pitch_mode: bool,
     pub flash_until: f64,
+    /// The note a key wrote last (this fork: pitch mode's flash shows it, not the next step's).
+    pub flash_note: u8,
     /// The steps of the 32 patterns.
     pub patterns: Vec<[Step303; 16]>,
 }
@@ -230,6 +232,7 @@ impl Default for Synth303 {
             edit: 0,
             pitch_mode: false,
             flash_until: 0.0,
+            flash_note: 0,
             patterns: vec![[Step303::default(); 16]; 32],
         }
     }
@@ -249,11 +252,13 @@ impl Synth303 {
         }
     }
 
-    /// Whether the key LED of `note` is lit: the edit step's note, shown only briefly after a
-    /// key press in pitch mode.
+    /// Whether the key LED of `note` is lit: the edit step's note; in pitch mode only briefly
+    /// after a key press, and then (this fork) the note that key wrote.
     pub fn note_lit(&self, pattern: u8, note: u8, now: f64) -> bool {
+        if self.pitch_mode {
+            return now < self.flash_until && self.flash_note == note;
+        }
         self.patterns[pattern as usize][self.edit as usize].note == note
-            && (!self.pitch_mode || now < self.flash_until)
     }
 
     pub fn step(&self, pattern: u8) -> &Step303 {
@@ -1161,12 +1166,20 @@ impl Panel {
         let s = &mut self.synth[k];
         let edit = s.edit as usize;
         let mut sent: Option<(u8, u8)> = None;
+        let mut also: Option<(u8, u8)> = None;
         if let Some(n) = name.strip_prefix("key") {
             let note: u8 = n.parse().unwrap_or(0);
             s.patterns[pattern as usize][edit].note = note;
             s.flash_until = now + NOTE_FLASH;
+            s.flash_note = note;
             sent = Some((0, note));
             if s.pitch_mode {
+                // this fork: the key's step plays, a rest becomes a note (as Note/Pause would)
+                let st = &mut s.patterns[pattern as usize][edit];
+                if st.rest {
+                    st.rest = false;
+                    also = Some((5, 0));
+                }
                 s.move_edit(1);
                 self.audition = Some((k, pattern, edit));
             }
@@ -1203,7 +1216,7 @@ impl Panel {
                 _ => {}
             }
         }
-        if let Some((field, value)) = sent {
+        for (field, value) in sent.into_iter().chain(also) {
             self.emit(Event::Step303 {
                 synth: k,
                 pattern,
@@ -2136,6 +2149,46 @@ mod tests {
         p.press("tb303_1.clear", 0.0);
         assert_eq!(*p.synth[0].step(0), Step303::default());
         assert_eq!(p.synth[1].edit, 0);
+    }
+
+    /// (this fork) In pitch mode a key's step becomes a note if it was a rest, sent after the
+    /// pitch, and the key LED flashes the note just written, not the next step's.
+    #[test]
+    fn a_pitch_mode_key_makes_its_step_a_note() {
+        let mut p = Panel::new();
+        assert!(
+            p.synth[0].patterns[0][0].rest,
+            "a new song's steps are rests"
+        );
+        p.press("tb303_1.pitch_button", 0.0);
+        p.events.clear();
+        p.press("tb303_1.key5", 1.0);
+        assert!(!p.synth[0].patterns[0][0].rest);
+        assert_eq!(p.synth[0].patterns[0][0].note, 5);
+        let sent: Vec<_> = p
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Step303 {
+                    step, field, value, ..
+                } => Some((*step, *field, *value)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sent, [(0, 0, 5), (0, 5, 0)]);
+        assert!(p.synth[0].note_lit(0, 5, 1.0));
+        assert!(!p.synth[0].note_lit(0, 0, 1.0));
+        assert!(!p.synth[0].note_lit(0, 5, 10.0), "only briefly");
+        // a step that already plays sends the pitch alone
+        p.synth[0].edit = 0;
+        p.events.clear();
+        p.press("tb303_1.key7", 2.0);
+        let n = p
+            .events
+            .iter()
+            .filter(|e| matches!(e, Event::Step303 { .. }))
+            .count();
+        assert_eq!(n, 1);
     }
 
     #[test]
