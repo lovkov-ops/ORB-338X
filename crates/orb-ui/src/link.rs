@@ -246,6 +246,105 @@ pub enum MixerTarget {
     Channel(u8, u8),
 }
 
+/// The compressor's gain reduction LEDs for `n` (0..=4) lit left of the centre ("0") one.
+fn gr_leds(n: usize) -> [u8; 9] {
+    let mut l = [0; 9];
+    l[4] = 1;
+    for k in 1..=n.min(4) {
+        l[4 - k] = if k <= 2 { 2 } else { 3 };
+    }
+    l
+}
+
+/// This fork: the second effects' sections, the mixer controller of their first control, and
+/// their controls' names in controller order.
+pub const SECOND_FX: [(&str, u8, &[&str]); 4] = [
+    (
+        "delay_b",
+        orb_engine::frame::DELAY_B,
+        &["on", "steps", "triplet", "feedback", "pan"],
+    ),
+    (
+        "dist_b",
+        orb_engine::frame::DIST_B,
+        &["on", "amount", "shape"],
+    ),
+    (
+        "pcf_b",
+        orb_engine::frame::PCF_B,
+        &["on", "freq", "q", "amt", "pattern", "dec", "mode"],
+    ),
+    (
+        "comp_b",
+        orb_engine::frame::COMP_B,
+        &["on", "ratio", "threshold"],
+    ),
+];
+
+/// This fork: the panel id of each of this fork's mixer controllers that an `.rbsx` keeps by
+/// name (all but the master's limiter's, `rbsx.rs`), in controller order: the inserts' wet
+/// amounts, the PCF and COMP on more channels, the slots, the second effects and the channels'
+/// knobs of them.
+pub fn fork_mixer_ids() -> Vec<(String, u8)> {
+    let mut ids = Vec::new();
+    for c in 1..=4 {
+        for n in [
+            "dist_wet",
+            "pcf_wet",
+            "comp_wet",
+            "pcf_more",
+            "comp_more",
+            "delay_b",
+            "dist_b",
+            "pcf_b",
+            "comp_b",
+        ] {
+            ids.push(format!("mixer{c}.{n}"));
+        }
+    }
+    for s in 1..=4 {
+        ids.push(format!("mixer.slot{s}"));
+    }
+    for (sec, _, names) in SECOND_FX {
+        for n in names {
+            ids.push(format!("{sec}.{n}"));
+        }
+    }
+    let mut v: Vec<(String, u8)> = ids
+        .into_iter()
+        .filter_map(|id| match mixer_target(&id) {
+            Some(MixerTarget::Global(g)) => Some((id, g)),
+            _ => None,
+        })
+        .collect();
+    v.sort_by_key(|x| x.1);
+    v
+}
+
+/// This fork: the mixer controller of a second effect's control (`dist_b.amount`), or of a
+/// channel's knob of one (`mixer2.delay_b`: the send into the second delay; `mixer2.pcf_b`:
+/// how much of the second PCF the channel hears).
+fn second_fx(id: &str) -> Option<u8> {
+    use orb_engine::frame::{SEND_B, WET_B};
+    let (sec, name) = id.split_once('.')?;
+    if let Some(&(_, first, names)) = SECOND_FX.iter().find(|f| f.0 == sec) {
+        let p = names.iter().position(|&n| n == name)?;
+        return Some(first + p as u8);
+    }
+    let c = sec
+        .strip_prefix("mixer")
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|n| (1..=4).contains(n))?
+        - 1;
+    match name {
+        "delay_b" => Some(SEND_B + c),
+        "dist_b" => Some(WET_B + 3 * c),
+        "pcf_b" => Some(WET_B + 3 * c + 1),
+        "comp_b" => Some(WET_B + 3 * c + 2),
+        _ => None,
+    }
+}
+
 /// This fork: the channel (0..4) and insert (0 DIST, 1 PCF, 2 COMP) of a mixer knob's wet
 /// amount id (`mixerN.dist_wet`, `.pcf_wet`, `.comp_wet`).
 pub fn wet_of(id: &str) -> Option<(usize, usize)> {
@@ -271,20 +370,10 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
             orb_engine::frame::WET + 3 * c as u8 + k as u8,
         ));
     }
-    // the second delay's controls and the channels' sends into it
-    if let Some(name) = id.strip_prefix("delay_b.") {
-        let p = ["on", "steps", "triplet", "feedback", "pan"]
-            .iter()
-            .position(|&n| n == name)?;
-        return Some(MixerTarget::Global(orb_engine::frame::DELAY_B + p as u8));
-    }
-    if let Some(c) = id
-        .strip_suffix(".delay_b")
-        .and_then(|s| s.strip_prefix("mixer"))
-        .and_then(|n| n.parse::<u8>().ok())
-        .filter(|n| (1..=4).contains(n))
-    {
-        return Some(MixerTarget::Global(orb_engine::frame::SEND_B + c - 1));
+    // the second effects' controls, the channels' sends into the second delay and their wet
+    // amounts of the other second effects
+    if let Some(g) = second_fx(id) {
+        return Some(MixerTarget::Global(g));
     }
     // the effects slots' effects
     if let Some(s) = id
@@ -358,12 +447,8 @@ fn new_song_knobs(
             // the faders (this fork: a double click sets them too)
             Some(MixerTarget::Global(0)) => Some(d.mixer.live.master),
             Some(MixerTarget::Global(orb_engine::frame::LIMIT_AMT)) => Some(d.mixer.live.limit_amt),
-            // this fork: the second delay's knobs and the sends into it
-            Some(MixerTarget::Global(g))
-                if (orb_engine::frame::DELAY_B..orb_engine::frame::SEND_B + 4).contains(&g) =>
-            {
-                d.mixer.live.fork(g)
-            }
+            // this fork: the second effects' knobs and the channels' knobs of them
+            Some(MixerTarget::Global(g)) if g >= orb_engine::frame::DELAY_B => d.mixer.live.fork(g),
             Some(MixerTarget::Channel(ch, 1)) => Some(d.mixer.live.channels[ch as usize].level),
             Some(MixerTarget::Channel(ch, 2)) => Some(d.mixer.live.channels[ch as usize].pan),
             Some(MixerTarget::Channel(ch, 3)) => Some(d.mixer.live.channels[ch as usize].send),
@@ -452,7 +537,10 @@ pub struct Link {
     /// ([`Link::song_mode_blocks`]).
     saved: Option<SavedBlocks>,
     /// The gain-reduction LEDs [`Link::moving`] saw last.
-    shown_gr: Option<[u8; 9]>,
+    shown_gr: Option<([u8; 9], [u8; 9])>,
+    /// The mixer's live parameters the last snapshot had (this fork: what an `.rbsx` keeps of
+    /// the effects slots, `rbsx.rs`).
+    mixer: orb_engine::frame::MixerParams,
 }
 
 /// The device parameters the original's save writes for a song in song mode, as the engine
@@ -522,6 +610,7 @@ impl Link {
             loaded_at: None,
             saved: None,
             shown_gr: None,
+            mixer: Default::default(),
             voice_mix: [VoiceMix::default(); 2],
         };
         (link, audio)
@@ -548,6 +637,11 @@ impl Link {
 
     /// The open song's latest known engine tracks, including constructor events and any
     /// published merges or stop prunes. Before its load runs, these are the built song's tracks.
+    /// The mixer's live parameters as the last [`Link::follow`] saw them.
+    pub fn mixer(&self) -> &orb_engine::frame::MixerParams {
+        &self.mixer
+    }
+
     pub fn loaded_tracks(&self) -> &[Vec<TrackEvent>; 9] {
         &self.loaded
     }
@@ -574,7 +668,8 @@ impl Link {
         let (playing, frames) = (s.playing, s.frames);
         // the compressor's reduction holds its last value in silence: it moves only when it
         // changes
-        let gr_moved = self.shown_gr.replace(panel.gr_leds) != Some(panel.gr_leds);
+        let gr = (panel.gr_leds, panel.gr_leds_b);
+        let gr_moved = self.shown_gr.replace(gr) != Some(gr);
         playing
             || frames <= mark
             || !self.backlog.is_empty()
@@ -1163,6 +1258,7 @@ impl Link {
     pub fn follow(&mut self, panel: &mut Panel) {
         let s = *self.player.snapshot();
         self.refresh_tracks();
+        self.mixer = s.mixer;
         // the meters and the running lights follow every call
         for c in 0..4 {
             panel.meters.insert(
@@ -1189,11 +1285,17 @@ impl Link {
         }
         // the gain reduction: the centre LED is "0", the reduction lights the ones to its left
         let n = ((live(Device::Compressor, 3).unwrap_or(0) as u32 * 4 + 63) / 127) as usize;
-        panel.gr_leds = [0; 9];
-        panel.gr_leds[4] = 1;
-        for k in 1..=n.min(4) {
-            panel.gr_leds[4 - k] = if k <= 2 { 2 } else { 3 };
+        panel.gr_leds = gr_leds(n);
+        // this fork: the second DIST's, PCF's and COMP's meters (their channels' summed)
+        let b = s.meters_b;
+        for (id, v) in [
+            ("dist_b.meter", b[0]),
+            ("pcf_b.meter", b[1]),
+            ("comp_b.meter", b[3]),
+        ] {
+            panel.meters.insert(id.into(), meter_state(v));
         }
+        panel.gr_leds_b = gr_leds(((b[2] as u32 * 4 + 63) / 127) as usize);
         let step = |d: Device, i: usize| {
             live(d, i)
                 .filter(|&b| s.playing && b < 16)
@@ -1273,14 +1375,21 @@ impl Link {
         for (s, &fx) in m.slots.iter().enumerate() {
             panel.adopt(&format!("mixer.slot{}", s + 1), fx as i32);
         }
-        for (p, name) in ["on", "steps", "triplet", "feedback", "pan"]
-            .into_iter()
-            .enumerate()
-        {
-            panel.adopt(&format!("delay_b.{name}"), m.delay_b[p] as i32);
+        // the second effects' controls and the channels' knobs of them
+        for (sec, first, names) in SECOND_FX {
+            for (p, name) in names.iter().enumerate() {
+                if let Some(v) = m.fork(first + p as u8) {
+                    panel.adopt(&format!("{sec}.{name}"), v as i32);
+                }
+            }
         }
-        for (c, &v) in m.send_b.iter().enumerate() {
-            panel.adopt(&format!("mixer{}.delay_b", c + 1), v as i32);
+        for c in 0..4 {
+            for fx in ["delay_b", "dist_b", "pcf_b", "comp_b"] {
+                let id = format!("mixer{}.{fx}", c + 1);
+                if let Some(v) = second_fx(&id).and_then(|g| m.fork(g)) {
+                    panel.adopt(&id, v as i32);
+                }
+            }
         }
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {
@@ -1327,5 +1436,20 @@ mod tests {
             assert!(s >= last, "{b}: {s} < {last}");
             last = s;
         }
+    }
+
+    /// (this fork) An `.rbsx` names each of this fork's mixer controllers but the limiter's
+    /// once, by the panel id that sends it.
+    #[test]
+    fn every_fork_mixer_controller_has_one_name() {
+        use super::fork_mixer_ids;
+        use orb_engine::frame::{FORK_END, WET};
+        let ids = fork_mixer_ids();
+        let ctrls: Vec<u8> = ids.iter().map(|x| x.1).collect();
+        assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
+        assert!(
+            ids.iter()
+                .any(|(id, g)| id == "comp_b.threshold" && *g == FORK_END - 1)
+        );
     }
 }

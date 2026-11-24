@@ -140,6 +140,15 @@ pub fn limit_events(tracks: &[Vec<TrackEvent>; 9], i: usize) -> Vec<(i32, u8)> {
         .collect()
 }
 
+/// This fork: the events of the mixer's controller `ctrl` in `tracks`, `(tick, value)`.
+pub fn fork_events(tracks: &[Vec<TrackEvent>; 9], ctrl: u8) -> Vec<(i32, u8)> {
+    tracks[Device::Mixer as usize]
+        .iter()
+        .filter(|e| e.ctrl == ctrl)
+        .map(|e| (e.tick, e.value))
+        .collect()
+}
+
 /// This fork: synth `k`'s (0, 1) sub-oscillator events in `tracks`, `(tick, level)`.
 pub fn sub_events(tracks: &[Vec<TrackEvent>; 9], k: usize) -> Vec<(i32, u8)> {
     let t = [Device::Tb303_1, Device::Tb303_2][k.min(1)] as usize;

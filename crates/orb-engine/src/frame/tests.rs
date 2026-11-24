@@ -1563,7 +1563,76 @@ fn a_second_delay_and_effects_out_of_the_slots() {
         .zip(&dry)
         .all(|(a, b)| (*a as i32 - *b as i32).abs() <= 1);
     assert!(near);
-    assert!(is_fork_mixer(SEND_B + 3) && !is_fork_mixer(SEND_B + 4));
+    assert!(is_fork_mixer(SEND_B + 3) && SEND_B + 4 == WET_B);
+}
+
+/// This fork: two slots that hold the DIST, the PCF or the COMP run a second one, each channel
+/// that hears it ([`MixerParams::wet_b`]) its own copy with the second one's controllers; its
+/// meters sum the copies'.
+#[test]
+fn a_second_dist_pcf_and_comp() {
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        (buf, e)
+    };
+    let (song, _) = render(&|_| {});
+    for (k, fx) in [FX_DIST, FX_PCF, FX_COMP].into_iter().enumerate() {
+        // two slots hold it: no channel hears the second one, as the song
+        let two = |e: &mut Engine| {
+            if fx == FX_COMP {
+                e.mixer_global(SLOT + 2, FX_COMP);
+            } else {
+                e.mixer_global(SLOT + 3, fx);
+            }
+        };
+        let (quiet, e) = render(&two);
+        assert_eq!(quiet, song, "fx {fx}");
+        assert!(e.frame.copies_b[0][k][0].is_none());
+        // channel 1 hears it: its own copy, heard, metered
+        let on = |e: &mut Engine| {
+            two(e);
+            e.mixer_global(WET_B + k as u8, WET_FULL);
+        };
+        let (heard, e) = render(&on);
+        assert!(e.frame.copies_b[0][k][0].is_some(), "fx {fx}");
+        assert!(e.frame.copies_b[1][k][0].is_none());
+        assert_ne!(heard, song, "fx {fx}");
+        let meter = [0, 1, 3][k];
+        assert!(
+            e.frame.meters_b[meter] > 0,
+            "fx {fx}: {:?}",
+            e.frame.meters_b
+        );
+        // its own controllers
+        let first = [DIST_B, PCF_B, COMP_B][k];
+        let (other, e) = render(&|e| {
+            on(e);
+            e.mixer_global(first + 1, 127);
+        });
+        assert_ne!(other, heard, "fx {fx}");
+        assert_eq!(e.frame.devices.mixer.live.ins_b(k)[1], 127);
+        // one slot again: the copies go
+        let (_, e) = render(&|e| {
+            on(e);
+            if fx == FX_COMP {
+                e.mixer_global(SLOT + 2, FX_PCF);
+            } else {
+                e.mixer_global(SLOT + 3, FX_COMP);
+            }
+        });
+        assert!(e.frame.copies_b[0][k][0].is_none(), "fx {fx}");
+    }
+    let m = MixerParams::default();
+    assert_eq!(m.dist_b, crate::dist::DEFAULTS[..3]);
+    assert_eq!(m.pcf_b, crate::pcf::DEFAULTS[..7]);
+    assert_eq!(m.comp_b, crate::comp::DEFAULTS[..3]);
+    assert!(is_fork_mixer(COMP_B + 2) && !is_fork_mixer(COMP_B + 3));
+    assert_eq!(COMP_B + 3, 124);
 }
 
 #[test]

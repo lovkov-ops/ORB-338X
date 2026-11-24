@@ -142,7 +142,7 @@ pub fn pattern_grid_button(dx: f32, dy: f32) -> u8 {
 /// other switch reads any value but 0 as its second position (the 303 waveform, the 808
 /// selectors, the delay's sixteenths; docs/ui_spec.md section 2).
 pub fn switch_position(id: &str, v: u8) -> u8 {
-    if id == "pcf.mode" {
+    if id == "pcf.mode" || id == "pcf_b.mode" {
         u8::from(v == 1)
     } else {
         u8::from(v != 0)

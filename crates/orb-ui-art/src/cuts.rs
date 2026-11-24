@@ -1722,15 +1722,6 @@ fn mixer_and_effects(c: &mut Cuts) {
     let (fx, fy) = knob22(c, mf, "17.17", None);
     c.place("delay.feedback", fx - 11.0, fy - 11.0);
     c.background(mf, "delay", "bg_delay", Bx::new(526.0, 150.0, 82.0, 90.0));
-    // the second delay (this fork: two slots that hold the delay): the same face
-    let mut bg = c
-        .parts
-        .iter()
-        .find(|p| p.name == "bg_delay")
-        .cloned()
-        .expect("bg_delay");
-    bg.name = "bg_delay_b".into();
-    c.parts.push(bg);
     // dist (slot 2, 240..330): its kinds' LEDs stay the background's, the classic one lit
     header(c, "dist", "19.23", "19.24");
     title(c, "dist", 240.0);
@@ -1800,21 +1791,33 @@ fn mixer_and_effects(c: &mut Cuts) {
         c.place(&format!("comp.{id}"), x - 11.0, y - 11.0);
     }
     c.background(mf, "comp", "bg_comp", Bx::new(526.0, 420.0, 82.0, 90.0));
-    // the second delay's controls and its mixer knobs where the delay's are (the panel moves
-    // them to the slot that holds it)
+    // the second effects (this fork: two slots that hold an effect): the same faces, their
+    // controls and their mixer knobs where the first ones' are (the panel moves them to the
+    // slot that holds them)
+    const FX: [&str; 4] = ["delay", "dist", "pcf", "comp"];
+    for fx in FX {
+        let mut bg = c
+            .parts
+            .iter()
+            .find(|p| p.name == format!("bg_{fx}"))
+            .cloned()
+            .expect("an effect's background");
+        bg.name = format!("bg_{fx}_b");
+        c.parts.push(bg);
+    }
     let dup: Vec<(String, (f32, f32))> = c
         .places
         .iter()
         .filter_map(|(k, &at)| {
             let (sec, name) = k.split_once('.')?;
-            match (sec, name) {
-                ("delay", _) => Some((format!("delay_b.{name}"), at)),
-                (_, "delay" | "delay_label") if sec.starts_with("mixer") => Some((
-                    format!("{sec}.{}", name.replacen("delay", "delay_b", 1)),
-                    at,
-                )),
-                _ => None,
+            if FX.contains(&sec) {
+                return Some((format!("{sec}_b.{name}"), at));
             }
+            let fx = name.strip_suffix("_label").unwrap_or(name);
+            (sec.starts_with("mixer") && FX.contains(&fx)).then(|| {
+                let b = format!("{fx}_b");
+                (format!("{sec}.{}", name.replacen(fx, &b, 1)), at)
+            })
         })
         .collect();
     c.places.extend(dup);

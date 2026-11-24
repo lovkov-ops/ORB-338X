@@ -88,6 +88,10 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
     v.push(("bg_dist", 526.0, 240.0));
     v.push(("bg_pcf", 526.0, 330.0));
     v.push(("bg_comp", 526.0, 420.0));
+    // the other second effects' faces (this fork), drawn when two slots hold the effect
+    v.push(("bg_dist_b", 526.0, 240.0));
+    v.push(("bg_pcf_b", 526.0, 330.0));
+    v.push(("bg_comp_b", 526.0, 420.0));
     v
 }
 
@@ -130,7 +134,7 @@ mod tests {
         // knob, + 2; the master's LIMIT key and AMT knob in place of its COMP key, + 1; the
         // mixer's slot knobs in place of its keys and their labels, + 16; the slots' menus, + 4;
         // the second delay's face, + 9, and its sends and their labels, + 8)
-        assert_eq!(c.len(), 497);
+        assert_eq!(c.len(), 551);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

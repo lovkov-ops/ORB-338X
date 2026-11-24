@@ -529,6 +529,15 @@ pub struct MixerParams {
     pub delay_b: [u8; 5],
     /// This fork: each channel's send into the second delay ([`SEND_B`]).
     pub send_b: [u8; 4],
+    /// This fork: how much of the second DIST, PCF and COMP each channel hears (`wet_b[c][k]`,
+    /// k as [`MixerParams::wet`]; [`WET_B`]): 0 off (not run), 127 only the effect. Heard when
+    /// two slots hold the effect.
+    pub wet_b: [[u8; 3]; 4],
+    /// This fork: the second DIST's, PCF's and COMP's controllers ([`DIST_B`], [`PCF_B`],
+    /// [`COMP_B`]), as the song's insert's first ones (without its meter bytes).
+    pub dist_b: [u8; 3],
+    pub pcf_b: [u8; 7],
+    pub comp_b: [u8; 3],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -556,13 +565,28 @@ pub const FX_COMP: u8 = 7;
 pub const DELAY_B: u8 = SLOT + 4;
 /// This fork: the mixer's controller of channel c's send into the second delay, `SEND_B + c`.
 pub const SEND_B: u8 = DELAY_B + 5;
+/// This fork: the mixer's controller of channel c's second insert k wet amount
+/// ([`MixerParams::wet_b`]): `WET_B + 3c + k`.
+pub const WET_B: u8 = SEND_B + 4;
+/// This fork: the mixer's controllers of the second DIST (`DIST_B + p`, p the distortion's
+/// controller 0..3), the second PCF (`PCF_B + p`, 0..7) and the second COMP (`COMP_B + p`,
+/// 0..3).
+pub const DIST_B: u8 = WET_B + 12;
+pub const PCF_B: u8 = DIST_B + 3;
+pub const COMP_B: u8 = PCF_B + 7;
+/// The second inserts' controllers at first: the song's inserts' ctor values.
+const DIST_B_DEFAULTS: [u8; 3] = [1, 70, 0];
+const PCF_B_DEFAULTS: [u8; 7] = [1, 70, 64, 40, 24, 90, 1];
+const COMP_B_DEFAULTS: [u8; 3] = [1, 70, 64];
+/// One past this fork's last mixer controller.
+pub const FORK_END: u8 = COMP_B + 3;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
 /// This fork: whether `ctrl` is one of this fork's mixer controllers ([`LIMIT`],
 /// [`LIMIT_AMT`], [`WET`].., [`MORE`]..).
 pub fn is_fork_mixer(ctrl: u8) -> bool {
-    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..SEND_B + 4).contains(&ctrl)
+    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..FORK_END).contains(&ctrl)
 }
 
 impl MixerParams {
@@ -571,6 +595,7 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= WET_B && is_fork_mixer(ctrl) => Some(*self.b_ctrl(ctrl)),
             _ if ctrl >= SEND_B && is_fork_mixer(ctrl) => {
                 Some(self.send_b[(ctrl - SEND_B) as usize])
             }
@@ -595,6 +620,14 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= WET_B && is_fork_mixer(ctrl) => {
+                let v = if ctrl < DIST_B {
+                    value.min(WET_FULL)
+                } else {
+                    value
+                };
+                *self.b_ctrl_mut(ctrl) = v;
+            }
             _ if ctrl >= SEND_B && is_fork_mixer(ctrl) => {
                 self.send_b[(ctrl - SEND_B) as usize] = value
             }
@@ -625,6 +658,40 @@ impl MixerParams {
         self.slots = from.slots;
         self.delay_b = from.delay_b;
         self.send_b = from.send_b;
+        self.wet_b = from.wet_b;
+        self.dist_b = from.dist_b;
+        self.pcf_b = from.pcf_b;
+        self.comp_b = from.comp_b;
+    }
+
+    /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
+    fn b_ctrl(&self, ctrl: u8) -> &u8 {
+        let x = ctrl as usize;
+        match ctrl {
+            _ if ctrl >= COMP_B => &self.comp_b[x - COMP_B as usize],
+            _ if ctrl >= PCF_B => &self.pcf_b[x - PCF_B as usize],
+            _ if ctrl >= DIST_B => &self.dist_b[x - DIST_B as usize],
+            _ => &self.wet_b[(x - WET_B as usize) / 3][(x - WET_B as usize) % 3],
+        }
+    }
+
+    fn b_ctrl_mut(&mut self, ctrl: u8) -> &mut u8 {
+        let x = ctrl as usize;
+        match ctrl {
+            _ if ctrl >= COMP_B => &mut self.comp_b[x - COMP_B as usize],
+            _ if ctrl >= PCF_B => &mut self.pcf_b[x - PCF_B as usize],
+            _ if ctrl >= DIST_B => &mut self.dist_b[x - DIST_B as usize],
+            _ => &mut self.wet_b[(x - WET_B as usize) / 3][(x - WET_B as usize) % 3],
+        }
+    }
+
+    /// This fork: the second insert k's (0 DIST, 1 PCF, 2 COMP) controllers.
+    pub fn ins_b(&self, k: usize) -> &[u8] {
+        match k {
+            0 => &self.dist_b,
+            1 => &self.pcf_b,
+            _ => &self.comp_b,
+        }
     }
 
     /// How many slots hold effect `fx`.
@@ -665,6 +732,10 @@ impl Default for MixerParams {
             slots: DEFAULT_SLOTS,
             delay_b: [1, 3, 1, 80, 64],
             send_b: [0; 4],
+            wet_b: [[0; 3]; 4],
+            dist_b: DIST_B_DEFAULTS,
+            pcf_b: PCF_B_DEFAULTS,
+            comp_b: COMP_B_DEFAULTS,
         }
     }
 }
@@ -689,6 +760,10 @@ impl From<&song::Mixer> for MixerParams {
             slots: DEFAULT_SLOTS,
             delay_b: [1, 3, 1, 80, 64],
             send_b: [0; 4],
+            wet_b: [[0; 3]; 4],
+            dist_b: DIST_B_DEFAULTS,
+            pcf_b: PCF_B_DEFAULTS,
+            comp_b: COMP_B_DEFAULTS,
         }
     }
 }
@@ -709,6 +784,10 @@ impl MixerParams {
             slots: DEFAULT_SLOTS,
             delay_b: [1, 3, 1, 80, 64],
             send_b: [0; 4],
+            wet_b: [[0; 3]; 4],
+            dist_b: DIST_B_DEFAULTS,
+            pcf_b: PCF_B_DEFAULTS,
+            comp_b: COMP_B_DEFAULTS,
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1025,6 +1104,13 @@ pub struct Frame {
     /// This fork: each channel's own copies of the PCF and the compressor ([`Routing::pcf_copy`],
     /// [`Routing::comp_copy`]).
     copies: [[Option<Box<voices::InsertCopy>>; 2]; 4],
+    /// This fork: each channel's copies of the second DIST, PCF and COMP (`copies_b[c][k]`:
+    /// the bus's, or a split drum machine's left and right sides'), while two slots hold the
+    /// insert and the channel hears it ([`MixerParams::wet_b`]).
+    copies_b: [[[Option<Box<voices::InsertCopy>>; 2]; 3]; 4],
+    /// This fork: the second inserts' meter bytes, each the sum of its channels' copies' (the
+    /// loudest gain reduction for the compressor's): DIST, PCF, COMP gain, COMP peak.
+    pub meters_b: [u8; 4],
     /// This fork: the second delay (two slots hold the delay), with its own line, and the
     /// controllers it was last given; its send bus, and each channel's send gain into it.
     delay_b: Option<Box<crate::delay::Delay>>,
@@ -1090,6 +1176,8 @@ impl Frame {
             voice_mix: [voices::VoiceMix::default(); 2],
             right: None,
             copies: Default::default(),
+            copies_b: Default::default(),
+            meters_b: [0; 4],
             delay_b: None,
             delay_b_set: [0; 5],
             send_b: [GUARD; BLOCK],
@@ -1202,6 +1290,44 @@ impl Frame {
                 }
             }
         }
+        // this fork: the second DIST, PCF and COMP: a channel that hears one while two slots
+        // hold it runs its own copy (made from the song's insert as this update left it, given
+        // the second one's controllers); the meters sum the copies'
+        let mut meters = [0u32; 4];
+        for (c, copies) in self.copies_b.iter_mut().enumerate() {
+            for (k, sides) in copies.iter_mut().enumerate() {
+                let fx = [FX_DIST, FX_PCF, FX_COMP][k];
+                if p.slots_of(fx) < 2 || p.wet_b[c][k] == 0 {
+                    *sides = [None, None];
+                    continue;
+                }
+                if sides[0].is_none() {
+                    let src: &dyn InsertEffect = match k {
+                        0 => &*self.devices.dist,
+                        1 => &*self.devices.pcf,
+                        _ => &*self.devices.comp,
+                    };
+                    sides[0] = voices::InsertCopy::new(src).map(Box::new);
+                }
+                for cp in sides.iter_mut().flatten() {
+                    cp.set_params(p.ins_b(k));
+                    cp.ins.update(&ctx);
+                }
+                if let Some(cp) = &sides[0] {
+                    let live = cp.ins.live();
+                    let at = |i: usize| live.get(i).copied().unwrap_or(0) as u32;
+                    match k {
+                        0 => meters[0] += at(crate::dist::METER),
+                        1 => meters[1] += at(crate::pcf::METER),
+                        _ => {
+                            meters[2] = meters[2].max(at(crate::comp::GAIN_METER));
+                            meters[3] += at(crate::comp::PEAK_METER);
+                        }
+                    }
+                }
+            }
+        }
+        self.meters_b = meters.map(|m| m.min(127) as u8);
         // 0x100130D7: 2 * T[master] + 1e-6
         self.state.master_target =
             st(MASTER_SCALE as f64 * t[p.master as usize] as f64 + OFFSET as f64);
@@ -1286,7 +1412,6 @@ impl Frame {
             let wet = self.devices.mixer.live.wet[c];
             let [pcf_copy, comp_copy] = &mut self.copies[c];
             let rt = ch.routing;
-            let order = self.devices.mixer.live.insert_order();
             let mut inserts = [
                 pick(rt.dist, &mut self.devices.dist, None),
                 pick(
@@ -1301,13 +1426,38 @@ impl Frame {
                 ),
             ];
             // this fork: in their slots' order (the original's: the distortion, the PCF, the
-            // compressor)
+            // compressor); an insert no slot holds is not heard; the lower of two slots that
+            // hold an insert is its second one, each channel's own copy
             let in_slots = self.devices.mixer.live.slots;
-            for k in order {
-                // this fork: an insert no slot holds is not heard
-                if !in_slots.contains(&[FX_DIST, FX_PCF, FX_COMP][k]) {
+            let wet_b = self.devices.mixer.live.wet_b[c];
+            let copies_b = &mut self.copies_b[c];
+            let mut seen = [false; 3];
+            for fx in in_slots {
+                let Some(k) = [FX_DIST, FX_PCF, FX_COMP].iter().position(|&f| f == fx) else {
+                    continue;
+                };
+                if seen[k] {
+                    let [left, right] = &mut copies_b[k];
+                    let Some(lc) = left else {
+                        continue;
+                    };
+                    let b = if split_now {
+                        &mut split.wet_l
+                    } else {
+                        &mut *bus
+                    };
+                    run_copy(&mut lc.ins, b, wet_b[k], &ctx);
+                    if split_now {
+                        if right.is_none() {
+                            *right = voices::InsertCopy::new(&*lc.ins).map(Box::new);
+                        }
+                        if let Some(rc) = right {
+                            run_copy(&mut rc.ins, &mut split.wet_r, wet_b[k], &ctx);
+                        }
+                    }
                     continue;
                 }
+                seen[k] = true;
                 if let Some((ins, song)) = inserts[k].take() {
                     ctx.stack_word = self.stack_word;
                     let b = if split_now {
@@ -1511,6 +1661,17 @@ fn copy_of(
     c: &mut Option<Box<voices::InsertCopy>>,
 ) -> Option<&mut Box<dyn InsertEffect>> {
     c.as_mut().filter(|_| on).map(|c| &mut c.ins)
+}
+
+/// This fork: a channel's copy of a second insert on `b`, `wet` of 127 heard ([`mix_wet`]);
+/// its faults are dropped and it leaves the stack word as it is.
+fn run_copy(ins: &mut Box<dyn InsertEffect>, b: &mut Block, wet: u8, ctx: &BlockContext) {
+    let dry = (wet < WET_FULL).then_some(*b);
+    ins.process(b, ctx);
+    let _ = ins.faulted();
+    if let Some(dry) = &dry {
+        mix_wet(b, dry, wet);
+    }
 }
 
 /// This fork: an insert's output `wet` (in place) mixed with its input `dry`, `amount` of 127
@@ -2023,6 +2184,8 @@ impl Engine {
         self.frame.devices.reset_all();
         // this fork: the channels' copies of the inserts start anew from the reset ones
         self.frame.copies = Default::default();
+        self.frame.copies_b = Default::default();
+        self.frame.meters_b = [0; 4];
         // and the second delay's line
         if let Some(d) = &mut self.frame.delay_b {
             d.silence();

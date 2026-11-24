@@ -1268,8 +1268,9 @@ fn knob_ids() -> Vec<String> {
         // the mixer's DIST, PCF and COMP knobs (this fork) are the original's keys: off in a
         // new song, and a double click does not set them
         .filter(|c| orb_ui::model::mixer_insert(&c.id).is_none())
-        // the second delay's (this fork) are hidden while one slot holds the delay
-        .filter(|c| !c.id.contains("delay_b"))
+        // the second effects' (this fork) are hidden while one slot holds each effect
+        .filter(|c| orb_ui::model::fx_instance(&c.section).is_none_or(|(_, i)| i == 0))
+        .filter(|c| !c.section.starts_with("mixer") || !c.name().ends_with("_b"))
         .map(|c| c.id)
         .collect()
 }
@@ -1283,7 +1284,7 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
     } else if let Some(orb_ui::link::MixerTarget::Global(g)) = orb_ui::link::mixer_target(id)
         && g >= orb_engine::frame::DELAY_B
     {
-        // this fork: the second delay's knobs and the sends into it
+        // this fork: the second effects' knobs and the channels' knobs of them
         s.mixer.fork(g).unwrap()
     } else if let Some(n) = section.strip_prefix("mixer") {
         let ch = &s.mixer.channels[n.parse::<usize>().unwrap() - 1];
@@ -1553,4 +1554,40 @@ fn the_second_delay_sends_the_mixers_controllers() {
         );
     }
     assert_eq!(mixer_target("delay_b.meter"), None);
+}
+
+/// This fork: the second DIST's, PCF's and COMP's controls and the channels' knobs of them are
+/// the mixer's controllers (msg 145 `{DIST_B + p}`.., `{WET_B + 3c + k}`), and reach the engine.
+#[test]
+fn the_second_dist_pcf_and_comp_reach_the_engine() {
+    use orb_engine::frame::{COMP_B, DIST_B, FX_PCF, PCF_B, WET_B};
+    use orb_ui::link::{MixerTarget::Global, mixer_target};
+    for (id, g) in [
+        ("dist_b.on", DIST_B),
+        ("dist_b.shape", DIST_B + 2),
+        ("pcf_b.pattern", PCF_B + 4),
+        ("pcf_b.mode", PCF_B + 6),
+        ("comp_b.threshold", COMP_B + 2),
+        ("mixer1.dist_b", WET_B),
+        ("mixer3.pcf_b", WET_B + 7),
+        ("mixer4.comp_b", WET_B + 11),
+    ] {
+        assert_eq!(mixer_target(id), Some(Global(g)), "{id}");
+    }
+    assert_eq!(mixer_target("pcf_b.meter"), None);
+    // a second PCF in the delay's slot, channel 2 hears it, its pattern one up
+    let mut h = Harness::new();
+    h.app.panel.put_slot(0, FX_PCF);
+    h.app.panel.set_knob("mixer2.pcf_b", 1000);
+    let before = h.app.panel.display("pcf_b.pattern").unwrap();
+    h.app.panel.arrow("pcf_b.pattern_up");
+    h.frame(vec![]);
+    h.calls(2);
+    let s = h.snap();
+    assert_eq!(s.mixer.slots[0], FX_PCF);
+    assert_eq!(s.mixer.wet_b[1][1], 127);
+    assert_eq!(s.mixer.pcf_b[4] as i32, before + 1);
+    h.frame(vec![]);
+    assert!(!h.app.panel.out_of_slots("pcf_b", "freq"));
+    assert_eq!(h.app.panel.display("pcf_b.pattern"), Some(before + 1));
 }

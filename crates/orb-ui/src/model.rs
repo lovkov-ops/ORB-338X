@@ -299,6 +299,8 @@ pub struct Panel {
     pub meters: HashMap<String, u8>,
     /// The compressor's nine gain-reduction LEDs: 0 off, 1 green, 2 amber, 3 red.
     pub gr_leds: [u8; 9],
+    /// This fork: the second COMP's ([`Panel::gr_leds`]).
+    pub gr_leds_b: [u8; 9],
     /// The song's sound model: the Options menu's "Vintage ReBirth Synth Sound" (GLOB byte 482,
     /// the engine's global byte 21). Changes go through [`Panel::set_vintage`].
     pub vintage: bool,
@@ -397,6 +399,7 @@ impl Panel {
             slots: orb_engine::frame::DEFAULT_SLOTS,
             meters: HashMap::new(),
             gr_leds: [0; 9],
+            gr_leds_b: [0; 9],
             vintage: false,
             events: Vec::new(),
             solo: [false; 4],
@@ -449,6 +452,7 @@ impl Panel {
         p.numbers.insert("delay.steps".into(), 3);
         p.numbers.insert("delay_b.steps".into(), 3);
         p.numbers.insert("pcf.pattern".into(), 0);
+        p.numbers.insert("pcf_b.pattern".into(), 0);
         // the channels' enables (this fork: no control of their own, SOLO and MUTE set them)
         for c in 1..=4 {
             p.toggles.insert(format!("mixer{c}.mute"), true);
@@ -705,15 +709,10 @@ impl Panel {
     }
 
     /// This fork: whether effect `fx` may go into slot `s` (the effect there leaves the rack):
-    /// an effect the engine has, the delay in at most two slots, the others in one.
+    /// an effect the engine has, in at most two slots.
     pub fn can_put(&self, s: usize, fx: u8) -> bool {
         let others = (0..4).filter(|&o| o != s && self.slots[o] == fx).count();
-        let most = if fx == orb_engine::frame::FX_DELAY {
-            1
-        } else {
-            0
-        };
-        s < 4 && self.slots[s] != fx && FX_READY.contains(&fx) && others <= most
+        s < 4 && self.slots[s] != fx && FX_READY.contains(&fx) && others <= 1
     }
 
     /// This fork: effect `fx` into slot `s` ([`Panel::can_put`]), sent; the effect that was
@@ -1300,10 +1299,11 @@ impl Panel {
                 self.numbers.insert(id.clone(), v);
                 (id, v)
             }
-            ("pcf", "pattern") => {
-                let v = (self.numbers["pcf.pattern"] + d).clamp(0, 54);
-                self.numbers.insert("pcf.pattern".into(), v);
-                ("pcf.pattern".into(), v)
+            ("pcf" | "pcf_b", "pattern") => {
+                let id = format!("{sec}.pattern");
+                let v = (self.numbers[&id] + d).clamp(0, 54);
+                self.numbers.insert(id.clone(), v);
+                (id, v)
             }
             _ => return,
         };
@@ -1544,7 +1544,12 @@ impl Panel {
             }
             "meter" if name.starts_with("gr") => {
                 let i: usize = name[2..].parse().unwrap_or(1);
-                let s = ["off", "green", "amber", "red"][self.gr_leds[i - 1].min(3) as usize];
+                let leds = if sec == "comp_b" {
+                    &self.gr_leds_b
+                } else {
+                    &self.gr_leds
+                };
+                let s = ["off", "green", "amber", "red"][leds[i - 1].min(3) as usize];
                 format!("gr_led_{s}")
             }
             "meter" => format!(
@@ -2051,10 +2056,20 @@ mod tests {
         assert!(p.out_of_slots("mixer2", "pcf_label") && !p.out_of_slots("mixer2", "delay_b"));
         assert_eq!(p.slot_dy("delay_b", "pan"), 180.0);
         assert_eq!(p.slot_dy("mixer1", "delay_b"), 44.0);
-        // not a third delay, not a second DIST, not an effect the engine does not have
-        for (s, fx) in [(1, FX_DELAY), (1, FX_DIST), (1, FX_RVRB)] {
+        // not a third delay, not an effect the engine does not have; a second DIST, not a
+        // third
+        for (s, fx) in [(1, FX_DELAY), (1, FX_RVRB)] {
             assert!(!p.can_put(s, fx), "{s} {fx}");
         }
+        assert!(p.can_put(1, FX_DIST));
+        p.put_slot(1, FX_DIST);
+        assert_eq!(p.slots, [FX_DELAY, FX_DIST, FX_DELAY, FX_DIST]);
+        assert!(!p.can_put(0, FX_DIST));
+        // the second DIST's face and knobs where the lower slot is (the fourth)
+        assert!(!p.out_of_slots("dist_b", "amount") && p.out_of_slots("comp_b", "ratio"));
+        assert_eq!(p.slot_dy("dist_b", "amount"), 180.0);
+        assert_eq!(p.slot_dy("mixer2", "dist_b"), 44.0);
+        p.put_slot(1, FX_COMP);
         // the PCF back
         assert!(p.can_put(0, FX_PCF));
         // the engine's slots
@@ -2219,8 +2234,8 @@ mod tests {
             .into_iter()
             .filter(|c| matches!(c.kind.as_str(), "switch" | "hswitch" | "vswitch"))
             .collect();
-        // (this fork: the second delay's 3/16, + 1)
-        assert_eq!(switches.len(), 11);
+        // (this fork: the second delay's 3/16 and the second PCF's mode, + 2)
+        assert_eq!(switches.len(), 12);
         for c in &switches {
             if c.id == "transport.mode" {
                 // the mode switch shows a flag, not a controller value
@@ -2240,7 +2255,7 @@ mod tests {
                     "{} = {v}: no part {n}",
                     c.id
                 );
-                let want = if c.id == "pcf.mode" {
+                let want = if c.id == "pcf.mode" || c.id == "pcf_b.mode" {
                     u8::from(v == 1)
                 } else {
                     u8::from(v != 0)

@@ -361,3 +361,68 @@ fn an_rbsx_keeps_the_master_limiter_and_its_moves() {
     assert_eq!(h3.app.gen_state().limit, [0, 0]);
     assert!(!h3.app.panel.toggle_on("master.limit"));
 }
+
+/// This fork: an `.rbsx` keeps the effects slots: which effect each slot holds, the second
+/// effects' settings and the channels' knobs of them, and their song-mode moves.
+#[test]
+fn an_rbsx_keeps_the_effects_slots() {
+    use orb_engine::frame::{FX_PCF, WET_B};
+    use orb_engine::song::Device;
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = Harness::new();
+    h.open(&song());
+    // a second PCF in the delay's slot, channel 2 hears it, its pattern one up
+    h.app.panel.put_slot(0, FX_PCF);
+    h.app.panel.set_knob("mixer2.pcf_b", 1000);
+    h.app.panel.arrow("pcf_b.pattern_up");
+    h.calls(2);
+    h.calls(2);
+    let moves = [(0, 127), (384, 40)];
+    h.app
+        .link
+        .as_mut()
+        .unwrap()
+        .send_fork_track(Device::Mixer, WET_B + 4, 127, &moves);
+    h.calls(2);
+    let snap = *h.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap.mixer.slots[0], FX_PCF);
+    assert_eq!(snap.mixer.wet_b[1][1], 127);
+    let kept = h.app.gen_state();
+    assert!(
+        kept.mixer_fx
+            .iter()
+            .any(|(g, v, t)| *g == WET_B + 4 && *v == 127 && t == &moves.to_vec())
+    );
+    let out = dir.path().join("slots.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+    // the song's own tracks have none of their events
+    let file = rbs::Song::parse(&std::fs::read(&out).unwrap()).unwrap();
+    assert!(
+        file.tracks
+            .iter()
+            .flat_map(|t| &t.events)
+            .all(|e| !orb_engine::frame::is_fork_mixer(e.ctrl))
+    );
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    h2.calls(2);
+    h2.calls(2);
+    assert_eq!(h2.app.gen_state(), kept);
+    let snap2 = *h2.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap2.mixer.slots, snap.mixer.slots);
+    assert_eq!(snap2.mixer.wet_b, snap.mixer.wet_b);
+    assert_eq!(snap2.mixer.pcf_b, snap.mixer.pcf_b);
+    assert_eq!(h2.app.panel.slots, snap.mixer.slots);
+    assert!(!h2.app.panel.out_of_slots("pcf_b", "freq"));
+    assert!(!h2.app.doc.modified, "opening is no edit");
+
+    // a plain .rbs: the original's slots
+    let mut h3 = Harness::new();
+    h3.open(&song());
+    h3.calls(2);
+    assert!(h3.app.gen_state().mixer_fx.is_empty());
+    assert_eq!(h3.app.panel.slots, orb_engine::frame::DEFAULT_SLOTS);
+}

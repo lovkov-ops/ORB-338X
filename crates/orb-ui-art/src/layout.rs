@@ -618,9 +618,18 @@ fn mixer(b: &mut Builder, c: usize) {
         );
         b.knob(id, KNOB_LFO, 36.0, 26.0 + 22.0 * k as f32, v);
     }
-    // the send into the second delay (this fork), shown when two slots hold the delay
-    b.part("delay_b_label", "label", "mixlbl_delay", 31.0, 34.0);
-    b.knob("delay_b", KNOB_LFO, 36.0, 26.0, 0.0);
+    // the second effects' knobs (this fork: the delay's send, the others' wet amounts, 0
+    // off), shown when two slots hold the effect
+    for id in ["delay", "dist", "pcf", "comp"] {
+        b.part(
+            &format!("{id}_b_label"),
+            "label",
+            &format!("mixlbl_{id}"),
+            31.0,
+            34.0,
+        );
+        b.knob(&format!("{id}_b"), KNOB_LFO, 36.0, 26.0, 0.0);
+    }
 }
 
 fn master(b: &mut Builder) {
@@ -672,13 +681,30 @@ fn effects(b: &mut Builder) {
     b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
     b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
 
-    b.section("dist", "bg_dist", 526.0, 240.0);
+    // DIST, PCF and COMP, and (this fork) their second ones where the first ones are (shown
+    // when two slots hold the effect; the panel moves each to its slot)
+    for sfx in ["", "_b"] {
+        dist(b, sfx);
+        pcf(b, sfx);
+        comp(b, sfx);
+    }
+}
+
+fn dist(b: &mut Builder, sfx: &str) {
+    b.section(
+        &format!("dist{sfx}"),
+        &format!("bg_dist{sfx}"),
+        526.0,
+        240.0,
+    );
     fx_header(b, false, 0);
     b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     b.knob("amount", KNOB_FX, 10.0, 27.0, 0.4);
     b.knob("shape", KNOB_FX, 51.0, 27.0, 0.5);
+}
 
-    b.section("pcf", "bg_pcf", 526.0, 330.0);
+fn pcf(b: &mut Builder, sfx: &str) {
+    b.section(&format!("pcf{sfx}"), &format!("bg_pcf{sfx}"), 526.0, 330.0);
     fx_header(b, true, 4);
     b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     b.display("pattern", 10.0, 23.0, 18.0, 2, "25");
@@ -694,8 +720,15 @@ fn effects(b: &mut Builder) {
     ] {
         b.knob(id, KNOB_LFO, x, 60.0, v);
     }
+}
 
-    b.section("comp", "bg_comp", 526.0, 420.0);
+fn comp(b: &mut Builder, sfx: &str) {
+    b.section(
+        &format!("comp{sfx}"),
+        &format!("bg_comp{sfx}"),
+        526.0,
+        420.0,
+    );
     fx_header(b, true, 3);
     b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     for i in 0..9 {
@@ -747,8 +780,9 @@ pub fn compose(parts: &[Part], l: &Layout) -> String {
     };
     let mut s = Svg::new();
     s.rect(0.0, 0.0, PANEL_W, PANEL_H, 0.0, pal::BG);
-    // the demo has one delay: the second's face and knobs (this fork) are left out
-    let second = |id: &str| id.contains("delay_b");
+    // the demo has one of each effect: the second ones' faces and knobs (this fork) are left
+    // out
+    let second = |id: &str| id.contains("_b.") || id.ends_with("_b") || id.contains("_b_");
     for (name, x, y) in l.backgrounds.iter().filter(|b| !second(&b.0)) {
         s.g_at(*x, *y).raw(&get(name).body).end_g();
     }

@@ -386,6 +386,9 @@ pub struct Snapshot {
     pub channel_meters: [u8; 4],
     /// The master meter bytes, left and right.
     pub master_meters: [u8; 2],
+    /// This fork: the second DIST's, PCF's and COMP's meter bytes (gain, peak), 0..127
+    /// ([`orb_engine::frame::Frame::meters_b`]).
+    pub meters_b: [u8; 4],
     /// The pattern each channel device plays (303 #1, 303 #2, 808, 909).
     pub patterns: [Option<u8>; 4],
     /// This fork: the 303s' sub-oscillator levels, live and as a save keeps them (the
@@ -897,6 +900,7 @@ impl Audio {
             *m = ch.meter;
         }
         s.master_meters = f.state.master_meter;
+        s.meters_b = f.meters_b;
         for (p, d) in s.patterns.iter_mut().zip(&f.devices.channels) {
             *p = d.playing_pattern();
         }

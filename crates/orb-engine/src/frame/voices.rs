@@ -122,7 +122,13 @@ impl InsertCopy {
 
     /// The song's insert's changed controller bytes, into the copy.
     pub fn follow(&mut self, src: &dyn InsertEffect) {
-        for (i, (&v, old)) in src.live().iter().zip(self.live.iter_mut()).enumerate() {
+        self.set_params(src.live());
+    }
+
+    /// The changed bytes of `params` (the first controllers), into the copy (this fork: a
+    /// second insert's own controllers, [`super::MixerParams::wet_b`]).
+    pub fn set_params(&mut self, params: &[u8]) {
+        for (i, (&v, old)) in params.iter().zip(self.live.iter_mut()).enumerate() {
             if v != *old {
                 self.ins.set_param(i as u8, v);
                 *old = v;

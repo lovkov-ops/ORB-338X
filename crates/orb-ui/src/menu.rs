@@ -778,16 +778,26 @@ impl App {
             song.sub = g.sub;
             song.sub_events = g.sub_track.clone();
             // and the master's limiter
-            song.fork_tracks = crate::document::LIMIT_CTRLS
-                .into_iter()
-                .enumerate()
-                .map(|(i, ctrl)| orb_engine::song::ForkTrack {
-                    device: orb_engine::song::Device::Mixer,
-                    ctrl,
-                    value: g.limit[i],
-                    events: g.limit_track[i].clone(),
-                })
-                .collect();
+            song.fork_tracks =
+                crate::document::LIMIT_CTRLS
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, ctrl)| orb_engine::song::ForkTrack {
+                        device: orb_engine::song::Device::Mixer,
+                        ctrl,
+                        value: g.limit[i],
+                        events: g.limit_track[i].clone(),
+                    })
+                    // and the effects slots (this fork)
+                    .chain(g.mixer_fx.iter().map(|(ctrl, value, events)| {
+                        orb_engine::song::ForkTrack {
+                            device: orb_engine::song::Device::Mixer,
+                            ctrl: *ctrl,
+                            value: *value,
+                            events: events.clone(),
+                        }
+                    }))
+                    .collect();
             song
         });
         let song = match song {

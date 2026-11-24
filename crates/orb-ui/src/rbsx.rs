@@ -69,7 +69,15 @@ pub struct GenState {
     /// the pattern-mode values, and their song-mode tracks' events, as `sub` and `sub_track`.
     pub limit: [u8; 2],
     pub limit_track: [Vec<(i32, u8)>; 2],
+    /// The effects slots (this fork): each mixer controller of theirs that is not at a new
+    /// song's value or has song-mode events (`crate::link::fork_mixer_ids`): the controller,
+    /// its pattern-mode value and its track's events, in controller order.
+    pub mixer_fx: Vec<FxSetting>,
 }
+
+/// One mixer controller of the effects slots an `.rbsx` keeps ([`GenState::mixer_fx`]): the
+/// controller, its value and its song-mode track's events `(tick, value)`.
+pub type FxSetting = (u8, u8, Vec<(i32, u8)>);
 
 /// The names of the master's limiter's two values in an `.rbsx` (this fork): LIMIT, AMT.
 const LIMIT_KEYS: [&str; 2] = ["master.limit", "master.limit_amt"];
@@ -184,6 +192,14 @@ pub fn encode(state: &GenState) -> Vec<u8> {
         lines.push(format!("{key}={}", state.limit[i]));
         lines.push(format!("{key}.track={}", track_text(&state.limit_track[i])));
     }
+    // the effects slots, by their panel ids
+    let names = crate::link::fork_mixer_ids();
+    for (g, v, track) in &state.mixer_fx {
+        if let Some((id, _)) = names.iter().find(|x| x.1 == *g) {
+            lines.push(format!("{id}={v}"));
+            lines.push(format!("{id}.track={}", track_text(track)));
+        }
+    }
     for c in 0..4 {
         let n = c + 1;
         lines.push(format!("mixer{n}.solo={}", state.mix_solo[c] as u8));
@@ -295,6 +311,16 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
                 .map(|(t, v)| (t, v.min(max as u8)))
                 .collect();
         }
+    }
+    // the effects slots (an older file without them: a new song's)
+    for (id, g) in crate::link::fork_mixer_ids() {
+        let Some(v) = get(&id).and_then(|v| v.parse::<u32>().ok()) else {
+            continue;
+        };
+        let track = get(&format!("{id}.track"))
+            .map(track_of)
+            .unwrap_or_default();
+        state.mixer_fx.push((g, v.min(127) as u8, track));
     }
     for c in 0..4 {
         let n = c + 1;
@@ -499,6 +525,7 @@ impl App {
                     .map(|l| crate::document::limit_events(l.loaded_tracks(), i))
                     .unwrap_or_default()
             }),
+            mixer_fx: self.mixer_fx_state(),
             kits: std::array::from_fn(|k| {
                 self.kit_of(k).map(|kit| match kit {
                     orb_cli::mods::Kit::Standard => orb_cli::mods::STANDARD.to_string(),
@@ -508,6 +535,24 @@ impl App {
                 })
             }),
         }
+    }
+
+    /// The effects slots' mixer controllers an `.rbsx` keeps ([`GenState::mixer_fx`]), as a
+    /// save keeps the mixer: in song mode the pattern-mode copy, else the live values.
+    fn mixer_fx_state(&self) -> Vec<FxSetting> {
+        let Some(link) = &self.link else {
+            return Vec::new();
+        };
+        let m = link.song_mode_blocks().map_or(*link.mixer(), |b| b.mixer);
+        let new_song = orb_engine::frame::MixerParams::default();
+        crate::link::fork_mixer_ids()
+            .into_iter()
+            .filter_map(|(_, g)| {
+                let v = m.fork(g)?;
+                let track = crate::document::fork_events(link.loaded_tracks(), g);
+                (Some(v) != new_song.fork(g) || !track.is_empty()).then_some((g, v, track))
+            })
+            .collect()
     }
 
     /// Sets the GENERATE menu as a song kept it (an empty state for a song without one); the
@@ -565,6 +610,10 @@ impl App {
             for (i, ctrl) in crate::document::LIMIT_CTRLS.into_iter().enumerate() {
                 let (v, track) = (state.limit[i], &state.limit_track[i]);
                 link.send_fork_track(orb_engine::song::Device::Mixer, ctrl, v, track);
+            }
+            // the effects slots (this fork): the panel follows the engine
+            for (ctrl, v, track) in &state.mixer_fx {
+                link.send_fork_track(orb_engine::song::Device::Mixer, *ctrl, *v, track);
             }
         }
         // the drum machines' FLIP faces (this fork) and their own kits
@@ -632,6 +681,11 @@ mod tests {
         st.sub_track[1] = vec![(0, 40), (984, 110), (1008, 40)];
         st.limit = [1, 70];
         st.limit_track[1] = vec![(0, 70), (768, 127)];
+        st.mixer_fx = vec![
+            (orb_engine::frame::SLOT, 3, vec![]),
+            (orb_engine::frame::WET_B + 4, 100, vec![(0, 100), (384, 20)]),
+            (orb_engine::frame::PCF_B + 4, 30, vec![]),
+        ];
         st
     }
 
@@ -649,6 +703,10 @@ mod tests {
         assert!(text.contains("baze2.cutoff.lfo=90\nbaze2.cutoff.amount=40\n"));
         assert!(text.contains("baze2.cutoff.sync=1\nbaze2.cutoff.shape=sh\n"));
         assert!(text.contains("baze1.cutoff.amount=0\n"));
+        // (this fork) the effects slots, by their panel ids
+        assert!(text.contains("mixer.slot1=3\nmixer.slot1.track=\n"));
+        assert!(text.contains("mixer2.pcf_b=100\nmixer2.pcf_b.track=0:100,384:20\n"));
+        assert!(text.contains("pcf_b.pattern=30\n"));
         assert!(text.contains("baze2.decay.lfo=64\nbaze2.decay.amount=0\n"));
         assert_eq!(
             decode(&encode(&GenState::default())),
