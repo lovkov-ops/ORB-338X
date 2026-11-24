@@ -1585,14 +1585,14 @@ fn save_png(path: &PathBuf, image: &egui::ColorImage) -> Result<(), image::Image
 
 /// The effects a slot can hold (this fork), as an effects slot's title menu lists them.
 const FX_NAMES: [(&str, &str); 8] = [
-    ("rvrb", "RVRB (reverb)"),
-    ("delay", "DELAY"),
-    ("dist", "DIST (distortion)"),
-    ("pcf", "PCF (pattern filter)"),
-    ("cho", "CHO (chorus)"),
-    ("fla", "FLA (flanger)"),
-    ("pha", "PHA (phaser)"),
-    ("comp", "COMP (compressor)"),
+    ("rvrb", "Reverb"),
+    ("delay", "Delay"),
+    ("dist", "Distortion"),
+    ("pcf", "Pattern filter"),
+    ("cho", "Chorus"),
+    ("fla", "Flanger"),
+    ("pha", "Phaser"),
+    ("comp", "Compressor"),
 ];
 
 /// A choice in an effects slot's menu (this fork).
