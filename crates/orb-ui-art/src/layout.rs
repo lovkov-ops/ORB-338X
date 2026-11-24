@@ -594,7 +594,7 @@ fn mixer(b: &mut Builder, c: usize) {
         HEADER_METER_Y,
     );
     // PAN and the fader on the left; on the right (this fork) a small knob per effects slot
-    // under its label, then the EQ (the background's until the EQ works). cuts.rs puts them
+    // under its label, then the EQ's HI, MID and LO knobs. cuts.rs puts them
     // where the user's panel has them. The slots hold DELAY, DIST, PCF and COMP: DELAY's knob
     // is the send, DIST's, PCF's and COMP's are on above 0.
     b.pan("pan", KNOB_22, 8.0, 26.0, 0.5);
@@ -617,6 +617,16 @@ fn mixer(b: &mut Builder, c: usize) {
             34.0,
         );
         b.knob(id, KNOB_LFO, 36.0, 26.0 + 22.0 * k as f32, v);
+    }
+    // the EQ's HI, MID and LO knobs (this fork), 0 dB in the middle
+    for (k, band) in ["hi", "mid", "lo"].into_iter().enumerate() {
+        b.pan(
+            &format!("eq_{band}"),
+            KNOB_LFO,
+            54.0,
+            37.0 + 22.0 * k as f32,
+            0.5,
+        );
     }
     // the second effects' knobs (this fork: the delay's send, the others' wet amounts, 0
     // off), shown when two slots hold the effect

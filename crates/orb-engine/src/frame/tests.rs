@@ -1631,8 +1631,39 @@ fn a_second_dist_pcf_and_comp() {
     assert_eq!(m.dist_b, crate::dist::DEFAULTS[..3]);
     assert_eq!(m.pcf_b, crate::pcf::DEFAULTS[..7]);
     assert_eq!(m.comp_b, crate::comp::DEFAULTS[..3]);
-    assert!(is_fork_mixer(COMP_B + 2) && !is_fork_mixer(COMP_B + 3));
+    assert!(is_fork_mixer(COMP_B + 2) && COMP_B + 3 == EQ);
     assert_eq!(COMP_B + 3, 124);
+}
+
+/// This fork: each channel's EQ (HI, MID, LO): all at 0 dB the original's sound; a band moved
+/// changes only its channel, and back at 0 dB the sound is the original's again.
+#[test]
+fn a_channels_eq() {
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        e.frame.devices.mixer.live.channels[0].send = 100;
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        buf
+    };
+    let song = render(&|_| {});
+    let n = crate::eq::NEUTRAL;
+    assert_eq!(render(&|e| e.mixer_global(EQ, n)), song);
+    // channel 1's LO up: changed; channel 2's (silent) LO up: as the song
+    let lo = render(&|e| e.mixer_global(EQ, 127));
+    assert_ne!(lo, song);
+    assert_eq!(render(&|e| e.mixer_global(EQ + 3, 127)), song);
+    // the HI cut is another sound
+    assert_ne!(render(&|e| e.mixer_global(EQ + 2, 0)), lo);
+    assert_eq!(MixerParams::default().eq, [[n; 3]; 4]);
+    let mut m = MixerParams::default();
+    m.set_fork(EQ + 7, 10);
+    assert_eq!((m.fork(EQ + 7), m.eq[2][1]), (Some(10), 10));
+    assert!(is_fork_mixer(EQ + 11) && !is_fork_mixer(EQ + 12));
+    assert_eq!(FORK_END, EQ + 12);
 }
 
 #[test]

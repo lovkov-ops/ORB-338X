@@ -298,6 +298,9 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
             "dist_b",
             "pcf_b",
             "comp_b",
+            "eq_lo",
+            "eq_mid",
+            "eq_hi",
         ] {
             ids.push(format!("mixer{c}.{n}"));
         }
@@ -337,6 +340,10 @@ fn second_fx(id: &str) -> Option<u8> {
         .filter(|n| (1..=4).contains(n))?
         - 1;
     match name {
+        // the channel's EQ (not a second effect's, but named as one: the channel's knob)
+        "eq_lo" => Some(orb_engine::frame::EQ + 3 * c),
+        "eq_mid" => Some(orb_engine::frame::EQ + 3 * c + 1),
+        "eq_hi" => Some(orb_engine::frame::EQ + 3 * c + 2),
         "delay_b" => Some(SEND_B + c),
         "dist_b" => Some(WET_B + 3 * c),
         "pcf_b" => Some(WET_B + 3 * c + 1),
@@ -1384,7 +1391,9 @@ impl Link {
             }
         }
         for c in 0..4 {
-            for fx in ["delay_b", "dist_b", "pcf_b", "comp_b"] {
+            for fx in [
+                "delay_b", "dist_b", "pcf_b", "comp_b", "eq_lo", "eq_mid", "eq_hi",
+            ] {
                 let id = format!("mixer{}.{fx}", c + 1);
                 if let Some(v) = second_fx(&id).and_then(|g| m.fork(g)) {
                     panel.adopt(&id, v as i32);
@@ -1449,7 +1458,7 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "comp_b.threshold" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "mixer4.eq_hi" && *g == FORK_END - 1)
         );
     }
 }

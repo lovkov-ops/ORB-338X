@@ -1302,8 +1302,8 @@ fn a_double_click_sets_every_knob_to_its_value_in_a_new_song() {
     let mut h = Harness::new();
     let knobs = knob_ids();
     // (this fork: each 303's SUB knob, + 2; the master's limiter's AMT, + 1; the PCF's four
-    // sliders are knobs, + 4)
-    assert_eq!(knobs.len(), 84);
+    // sliders are knobs, + 4; the channels' EQ knobs, + 12)
+    assert_eq!(knobs.len(), 96);
     for id in &knobs {
         // the panel shows the new empty song: its value is the knob's default
         let new_song = h.app.panel.value(id).unwrap();

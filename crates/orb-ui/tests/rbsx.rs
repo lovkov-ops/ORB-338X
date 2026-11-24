@@ -375,6 +375,9 @@ fn an_rbsx_keeps_the_effects_slots() {
     h.app.panel.put_slot(0, FX_PCF);
     h.app.panel.set_knob("mixer2.pcf_b", 1000);
     h.app.panel.arrow("pcf_b.pattern_up");
+    // and channel 1's EQ: the lows up, the highs down
+    h.app.panel.set_knob("mixer1.eq_lo", 1000);
+    h.app.panel.set_knob("mixer1.eq_hi", 0);
     h.calls(2);
     h.calls(2);
     let moves = [(0, 127), (384, 40)];
@@ -387,6 +390,7 @@ fn an_rbsx_keeps_the_effects_slots() {
     let snap = *h.app.link.as_mut().unwrap().player().snapshot();
     assert_eq!(snap.mixer.slots[0], FX_PCF);
     assert_eq!(snap.mixer.wet_b[1][1], 127);
+    assert_eq!(snap.mixer.eq[0], [127, 64, 0]);
     let kept = h.app.gen_state();
     assert!(
         kept.mixer_fx
@@ -415,6 +419,8 @@ fn an_rbsx_keeps_the_effects_slots() {
     assert_eq!(snap2.mixer.slots, snap.mixer.slots);
     assert_eq!(snap2.mixer.wet_b, snap.mixer.wet_b);
     assert_eq!(snap2.mixer.pcf_b, snap.mixer.pcf_b);
+    assert_eq!(snap2.mixer.eq, snap.mixer.eq);
+    assert_eq!(h2.app.panel.value("mixer1.eq_lo"), Some(127));
     assert_eq!(h2.app.panel.slots, snap.mixer.slots);
     assert!(!h2.app.panel.out_of_slots("pcf_b", "freq"));
     assert!(!h2.app.doc.modified, "opening is no edit");

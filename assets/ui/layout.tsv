@@ -396,6 +396,9 @@ mixer1.pcf_label	mixer1	label	mixlbl_pcf	487.5	134	20	4
 mixer1.pcf	mixer1	knob	knob_lfo	491.5	120	12	12
 mixer1.comp_label	mixer1	label	mixlbl_comp	487.5	156	20	4
 mixer1.comp	mixer1	knob	knob_lfo	491.5	142	12	12
+mixer1.eq_hi	mixer1	knob	knob_lfo	509.5	86.42	12	12
+mixer1.eq_mid	mixer1	knob	knob_lfo	509.5	108.42	12	12
+mixer1.eq_lo	mixer1	knob	knob_lfo	509.5	130.42	12	12
 mixer1.delay_b_label	mixer1	label	mixlbl_delay	487.5	90	20	4
 mixer1.delay_b	mixer1	knob	knob_lfo	491.5	76	12	12
 mixer1.dist_b_label	mixer1	label	mixlbl_dist	487.5	112	20	4
@@ -417,6 +420,9 @@ mixer2.pcf_label	mixer2	label	mixlbl_pcf	487.5	249	20	4
 mixer2.pcf	mixer2	knob	knob_lfo	491.5	235	12	12
 mixer2.comp_label	mixer2	label	mixlbl_comp	487.5	271	20	4
 mixer2.comp	mixer2	knob	knob_lfo	491.5	257	12	12
+mixer2.eq_hi	mixer2	knob	knob_lfo	509.5	201.42	12	12
+mixer2.eq_mid	mixer2	knob	knob_lfo	509.5	223.42	12	12
+mixer2.eq_lo	mixer2	knob	knob_lfo	509.5	245.42	12	12
 mixer2.delay_b_label	mixer2	label	mixlbl_delay	487.5	205	20	4
 mixer2.delay_b	mixer2	knob	knob_lfo	491.5	191	12	12
 mixer2.dist_b_label	mixer2	label	mixlbl_dist	487.5	227	20	4
@@ -438,6 +444,9 @@ mixer3.pcf_label	mixer3	label	mixlbl_pcf	487.5	364	20	4
 mixer3.pcf	mixer3	knob	knob_lfo	491.5	350	12	12
 mixer3.comp_label	mixer3	label	mixlbl_comp	487.5	386	20	4
 mixer3.comp	mixer3	knob	knob_lfo	491.5	372	12	12
+mixer3.eq_hi	mixer3	knob	knob_lfo	509.5	316.42	12	12
+mixer3.eq_mid	mixer3	knob	knob_lfo	509.5	338.42	12	12
+mixer3.eq_lo	mixer3	knob	knob_lfo	509.5	360.42	12	12
 mixer3.delay_b_label	mixer3	label	mixlbl_delay	487.5	320	20	4
 mixer3.delay_b	mixer3	knob	knob_lfo	491.5	306	12	12
 mixer3.dist_b_label	mixer3	label	mixlbl_dist	487.5	342	20	4
@@ -459,6 +468,9 @@ mixer4.pcf_label	mixer4	label	mixlbl_pcf	487.5	479	20	4
 mixer4.pcf	mixer4	knob	knob_lfo	491.5	465	12	12
 mixer4.comp_label	mixer4	label	mixlbl_comp	487.5	501	20	4
 mixer4.comp	mixer4	knob	knob_lfo	491.5	487	12	12
+mixer4.eq_hi	mixer4	knob	knob_lfo	509.5	431.42	12	12
+mixer4.eq_mid	mixer4	knob	knob_lfo	509.5	453.42	12	12
+mixer4.eq_lo	mixer4	knob	knob_lfo	509.5	475.42	12	12
 mixer4.delay_b_label	mixer4	label	mixlbl_delay	487.5	435	20	4
 mixer4.delay_b	mixer4	knob	knob_lfo	491.5	421	12	12
 mixer4.dist_b_label	mixer4	label	mixlbl_dist	487.5	457	20	4

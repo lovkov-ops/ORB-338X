@@ -1232,7 +1232,8 @@ impl App {
                 paint_arc(ui, view, c, k, a, b);
             }
         } else if k.ring_r > 0.0 {
-            let bipolar = c.name() == "pan";
+            // a PAN and (this fork) an EQ knob light from the middle
+            let bipolar = c.name() == "pan" || c.name().starts_with("eq_");
             let a0 = if bipolar { 0.0 } else { -135.0 };
             // while the LFO moves the value, the arc shows where it is now (lfo.rs)
             let arc = self.lfo_arc(&c.id).unwrap_or(p);

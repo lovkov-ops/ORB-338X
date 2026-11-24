@@ -1540,8 +1540,8 @@ fn mixer_and_effects(c: &mut Cuts) {
     // the fader's parts as mockup 1 draws them
     fader(c, m, "mixer1.level", "10.12", "10.13", true);
     // the channels as the user's panel with the effects rack draws them (`Mockup::panel_fx`):
-    // PAN, the fader, a small knob per effects slot under its label, the EQ (its knobs are
-    // the background's until the EQ works)
+    // PAN, the fader, a small knob per effects slot under its label, the EQ's three knobs
+    // (their labels stay the background's)
     let mf = Mockup::panel_fx();
     for (k, kind) in FX_KINDS.iter().enumerate() {
         c.parts
@@ -1556,18 +1556,22 @@ fn mixer_and_effects(c: &mut Cuts) {
         meter: usize,
         pan: usize,
         knobs: [(usize, usize); 4],
+        // the EQ's HI, MID and LO knobs (their labels stay the background's)
+        eq: [usize; 3],
     }
     let one = Ch {
         leds: [19, 20],
         meter: 23,
         pan: 24,
         knobs: [(3, 2), (5, 4), (7, 6), (13, 8)],
+        eq: [14, 15, 16],
     };
     let two = Ch {
         leds: [4, 5],
         meter: 8,
         pan: 9,
         knobs: [(11, 10), (13, 12), (15, 14), (21, 16)],
+        eq: [22, 23, 24],
     };
     for ch in 0..4 {
         let g = 12 + ch;
@@ -1587,6 +1591,13 @@ fn mixer_and_effects(c: &mut Cuts) {
         let (px, py) = knob22(c, mf, &at(n.pan), None);
         c.place(&format!("{sec}.pan"), px - 11.0, py - 11.0);
         fader(c, mf, &format!("{sec}.level"), &at(25), &at(26), false);
+        // the EQ's knobs (this fork)
+        for (&g_eq, band) in n.eq.iter().zip(["hi", "mid", "lo"]) {
+            let v = grp(mf, &at(g_eq));
+            let kb = bbox(&v);
+            c.take(&v);
+            c.place(&format!("{sec}.eq_{band}"), kb.cx() - 6.0, kb.cy() - 6.0);
+        }
         // the slots' knobs (the default kinds: DELAY's send, DIST, PCF, COMP) and their labels
         for (slot, &(knob_g, label_g)) in n.knobs.iter().enumerate() {
             let v = grp(mf, &at(knob_g));

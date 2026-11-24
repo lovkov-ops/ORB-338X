@@ -133,8 +133,9 @@ mod tests {
         // (this fork's FLIP faces: KIT, 11 PAN knobs and 11 FX keys each, + 46; each 303's SUB
         // knob, + 2; the master's LIMIT key and AMT knob in place of its COMP key, + 1; the
         // mixer's slot knobs in place of its keys and their labels, + 16; the slots' menus, + 4;
-        // the second delay's face, + 9, and its sends and their labels, + 8)
-        assert_eq!(c.len(), 551);
+        // the second delay's face, + 9, and its sends and their labels, + 8; the other second
+        // effects' faces and knobs, + 54; the channels' EQ knobs, + 12)
+        assert_eq!(c.len(), 563);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

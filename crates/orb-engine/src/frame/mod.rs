@@ -538,6 +538,9 @@ pub struct MixerParams {
     pub dist_b: [u8; 3],
     pub pcf_b: [u8; 7],
     pub comp_b: [u8; 3],
+    /// This fork: each channel's EQ (`eq[c][band]`, band 0 LO, 1 MID, 2 HI; [`EQ`]),
+    /// [`crate::eq::NEUTRAL`] 0 dB.
+    pub eq: [[u8; 3]; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -578,8 +581,12 @@ pub const COMP_B: u8 = PCF_B + 7;
 const DIST_B_DEFAULTS: [u8; 3] = [1, 70, 0];
 const PCF_B_DEFAULTS: [u8; 7] = [1, 70, 64, 40, 24, 90, 1];
 const COMP_B_DEFAULTS: [u8; 3] = [1, 70, 64];
+/// This fork: the mixer's controller of channel c's EQ band (0 LO, 1 MID, 2 HI,
+/// [`MixerParams::eq`]): `EQ + 3c + band`. (Above 127: no song file of the original has a
+/// mixer controller there.)
+pub const EQ: u8 = COMP_B + 3;
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = COMP_B + 3;
+pub const FORK_END: u8 = EQ + 12;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
@@ -595,6 +602,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= EQ && is_fork_mixer(ctrl) => {
+                let x = (ctrl - EQ) as usize;
+                Some(self.eq[x / 3][x % 3])
+            }
             _ if ctrl >= WET_B && is_fork_mixer(ctrl) => Some(*self.b_ctrl(ctrl)),
             _ if ctrl >= SEND_B && is_fork_mixer(ctrl) => {
                 Some(self.send_b[(ctrl - SEND_B) as usize])
@@ -620,6 +631,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= EQ && is_fork_mixer(ctrl) => {
+                let x = (ctrl - EQ) as usize;
+                self.eq[x / 3][x % 3] = value.min(127);
+            }
             _ if ctrl >= WET_B && is_fork_mixer(ctrl) => {
                 let v = if ctrl < DIST_B {
                     value.min(WET_FULL)
@@ -662,6 +677,7 @@ impl MixerParams {
         self.dist_b = from.dist_b;
         self.pcf_b = from.pcf_b;
         self.comp_b = from.comp_b;
+        self.eq = from.eq;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -736,6 +752,7 @@ impl Default for MixerParams {
             dist_b: DIST_B_DEFAULTS,
             pcf_b: PCF_B_DEFAULTS,
             comp_b: COMP_B_DEFAULTS,
+            eq: [[crate::eq::NEUTRAL; 3]; 4],
         }
     }
 }
@@ -764,6 +781,7 @@ impl From<&song::Mixer> for MixerParams {
             dist_b: DIST_B_DEFAULTS,
             pcf_b: PCF_B_DEFAULTS,
             comp_b: COMP_B_DEFAULTS,
+            eq: [[crate::eq::NEUTRAL; 3]; 4],
         }
     }
 }
@@ -788,6 +806,7 @@ impl MixerParams {
             dist_b: DIST_B_DEFAULTS,
             pcf_b: PCF_B_DEFAULTS,
             comp_b: COMP_B_DEFAULTS,
+            eq: [[crate::eq::NEUTRAL; 3]; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1111,6 +1130,8 @@ pub struct Frame {
     /// This fork: the second inserts' meter bytes, each the sum of its channels' copies' (the
     /// loudest gain reduction for the compressor's): DIST, PCF, COMP gain, COMP peak.
     pub meters_b: [u8; 4],
+    /// This fork: each channel's EQ ([`MixerParams::eq`]).
+    eqs: [crate::eq::ChannelEq; 4],
     /// This fork: the second delay (two slots hold the delay), with its own line, and the
     /// controllers it was last given; its send bus, and each channel's send gain into it.
     delay_b: Option<Box<crate::delay::Delay>>,
@@ -1178,6 +1199,7 @@ impl Frame {
             copies: Default::default(),
             copies_b: Default::default(),
             meters_b: [0; 4],
+            eqs: Default::default(),
             delay_b: None,
             delay_b_set: [0; 5],
             send_b: [GUARD; BLOCK],
@@ -1225,6 +1247,8 @@ impl Frame {
             } else {
                 st((pg[0] as f64 + pg[1] as f64) * tb * VINTAGE_SEND + VINTAGE_OFFSET)
             };
+            // this fork: the channel's EQ
+            self.eqs[c].set(p.eq[c]);
             // 0x10012D1A..0x10012D96: the meter byte, then the peak decays
             let m = t[lev] as f64 * ch.peak as f64;
             ch.meter = meter_byte(m, m > METER_FULL as f64);
@@ -1515,6 +1539,18 @@ impl Frame {
                             *x = st(*x as f64 * g);
                         }
                     }
+                }
+            }
+            // this fork: the channel's EQ (not run while its bands are all at 0 dB), on the
+            // bus, or a split drum machine's sides and send
+            let eq = &mut self.eqs[c];
+            if !eq.neutral() {
+                if split_now {
+                    eq.process(0, &mut split.wet_l);
+                    eq.process(1, &mut split.wet_r);
+                    eq.process(2, &mut split.dry_l);
+                } else {
+                    eq.process(0, bus);
                 }
             }
             // the channel's left and right signals and its send source: the bus for every
@@ -2186,6 +2222,9 @@ impl Engine {
         self.frame.copies = Default::default();
         self.frame.copies_b = Default::default();
         self.frame.meters_b = [0; 4];
+        for eq in &mut self.frame.eqs {
+            eq.silence();
+        }
         // and the second delay's line
         if let Some(d) = &mut self.frame.delay_b {
             d.silence();

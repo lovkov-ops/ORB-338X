@@ -23,6 +23,7 @@ pub mod compare;
 pub mod delay;
 pub mod dist;
 pub mod drums;
+pub mod eq;
 pub mod frame;
 pub mod limiter;
 pub mod load;
