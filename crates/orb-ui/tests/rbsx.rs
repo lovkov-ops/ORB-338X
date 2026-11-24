@@ -449,3 +449,41 @@ fn an_rbsx_keeps_the_effects_slots() {
     assert!(h3.app.panel.radio_on("dist.kind0"));
     assert_eq!(h3.app.panel.slots, orb_engine::frame::DEFAULT_SLOTS);
 }
+
+/// This fork: an `.rbsx` keeps the reverb: its slot, its settings and the channels' knobs of
+/// it.
+#[test]
+fn an_rbsx_keeps_the_reverb() {
+    use orb_engine::frame::FX_RVRB;
+    let dir = tempfile::tempdir().unwrap();
+    // a new song (pattern mode: a save keeps the live mixer)
+    let mut h = Harness::new();
+    // a reverb in the DIST's slot, channel 4 sends into it, its TYPE plate, MODE mono
+    h.app.panel.put_slot(1, FX_RVRB);
+    h.app.panel.set_knob("mixer4.rvrb", 900);
+    h.app.panel.arrow("rvrb.type_up");
+    h.app.panel.arrow("rvrb.type_up");
+    h.app.panel.set_knob("rvrb.size", 1000);
+    h.calls(2);
+    h.calls(2);
+    let snap = *h.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap.mixer.slots[1], FX_RVRB);
+    assert_eq!(snap.mixer.rvrb[0][1], 2);
+    assert_eq!(snap.mixer.rvrb[0][3], 127);
+    assert!(snap.mixer.rvrb_send[3][0] > 0);
+    let out = dir.path().join("reverb.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    h2.calls(2);
+    h2.calls(2);
+    let snap2 = *h2.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap2.mixer.slots, snap.mixer.slots);
+    assert_eq!(snap2.mixer.rvrb, snap.mixer.rvrb);
+    assert_eq!(snap2.mixer.rvrb_send, snap.mixer.rvrb_send);
+    assert_eq!(h2.app.panel.display("rvrb.type"), Some(2));
+    assert!(!h2.app.panel.out_of_slots("rvrb", "size"));
+}

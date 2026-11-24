@@ -258,7 +258,7 @@ fn gr_leds(n: usize) -> [u8; 9] {
 
 /// This fork: the second effects' sections, the mixer controller of their first control, and
 /// their controls' names in controller order.
-pub const SECOND_FX: [(&str, u8, &[&str]); 10] = [
+pub const SECOND_FX: [(&str, u8, &[&str]); 12] = [
     (
         "delay_b",
         orb_engine::frame::DELAY_B,
@@ -287,7 +287,13 @@ pub const SECOND_FX: [(&str, u8, &[&str]); 10] = [
     ("fla_b", orb_engine::frame::MOD + 21, FLA_NAMES),
     ("pha", orb_engine::frame::MOD + 28, PHA_NAMES),
     ("pha_b", orb_engine::frame::MOD + 35, PHA_NAMES),
+    // and the reverb
+    ("rvrb", orb_engine::frame::RVRB, RVRB_NAMES),
+    ("rvrb_b", orb_engine::frame::RVRB + 5, RVRB_NAMES),
 ];
+
+/// This fork: the reverb's controls in controller order ([`orb_engine::reverb::ON`]..).
+const RVRB_NAMES: &[&str] = &["on", "type", "mode", "size", "decay"];
 
 /// This fork: the chorus's, the flanger's and the phaser's controls in controller order
 /// ([`orb_engine::modfx::ON`]..).
@@ -322,6 +328,7 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
         ]
         .into_iter()
         .chain(MOD_KNOBS)
+        .chain(["rvrb", "rvrb_b"])
         {
             ids.push(format!("mixer{c}.{n}"));
         }
@@ -371,6 +378,9 @@ fn second_fx(id: &str) -> Option<u8> {
         "dist_b" => Some(WET_B + 3 * c),
         "pcf_b" => Some(WET_B + 3 * c + 1),
         "comp_b" => Some(WET_B + 3 * c + 2),
+        // the sends into the reverbs
+        "rvrb" => Some(orb_engine::frame::RVRB_SEND + 2 * c),
+        "rvrb_b" => Some(orb_engine::frame::RVRB_SEND + 2 * c + 1),
         _ => MOD_KNOBS
             .iter()
             .position(|&n| n == name)
@@ -1341,6 +1351,11 @@ impl Link {
                     .insert(format!("{fx}{sfx}.meter"), meter_state(v));
             }
         }
+        // and the reverbs'
+        for (inst, id) in ["rvrb.meter", "rvrb_b.meter"].into_iter().enumerate() {
+            let v = s.meters_rvrb[inst];
+            panel.meters.insert(id.into(), meter_state(v));
+        }
         let step = |d: Device, i: usize| {
             live(d, i)
                 .filter(|&b| s.playing && b < 16)
@@ -1434,6 +1449,7 @@ impl Link {
             ]
             .into_iter()
             .chain(MOD_KNOBS)
+            .chain(["rvrb", "rvrb_b"])
             {
                 let id = format!("mixer{}.{fx}", c + 1);
                 if let Some(v) = second_fx(&id).and_then(|g| m.fork(g)) {
@@ -1501,7 +1517,7 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "mixer4.pha_b" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "mixer4.rvrb_b" && *g == FORK_END - 1)
         );
     }
 }

@@ -31,6 +31,7 @@ pub mod load;
 pub mod modfx;
 pub mod pcf;
 pub mod process;
+pub mod reverb;
 pub mod samples;
 pub mod seq;
 pub mod song;

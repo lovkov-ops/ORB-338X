@@ -1655,3 +1655,44 @@ fn the_chorus_flanger_and_phaser_reach_the_engine() {
     assert_eq!(s.mixer.mods[2][1][1], 4);
     assert_eq!(h.app.panel.display("cho.type"), Some(2));
 }
+
+/// (this fork) The reverb: a slot's menu puts it in, the channel's knob in that slot sends
+/// into it, its TYPE arrows, MODE switch and knobs reach the engine; a second one has its own.
+#[test]
+fn the_reverb_reaches_the_engine() {
+    use orb_engine::frame::{FX_RVRB, RVRB, RVRB_SEND};
+    use orb_ui::link::{MixerTarget::Global, mixer_target};
+    for (id, g) in [
+        ("rvrb.on", RVRB),
+        ("rvrb.type", RVRB + 1),
+        ("rvrb.decay", RVRB + 4),
+        ("rvrb_b.mode", RVRB + 7),
+        ("rvrb_b.size", RVRB + 8),
+        ("mixer1.rvrb", RVRB_SEND),
+        ("mixer3.rvrb_b", RVRB_SEND + 5),
+        ("mixer4.rvrb_b", RVRB_SEND + 7),
+    ] {
+        assert_eq!(mixer_target(id), Some(Global(g)), "{id}");
+    }
+    let mut h = Harness::new();
+    assert!(h.app.panel.out_of_slots("rvrb", "size"));
+    assert!(h.app.panel.can_put(1, FX_RVRB));
+    h.app.panel.put_slot(1, FX_RVRB);
+    assert!(!h.app.panel.out_of_slots("rvrb", "size"));
+    h.app.panel.set_knob("mixer2.rvrb", 800);
+    h.app.panel.arrow("rvrb.type_up");
+    h.app.panel.arrow("rvrb.type_up");
+    // a second one, its DECAY all the way down
+    h.app.panel.put_slot(2, FX_RVRB);
+    assert!(!h.app.panel.can_put(3, FX_RVRB));
+    assert!(!h.app.panel.out_of_slots("rvrb_b", "decay"));
+    h.app.panel.set_knob("rvrb_b.decay", -1000);
+    h.frame(vec![]);
+    h.calls(2);
+    let s = h.snap();
+    assert_eq!(s.mixer.slots[1..3], [FX_RVRB, FX_RVRB]);
+    assert!(s.mixer.rvrb_send[1][0] > 0);
+    assert_eq!(s.mixer.rvrb[0][1], 2);
+    assert_eq!(s.mixer.rvrb[1][4], 0);
+    assert_eq!(h.app.panel.display("rvrb.type"), Some(2));
+}

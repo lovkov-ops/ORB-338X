@@ -1903,5 +1903,76 @@ fn a_chorus_flanger_and_phaser() {
     m.set_fork(MOD + 41, 7);
     assert_eq!(m.mods[2][1][6], 7);
     assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
-    assert_eq!(FORK_END, MOD_SEND + 24);
+    assert_eq!(RVRB, MOD_SEND + 24);
+}
+
+/// (this fork) The reverb: not heard until a slot holds it and a channel sends into it; each
+/// TYPE its own sound, metered; a second one with its own controllers.
+#[test]
+fn a_reverb() {
+    use crate::reverb::{MODE, TYPE, TYPES};
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        (buf, e)
+    };
+    let (song, _) = render(&|_| {});
+    // in the delay's slot (the delay is then not heard: no channel sent into it), no send
+    let slot = |e: &mut Engine| e.mixer_global(SLOT, FX_RVRB);
+    let (quiet, e) = render(&slot);
+    assert_eq!(quiet, song);
+    assert!(e.frame.rvrb[0].is_none());
+    let send = |e: &mut Engine| e.mixer_global(RVRB_SEND, 100);
+    assert_eq!(render(&send).0, song);
+    let on = |e: &mut Engine| {
+        slot(e);
+        send(e);
+    };
+    let (b, e) = render(&on);
+    assert_ne!(b, song);
+    assert!(e.frame.meters_rvrb[0] > 0);
+    // switched off: the song
+    assert_eq!(
+        render(&|e| {
+            on(e);
+            e.mixer_global(RVRB, 0);
+        })
+        .0,
+        song
+    );
+    // every TYPE, mono: other sounds
+    let mut all = vec![b.clone()];
+    for t in 1..TYPES {
+        let (x, _) = render(&|e| {
+            on(e);
+            e.mixer_global(RVRB + TYPE as u8, t);
+        });
+        assert!(!all.contains(&x), "type {t}");
+        all.push(x);
+    }
+    let (mono, _) = render(&|e| {
+        on(e);
+        e.mixer_global(RVRB + MODE as u8, 1);
+    });
+    assert_ne!(mono, b);
+    // a second one in the DIST's slot, its own send
+    let (two, e) = render(&|e| {
+        on(e);
+        e.mixer_global(SLOT + 1, FX_RVRB);
+        e.mixer_global(RVRB_SEND + 1, 100);
+    });
+    assert!(e.frame.rvrb[1].is_some());
+    assert_ne!(two, b);
+    let mut m = MixerParams::default();
+    assert_eq!(m.rvrb[1], crate::reverb::DEFAULTS);
+    m.set_fork(RVRB_SEND + 7, 99);
+    assert_eq!((m.fork(RVRB_SEND + 7), m.rvrb_send[3][1]), (Some(99), 99));
+    m.set_fork(RVRB + 9, 7);
+    assert_eq!(m.rvrb[1][4], 7);
+    assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
+    assert_eq!(FORK_END, RVRB_SEND + 8);
 }

@@ -632,6 +632,10 @@ fn mixer(b: &mut Builder, c: usize) {
     // off), shown when two slots hold the effect
     // the chorus's, the flanger's and the phaser's sends (this fork), shown when a slot holds
     // the effect
+    for id in ["rvrb", "rvrb_b"] {
+        b.part(&format!("{id}_label"), "label", "mixlbl_rvrb", 31.0, 34.0);
+        b.knob(id, KNOB_LFO, 36.0, 26.0, 0.0);
+    }
     for id in ["cho", "fla", "pha", "cho_b", "fla_b", "pha_b"] {
         b.part(
             &format!("{id}_label"),
@@ -691,6 +695,20 @@ fn effects(b: &mut Builder) {
     b.part("triplet", "vswitch", "switch_fx_0", 49.0, 22.0);
     b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
     b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
+
+    // the reverb (this fork) and its second one, shown when a slot holds it, in the delay's
+    // slot here (the panel moves each to its slot)
+    for sec in ["rvrb", "rvrb_b"] {
+        b.section(sec, &format!("bg_{sec}"), 526.0, 150.0);
+        fx_header(b, true, 4);
+        b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
+        b.display("type", 9.0, 23.0, 18.0, 2, "HA");
+        b.part("type_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
+        b.part("type_down", "repeat", "arrow_dec_rest", 29.0, 31.0);
+        b.part("mode", "vswitch", "switch_fx_0", 49.0, 22.0);
+        b.knob("size", KNOB_FX, 10.0, 55.0, 0.5);
+        b.knob("decay", KNOB_FX, 51.0, 55.0, 0.5);
+    }
 
     // the second delay (this fork), shown when two slots hold the delay
     b.section("delay_b", "bg_delay_b", 526.0, 150.0);
@@ -848,7 +866,7 @@ pub fn compose(parts: &[Part], l: &Layout) -> String {
     // the demo has the original's effects, one of each: the second ones' faces and knobs and
     // the chorus's, the flanger's and the phaser's (this fork) are left out
     let second = |id: &str| {
-        let modfx = ["cho", "fla", "pha"].iter().any(|fx| {
+        let modfx = ["rvrb", "cho", "fla", "pha"].iter().any(|fx| {
             id.starts_with(&format!("{fx}."))
                 || id.starts_with(&format!("{fx}_b."))
                 || id.ends_with(&format!(".{fx}"))

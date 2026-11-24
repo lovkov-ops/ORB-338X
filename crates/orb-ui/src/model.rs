@@ -347,9 +347,11 @@ pub fn mixer_insert(id: &str) -> Option<(usize, &str)> {
 pub const FX_KINDS: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
 
 /// This fork: the effects the engine has so far (a slot's menu offers only these).
-pub const FX_READY: [u8; 7] = {
+pub const FX_READY: [u8; 8] = {
     use orb_engine::frame::*;
-    [FX_DELAY, FX_DIST, FX_PCF, FX_CHO, FX_FLA, FX_PHA, FX_COMP]
+    [
+        FX_RVRB, FX_DELAY, FX_DIST, FX_PCF, FX_CHO, FX_FLA, FX_PHA, FX_COMP,
+    ]
 };
 
 /// This fork: the effect code of a section or knob name (`delay`, `dist`, ...).
@@ -431,7 +433,7 @@ impl Panel {
                     let v = match c.name() {
                         "shuffle" | "delay" | "limit_amt" => 0,
                         // this fork: the channels' sends into the chorus, flanger and phaser
-                        "cho" | "fla" | "pha" | "cho_b" | "fla_b" | "pha_b"
+                        "cho" | "fla" | "pha" | "cho_b" | "fla_b" | "pha_b" | "rvrb" | "rvrb_b"
                             if c.section.starts_with("mixer") =>
                         {
                             0
@@ -474,6 +476,7 @@ impl Panel {
             p.numbers.insert(format!("cho{sfx}.type"), 1);
             p.numbers.insert(format!("fla{sfx}.type"), 1);
             p.numbers.insert(format!("pha{sfx}.stages"), 6);
+            p.numbers.insert(format!("rvrb{sfx}.type"), 0);
         }
         // the DISTs' kinds (this fork): the classic one
         p.numbers.insert("dist.kind".into(), 0);
@@ -714,7 +717,9 @@ impl Panel {
             .position(|&s| s == fx)
             .or((orb_engine::frame::FX_CHO..=orb_engine::frame::FX_PHA)
                 .contains(&fx)
-                .then_some(2));
+                .then_some(2))
+            // the reverb in the delay's
+            .or((fx == orb_engine::frame::FX_RVRB).then_some(0));
         match (home, self.slot_of(fx, inst)) {
             (Some(home), Some(now)) => step * (now as f32 - home as f32),
             _ => 0.0,
@@ -1350,6 +1355,13 @@ impl Panel {
             ("cho" | "cho_b" | "fla" | "fla_b", "type") => {
                 let id = format!("{sec}.type");
                 let v = (self.numbers[&id] + d).clamp(1, 4);
+                self.numbers.insert(id.clone(), v);
+                (id, v)
+            }
+            // the reverb's TYPE (this fork): HA, rO, PL, SP
+            ("rvrb" | "rvrb_b", "type") => {
+                let id = format!("{sec}.type");
+                let v = (self.numbers[&id] + d).clamp(0, 3);
                 self.numbers.insert(id.clone(), v);
                 (id, v)
             }
@@ -2088,7 +2100,7 @@ mod tests {
 
     #[test]
     fn a_slots_menu_swaps_effects_and_moves_their_controls() {
-        use orb_engine::frame::{FX_COMP, FX_DELAY, FX_DIST, FX_PCF, FX_RVRB};
+        use orb_engine::frame::{FX_COMP, FX_DELAY, FX_DIST, FX_PCF};
         // this fork: the DIST slot (the second) and the COMP slot (the fourth) swap
         let mut p = Panel::new();
         assert_eq!(p.slot_dy("comp", "ratio"), 0.0);
@@ -2116,11 +2128,8 @@ mod tests {
         assert!(p.out_of_slots("mixer2", "pcf_label") && !p.out_of_slots("mixer2", "delay_b"));
         assert_eq!(p.slot_dy("delay_b", "pan"), 180.0);
         assert_eq!(p.slot_dy("mixer1", "delay_b"), 44.0);
-        // not a third delay, not an effect the engine does not have; a second DIST, not a
-        // third
-        for (s, fx) in [(1, FX_DELAY), (1, FX_RVRB)] {
-            assert!(!p.can_put(s, fx), "{s} {fx}");
-        }
+        // not a third delay; a second DIST, not a third
+        assert!(!p.can_put(1, FX_DELAY));
         assert!(p.can_put(1, FX_DIST));
         p.put_slot(1, FX_DIST);
         assert_eq!(p.slots, [FX_DELAY, FX_DIST, FX_DELAY, FX_DIST]);
@@ -2295,8 +2304,8 @@ mod tests {
             .filter(|c| matches!(c.kind.as_str(), "switch" | "hswitch" | "vswitch"))
             .collect();
         // (this fork: the second delay's 3/16 and the second PCF's mode, + 2; the chorus's, the
-        // flanger's and the phaser's MODE, first and second, + 6)
-        assert_eq!(switches.len(), 18);
+        // flanger's and the phaser's MODE, first and second, + 6; the reverb's, + 2)
+        assert_eq!(switches.len(), 20);
         for c in &switches {
             if c.id == "transport.mode" {
                 // the mode switch shows a flag, not a controller value

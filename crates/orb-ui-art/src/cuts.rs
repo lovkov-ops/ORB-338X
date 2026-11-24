@@ -291,6 +291,20 @@ const DIGITS: [[bool; 7]; 10] = {
     ]
 };
 
+/// This fork: the letters a display shows (the reverb's TYPEs, `crate::layout`), as digits'
+/// frames `{family}_{letter}`: H, A, r, P, L (O is the 0, S the 5).
+const LETTERS: [(char, [bool; 7]); 5] = {
+    const T: bool = true;
+    const F: bool = false;
+    [
+        ('H', [F, T, T, F, T, T, T]),
+        ('A', [T, T, T, F, T, T, T]),
+        ('r', [F, F, F, F, T, F, T]),
+        ('P', [T, T, F, F, T, T, T]),
+        ('L', [F, F, F, T, T, T, F]),
+    ]
+};
+
 /// The lit and unlit color of the segments.
 const SEG_ON: &str = "#ff3b2f";
 const SEG_OFF: &str = "#3a1a17";
@@ -312,6 +326,12 @@ fn digits(c: &mut Cuts, family: &str, seg: &[&Shape], x: f32, y: f32) {
     for (d, on) in DIGITS.iter().enumerate() {
         c.parts
             .push(part(&format!("{family}_{d}"), x, y, 9.0, 16.0, &one(*on)));
+    }
+    if family == "segb" {
+        for (ch, on) in LETTERS {
+            c.parts
+                .push(part(&format!("{family}_{ch}"), x, y, 9.0, 16.0, &one(on)));
+        }
     }
     c.parts.push(part(
         &format!("{family}_blank"),
@@ -1642,6 +1662,18 @@ fn mixer_and_effects(c: &mut Cuts) {
             c.place(&k.replacen(".pcf", &format!(".{fx}"), 1), at.0, at.1);
         }
     }
+    // and of the reverb: where the delay's send is
+    let delay: Vec<(String, (f32, f32))> = c
+        .places
+        .iter()
+        .filter(|(k, _)| {
+            k.starts_with("mixer") && (k.ends_with(".delay") || k.ends_with(".delay_label"))
+        })
+        .map(|(k, &at)| (k.clone(), at))
+        .collect();
+    for (k, at) in delay {
+        c.place(&k.replacen(".delay", ".rvrb", 1), at.0, at.1);
+    }
     c.background(
         mf,
         "mix-303-a",
@@ -1760,6 +1792,24 @@ fn mixer_and_effects(c: &mut Cuts) {
     let (fx, fy) = knob22(c, mf, "17.17", None);
     c.place("delay.feedback", fx - 11.0, fy - 11.0);
     c.background(mf, "delay", "bg_delay", Bx::new(526.0, 150.0, 82.0, 90.0));
+    // the reverb (this fork; the mockup has it in the delay's slot): its TYPE display and
+    // arrows, its MODE switch, SIZE and DECAY
+    header(c, "rvrb", "18.12", "18.13");
+    title(c, "rvrb", 150.0);
+    let d = digits_of("18.5", 2);
+    c.take(&d);
+    let (x, y) = display_at(&d[..7], 18.0, 2);
+    c.place("rvrb.type", x, y);
+    arrows(c, "rvrb", "18.14", "type");
+    let v = grp(mf, "18.15");
+    let b = bbox(&v);
+    c.take(&v);
+    c.place("rvrb.mode", b.x0, b.y0);
+    for (g, id) in [("18.16", "size"), ("18.17", "decay")] {
+        let (x, y) = knob22(c, mf, g, None);
+        c.place(&format!("rvrb.{id}"), x - 11.0, y - 11.0);
+    }
+    c.background(mf, "rev", "bg_rvrb", Bx::new(526.0, 150.0, 82.0, 90.0));
     // dist (slot 2, 240..330): its kinds' lamps (their wells and labels the background's,
     // the third's RECT in place of the mockup's SAT); a lamp's key is its well and its label,
     // lit by the lit LED
@@ -1889,7 +1939,7 @@ fn mixer_and_effects(c: &mut Cuts) {
     // the second effects (this fork: two slots that hold an effect): the same faces, their
     // controls and their mixer knobs where the first ones' are (the panel moves them to the
     // slot that holds them)
-    const FX: [&str; 7] = ["delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
+    const FX: [&str; 8] = ["rvrb", "delay", "dist", "pcf", "cho", "fla", "pha", "comp"];
     for fx in FX {
         let mut bg = c
             .parts

@@ -228,6 +228,30 @@ pub fn tr909_step(x: f32) -> Option<usize> {
 
 /// The frame names of a seven-segment display of `n` digits showing `value`, right-aligned
 /// with blank leading zeros; `None` is a disabled display (all blank).
+/// This fork: the frames of display `id` showing `value`: the reverb's TYPE as its two
+/// letters ([`orb_engine::reverb::NAMES`]; O the 0, S the 5), others as [`digit_frames`].
+pub fn display_frames(id: &str, value: Option<i32>, n: usize) -> Vec<&'static str> {
+    if matches!(id, "rvrb.type" | "rvrb_b.type")
+        && let Some(v) = value
+    {
+        let name = orb_engine::reverb::NAMES[v.clamp(0, 3) as usize];
+        return name
+            .chars()
+            .map(|ch| match ch {
+                'H' => "seg_H",
+                'A' => "seg_A",
+                'r' => "seg_r",
+                'P' => "seg_P",
+                'L' => "seg_L",
+                'O' => "seg_0",
+                'S' => "seg_5",
+                _ => "seg_blank",
+            })
+            .collect();
+    }
+    digit_frames(value, n)
+}
+
 pub fn digit_frames(value: Option<i32>, n: usize) -> Vec<&'static str> {
     const NAMES: [&str; 10] = [
         "seg_0", "seg_1", "seg_2", "seg_3", "seg_4", "seg_5", "seg_6", "seg_7", "seg_8", "seg_9",

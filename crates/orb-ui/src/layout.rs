@@ -99,6 +99,9 @@ pub fn backgrounds() -> Vec<(&'static str, f32, f32)> {
     ] {
         v.push((bg, 526.0, 330.0));
     }
+    // and the reverb, in the delay's slot here
+    v.push(("bg_rvrb", 526.0, 150.0));
+    v.push(("bg_rvrb_b", 526.0, 150.0));
     v
 }
 
@@ -143,8 +146,9 @@ mod tests {
         // the second delay's face, + 9, and its sends and their labels, + 8; the other second
         // effects' faces and knobs, + 54; the channels' EQ knobs, + 12; the two DISTs' kind
         // lamps, + 16; the chorus's, the flanger's and the phaser's faces, first and second,
-        // 11 controls each, + 66, and the channels' sends into them and their labels, + 48)
-        assert_eq!(c.len(), 693);
+        // 11 controls each, + 66, and the channels' sends into them and their labels, + 48; the
+        // reverb's faces, 9 controls each, + 18, its sends and their labels, + 16)
+        assert_eq!(c.len(), 727);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

@@ -549,6 +549,10 @@ pub struct MixerParams {
     pub mods: [[[u8; crate::modfx::PARAMS]; 2]; 3],
     /// This fork: each channel's send into them (`mod_send[c][k][inst]`, [`MOD_SEND`]).
     pub mod_send: [[[u8; 2]; 3]; 4],
+    /// This fork: the reverb's controllers (`rvrb[inst]`, inst 0 the first, 1 the second;
+    /// [`RVRB`]) and each channel's send into it (`rvrb_send[c][inst]`, [`RVRB_SEND`]).
+    pub rvrb: [[u8; crate::reverb::PARAMS]; 2],
+    pub rvrb_send: [[u8; 2]; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -602,8 +606,13 @@ pub const DIST_KIND: u8 = EQ + 12;
 pub const MOD: u8 = DIST_KIND + 2;
 /// This fork: the mixer's controller of channel c's send into them, `MOD_SEND + 6c + 2k + inst`.
 pub const MOD_SEND: u8 = MOD + 42;
+/// This fork: the mixer's controllers of the reverb, `RVRB + 5 * inst + p` (p the reverb's
+/// controller, [`crate::reverb::ON`]..), and of channel c's send into it,
+/// `RVRB_SEND + 2c + inst`.
+pub const RVRB: u8 = MOD_SEND + 24;
+pub const RVRB_SEND: u8 = RVRB + 10;
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = MOD_SEND + 24;
+pub const FORK_END: u8 = RVRB_SEND + 8;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
@@ -619,6 +628,14 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= RVRB_SEND && is_fork_mixer(ctrl) => {
+                let x = (ctrl - RVRB_SEND) as usize;
+                Some(self.rvrb_send[x / 2][x % 2])
+            }
+            _ if ctrl >= RVRB && is_fork_mixer(ctrl) => {
+                let x = (ctrl - RVRB) as usize;
+                Some(self.rvrb[x / 5][x % 5])
+            }
             _ if ctrl >= MOD_SEND && is_fork_mixer(ctrl) => {
                 let x = (ctrl - MOD_SEND) as usize;
                 Some(self.mod_send[x / 6][x % 6 / 2][x % 2])
@@ -659,6 +676,14 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= RVRB_SEND && is_fork_mixer(ctrl) => {
+                let x = (ctrl - RVRB_SEND) as usize;
+                self.rvrb_send[x / 2][x % 2] = value.min(127);
+            }
+            _ if ctrl >= RVRB && is_fork_mixer(ctrl) => {
+                let x = (ctrl - RVRB) as usize;
+                self.rvrb[x / 5][x % 5] = value.min(127);
+            }
             _ if ctrl >= MOD_SEND && is_fork_mixer(ctrl) => {
                 let x = (ctrl - MOD_SEND) as usize;
                 self.mod_send[x / 6][x % 6 / 2][x % 2] = value.min(127);
@@ -721,6 +746,8 @@ impl MixerParams {
         self.dist_kind = from.dist_kind;
         self.mods = from.mods;
         self.mod_send = from.mod_send;
+        self.rvrb = from.rvrb;
+        self.rvrb_send = from.rvrb_send;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -799,6 +826,8 @@ impl Default for MixerParams {
             dist_kind: [crate::dist_kinds::CLASSIC; 2],
             mods: crate::modfx::DEFAULTS.map(|d| [d; 2]),
             mod_send: [[[0; 2]; 3]; 4],
+            rvrb: [crate::reverb::DEFAULTS; 2],
+            rvrb_send: [[0; 2]; 4],
         }
     }
 }
@@ -831,6 +860,8 @@ impl From<&song::Mixer> for MixerParams {
             dist_kind: [crate::dist_kinds::CLASSIC; 2],
             mods: crate::modfx::DEFAULTS.map(|d| [d; 2]),
             mod_send: [[[0; 2]; 3]; 4],
+            rvrb: [crate::reverb::DEFAULTS; 2],
+            rvrb_send: [[0; 2]; 4],
         }
     }
 }
@@ -859,6 +890,8 @@ impl MixerParams {
             dist_kind: [crate::dist_kinds::CLASSIC; 2],
             mods: crate::modfx::DEFAULTS.map(|d| [d; 2]),
             mod_send: [[[0; 2]; 3]; 4],
+            rvrb: [crate::reverb::DEFAULTS; 2],
+            rvrb_send: [[0; 2]; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1195,6 +1228,12 @@ pub struct Frame {
     mod_bus: [[Block; 2]; 3],
     mod_gain: [[[f32; 2]; 3]; 4],
     pub meters_mod: [[u8; 2]; 3],
+    /// This fork: the reverbs (`rvrb[inst]`) while a slot holds one, it is on and a channel
+    /// sends into it; their send buses, each channel's send gains, their meter bytes.
+    rvrb: [Option<Box<crate::reverb::Reverb>>; 2],
+    rvrb_bus: [Block; 2],
+    rvrb_gain: [[f32; 2]; 4],
+    pub meters_rvrb: [u8; 2],
     /// This fork: the second delay (two slots hold the delay), with its own line, and the
     /// controllers it was last given; its send bus, and each channel's send gain into it.
     delay_b: Option<Box<crate::delay::Delay>>,
@@ -1268,6 +1307,10 @@ impl Frame {
             mod_bus: [[[0.0; BLOCK]; 2]; 3],
             mod_gain: [[[0.0; 2]; 3]; 4],
             meters_mod: [[0; 2]; 3],
+            rvrb: Default::default(),
+            rvrb_bus: [[0.0; BLOCK]; 2],
+            rvrb_gain: [[0.0; 2]; 4],
+            meters_rvrb: [0; 2],
             delay_b: None,
             delay_b_set: [0; 5],
             send_b: [GUARD; BLOCK],
@@ -1325,6 +1368,15 @@ impl Frame {
                         st((pg[0] as f64 + pg[1] as f64) * ts * VINTAGE_SEND + VINTAGE_OFFSET)
                     };
                 }
+            }
+            // and into the reverbs
+            for (inst, g) in self.rvrb_gain[c].iter_mut().enumerate() {
+                let ts = t[p.rvrb_send[c][inst] as usize] as f64;
+                *g = if !self.vintage {
+                    st(t[lev] as f64 * ts + OFFSET as f64)
+                } else {
+                    st((pg[0] as f64 + pg[1] as f64) * ts * VINTAGE_SEND + VINTAGE_OFFSET)
+                };
             }
             // this fork: the channel's EQ
             self.eqs[c].set(p.eq[c]);
@@ -1460,6 +1512,20 @@ impl Frame {
                     self.mods[k][inst].get_or_insert_with(|| Box::new(crate::modfx::ModFx::new(k)));
                 self.meters_mod[k][inst] = m.meter();
             }
+        }
+        // and the reverbs
+        for inst in 0..2 {
+            let on = p.slots_of(FX_RVRB) > inst
+                && p.rvrb[inst][crate::reverb::ON] != 0
+                && (0..4).any(|c| p.rvrb_send[c][inst] != 0);
+            if !on {
+                self.rvrb[inst] = None;
+                self.rvrb_bus[inst] = [0.0; BLOCK];
+                self.meters_rvrb[inst] = 0;
+                continue;
+            }
+            let rv = self.rvrb[inst].get_or_insert_with(|| Box::new(crate::reverb::Reverb::new()));
+            self.meters_rvrb[inst] = rv.meter();
         }
         // 0x100130D7: 2 * T[master] + 1e-6
         self.state.master_target =
@@ -1714,6 +1780,16 @@ impl Frame {
                     }
                 }
             }
+            // and into the reverbs
+            for inst in 0..2 {
+                if self.rvrb[inst].is_none() {
+                    continue;
+                }
+                let sg = self.rvrb_gain[c][inst] as f64;
+                for (s, &b) in self.rvrb_bus[inst].iter_mut().zip(bs.iter()) {
+                    *s = st(b as f64 * sg + *s as f64);
+                }
+            }
             // 0x100136B7: smoothing, n = old*0.93 + target*0.07 stored as f32; the ramp steps
             // from the stored old value by (n_unrounded - old)/32 every two samples
             let old_l = ch.gain_l as f64;
@@ -1757,6 +1833,15 @@ impl Frame {
                     m.process(&mods[k][inst], bus, l, r);
                     *bus = [0.0; BLOCK];
                 }
+            }
+        }
+        // this fork: the reverbs, each on its send bus
+        let rvrb = self.devices.mixer.live.rvrb;
+        for (inst, rv) in self.rvrb.iter_mut().enumerate() {
+            if let Some(rv) = rv {
+                let bus = &mut self.rvrb_bus[inst];
+                rv.process(&rvrb[inst], bus, l, r);
+                *bus = [0.0; BLOCK];
             }
         }
         // 0x10013883: the compressor on the master
@@ -2415,6 +2500,10 @@ impl Engine {
         self.frame.mods = Default::default();
         self.frame.mod_bus = [[[0.0; BLOCK]; 2]; 3];
         self.frame.meters_mod = [[0; 2]; 3];
+        // and the reverbs
+        self.frame.rvrb = Default::default();
+        self.frame.rvrb_bus = [[0.0; BLOCK]; 2];
+        self.frame.meters_rvrb = [0; 2];
         // and the second delay's line
         if let Some(d) = &mut self.frame.delay_b {
             d.silence();
