@@ -618,6 +618,9 @@ fn mixer(b: &mut Builder, c: usize) {
         );
         b.knob(id, KNOB_LFO, 36.0, 26.0 + 22.0 * k as f32, v);
     }
+    // the send into the second delay (this fork), shown when two slots hold the delay
+    b.part("delay_b_label", "label", "mixlbl_delay", 31.0, 34.0);
+    b.knob("delay_b", KNOB_LFO, 36.0, 26.0, 0.0);
 }
 
 fn master(b: &mut Builder) {
@@ -649,6 +652,17 @@ fn fx_header(b: &mut Builder, on: bool, level: u8) {
 /// PCF (..420) and COMP (..510). Each title opens the effect menu.
 fn effects(b: &mut Builder) {
     b.section("delay", "bg_delay", 526.0, 150.0);
+    fx_header(b, false, 0);
+    b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
+    b.display("steps", 9.0, 23.0, 19.0, 2, " 3");
+    b.part("steps_up", "repeat", "arrow_inc_rest", 29.0, 22.0);
+    b.part("steps_down", "repeat", "arrow_dec_rest", 29.0, 31.0);
+    b.part("triplet", "vswitch", "switch_fx_0", 49.0, 22.0);
+    b.pan("pan", KNOB_FX, 10.0, 55.0, 0.5);
+    b.knob("feedback", KNOB_FX, 51.0, 55.0, 0.4);
+
+    // the second delay (this fork), shown when two slots hold the delay
+    b.section("delay_b", "bg_delay_b", 526.0, 150.0);
     fx_header(b, false, 0);
     b.part("menu", "fxmenu", "hit_fx_title", 23.0, 2.0);
     b.display("steps", 9.0, 23.0, 19.0, 2, " 3");
@@ -733,10 +747,12 @@ pub fn compose(parts: &[Part], l: &Layout) -> String {
     };
     let mut s = Svg::new();
     s.rect(0.0, 0.0, PANEL_W, PANEL_H, 0.0, pal::BG);
-    for (name, x, y) in &l.backgrounds {
+    // the demo has one delay: the second's face and knobs (this fork) are left out
+    let second = |id: &str| id.contains("delay_b");
+    for (name, x, y) in l.backgrounds.iter().filter(|b| !second(&b.0)) {
         s.g_at(*x, *y).raw(&get(name).body).end_g();
     }
-    for c in &l.ctls {
+    for c in l.ctls.iter().filter(|c| !second(&c.id)) {
         match &c.extra {
             Extra::Plain => {
                 s.g_at(c.x, c.y).raw(&get(&c.part).body).end_g();

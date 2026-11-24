@@ -396,6 +396,8 @@ mixer1.pcf_label	mixer1	label	mixlbl_pcf	487.5	134	20	4
 mixer1.pcf	mixer1	knob	knob_lfo	491.5	120	12	12
 mixer1.comp_label	mixer1	label	mixlbl_comp	487.5	156	20	4
 mixer1.comp	mixer1	knob	knob_lfo	491.5	142	12	12
+mixer1.delay_b_label	mixer1	label	mixlbl_delay	487.5	90	20	4
+mixer1.delay_b	mixer1	knob	knob_lfo	491.5	76	12	12
 mixer2.activity	mixer2	chanled	power_14x14_off	460	168	14	14
 mixer2.solo	mixer2	toggle	solo_14x14_off	471	168	14	14
 mixer2.meter	mixer2	meter	meter_8x12_5	514	168.25	8	14
@@ -409,6 +411,8 @@ mixer2.pcf_label	mixer2	label	mixlbl_pcf	487.5	249	20	4
 mixer2.pcf	mixer2	knob	knob_lfo	491.5	235	12	12
 mixer2.comp_label	mixer2	label	mixlbl_comp	487.5	271	20	4
 mixer2.comp	mixer2	knob	knob_lfo	491.5	257	12	12
+mixer2.delay_b_label	mixer2	label	mixlbl_delay	487.5	205	20	4
+mixer2.delay_b	mixer2	knob	knob_lfo	491.5	191	12	12
 mixer3.activity	mixer3	chanled	power_14x14_off	460	283	14	14
 mixer3.solo	mixer3	toggle	solo_14x14_off	471	283	14	14
 mixer3.meter	mixer3	meter	meter_8x12_8	514	283.25	8	14
@@ -422,6 +426,8 @@ mixer3.pcf_label	mixer3	label	mixlbl_pcf	487.5	364	20	4
 mixer3.pcf	mixer3	knob	knob_lfo	491.5	350	12	12
 mixer3.comp_label	mixer3	label	mixlbl_comp	487.5	386	20	4
 mixer3.comp	mixer3	knob	knob_lfo	491.5	372	12	12
+mixer3.delay_b_label	mixer3	label	mixlbl_delay	487.5	320	20	4
+mixer3.delay_b	mixer3	knob	knob_lfo	491.5	306	12	12
 mixer4.activity	mixer4	chanled	power_14x14_off	460	398	14	14
 mixer4.solo	mixer4	toggle	solo_14x14_off	471	398	14	14
 mixer4.meter	mixer4	meter	meter_8x12_3	514	398.25	8	14
@@ -435,6 +441,8 @@ mixer4.pcf_label	mixer4	label	mixlbl_pcf	487.5	479	20	4
 mixer4.pcf	mixer4	knob	knob_lfo	491.5	465	12	12
 mixer4.comp_label	mixer4	label	mixlbl_comp	487.5	501	20	4
 mixer4.comp	mixer4	knob	knob_lfo	491.5	487	12	12
+mixer4.delay_b_label	mixer4	label	mixlbl_delay	487.5	435	20	4
+mixer4.delay_b	mixer4	knob	knob_lfo	491.5	421	12	12
 master.meter_l	master	meter	meter_15x56_8	542	74	15	56
 master.meter_r	master	meter	meter_15x56_7	577	74	15	56
 master.fader	master	fader	fader_track	559	75	15	54
@@ -449,6 +457,15 @@ delay.steps_down	delay	repeat	arrow_dec_rest	556.5	181.5	10	8
 delay.triplet	delay	vswitch	switch_fx_0	575	172	9	18
 delay.pan	delay	knob	knob_fx	536	205	22	22
 delay.feedback	delay	knob	knob_fx	577	205	22	22
+delay_b.on	delay_b	toggle	power_14x14_off	530	153	14	14
+delay_b.meter	delay_b	meter	meter_8x12_0	596	153.25	8	14
+delay_b.menu	delay_b	fxmenu	hit_fx_title	549	152	36	15
+delay_b.steps	delay_b	display	segb_0..9,segb_blank	535	172.5	19	16
+delay_b.steps_up	delay_b	repeat	arrow_inc_rest	556.5	172.5	10	8
+delay_b.steps_down	delay_b	repeat	arrow_dec_rest	556.5	181.5	10	8
+delay_b.triplet	delay_b	vswitch	switch_fx_0	575	172	9	18
+delay_b.pan	delay_b	knob	knob_fx	536	205	22	22
+delay_b.feedback	delay_b	knob	knob_fx	577	205	22	22
 dist.on	dist	toggle	power_14x14_off	530	243	14	14
 dist.meter	dist	meter	meter_8x12_0	596	243.25	8	14
 dist.menu	dist	fxmenu	hit_fx_title	549	242	36	15

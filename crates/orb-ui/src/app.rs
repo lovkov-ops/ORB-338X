@@ -703,10 +703,13 @@ impl App {
         }
 
         for (name, x, y) in layout::backgrounds() {
-            // an effects slot's face where its effect's slot is now (this fork)
-            let y = y + name
-                .strip_prefix("bg_")
-                .map_or(0.0, |sec| self.panel.slot_dy(sec, ""));
+            // an effects slot's face where its effect's slot is now, none for an effect no
+            // slot holds (this fork)
+            let sec = name.strip_prefix("bg_").unwrap_or("");
+            if self.panel.out_of_slots(sec, "") {
+                continue;
+            }
+            let y = y + self.panel.slot_dy(sec, "");
             // a drum machine's FLIP face (this fork)
             let name = self.panel.background(name);
             let (w, h) = part_size(name);
@@ -928,14 +931,18 @@ impl App {
                 let r = self.hit(ui, c, rect);
                 self.kit_menu(&r, usize::from(c.section == "tr909f"));
             }
-            // an effects slot's title (this fork): the menu of the effects a slot can hold; a
-            // choice swaps the slot's effect with the one of the slot that holds it
+            // an effects slot's title (this fork): the menu of the effects a slot can hold (a
+            // choice goes into this slot) and of the slots to swap with
             "fxmenu" => {
                 let r = self.hit(ui, c, rect);
-                if let Some(fx) = fx_menu(&r, &c.section)
-                    && let Some(from) = crate::model::fx_code(&c.section)
-                {
-                    self.panel.swap_slot(from, fx);
+                let slot = crate::model::fx_instance(&c.section)
+                    .and_then(|(fx, inst)| self.panel.slot_of(fx, inst));
+                if let Some(s) = slot {
+                    match fx_menu(&r, &self.panel, s) {
+                        Some(SlotPick::Put(fx)) => self.panel.put_slot(s, fx),
+                        Some(SlotPick::Swap(o)) => self.panel.swap_slots(s, o),
+                        None => {}
+                    }
                 }
             }
             // a mixer knob's label (this fork): the effect of its slot
@@ -1472,7 +1479,7 @@ fn part_size(name: &str) -> (f32, f32) {
         "bg_tb303" | "bg_tr808" | "bg_tr909" | "bg_tr808_flip" | "bg_tr909_flip" => (366.0, 115.0),
         "bg_master" => (82.0, 100.0),
         // this fork: the four effects slots, 90 px each
-        "bg_delay" | "bg_dist" | "bg_pcf" | "bg_comp" => (82.0, 90.0),
+        "bg_delay" | "bg_delay_b" | "bg_dist" | "bg_pcf" | "bg_comp" => (82.0, 90.0),
         _ => panic!("no size for background {name}"),
     }
 }
@@ -1571,23 +1578,42 @@ const FX_NAMES: [(&str, &str); 8] = [
     ("comp", "COMP (compressor)"),
 ];
 
-/// An effects slot's title menu (this fork): every effect, the slot's own checked; the ones
-/// the engine does not have yet greyed out. The effect chosen, if another.
-fn fx_menu(r: &egui::Response, slot: &str) -> Option<u8> {
+/// A choice in an effects slot's menu (this fork).
+enum SlotPick {
+    /// The effect goes into this slot.
+    Put(u8),
+    /// This slot and that one swap their effects.
+    Swap(usize),
+}
+
+/// Effects slot `slot`'s title menu (this fork): every effect, the slot's own checked, the
+/// ones it may not hold greyed out ([`crate::model::Panel::can_put`]); then the other slots to
+/// swap with.
+fn fx_menu(r: &egui::Response, panel: &crate::model::Panel, slot: usize) -> Option<SlotPick> {
     let mut pick = None;
     egui::Popup::menu(r).show(|ui| {
         for (kind, name) in FX_NAMES {
-            let own = kind == slot;
-            let code = crate::model::fx_code(kind);
-            let ready = code.is_some_and(|c| crate::model::FX_READY.contains(&c));
-            ui.add_enabled_ui(ready, |ui| {
+            let Some(fx) = crate::model::fx_code(kind) else {
+                continue;
+            };
+            let own = panel.slots[slot] == fx;
+            ui.add_enabled_ui(own || panel.can_put(slot, fx), |ui| {
                 if ui.selectable_label(own, name).clicked() {
                     if !own {
-                        pick = code;
+                        pick = Some(SlotPick::Put(fx));
                     }
                     ui.close();
                 }
             });
+        }
+        ui.separator();
+        for o in (0..4).filter(|&o| o != slot) {
+            let label = format!("Swap with slot {}", o + 1);
+            let can = panel.slots[o] != panel.slots[slot];
+            if ui.add_enabled(can, egui::Button::new(label)).clicked() {
+                pick = Some(SlotPick::Swap(o));
+                ui.close();
+            }
         }
     });
     pick

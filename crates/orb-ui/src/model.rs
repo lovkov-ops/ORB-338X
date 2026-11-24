@@ -347,6 +347,16 @@ pub fn fx_code(name: &str) -> Option<u8> {
     FX_KINDS.iter().position(|&k| k == name).map(|i| i as u8)
 }
 
+/// This fork: the effect and its instance (0 the song's, 1 the second: `delay_b`) of a section
+/// or a mixer knob or label name.
+pub fn fx_instance(name: &str) -> Option<(u8, usize)> {
+    let name = name.strip_suffix("_label").unwrap_or(name);
+    match name.strip_suffix("_b") {
+        Some(base) => fx_code(base).map(|fx| (fx, 1)),
+        None => fx_code(name).map(|fx| (fx, 0)),
+    }
+}
+
 /// This fork: the channel (0..4) and the effect (0 PCF, 1 COMP) of a `mixerN.pcf_more` or
 /// `.comp_more` id.
 pub fn more_of(id: &str) -> Option<(usize, usize)> {
@@ -432,6 +442,7 @@ impl Panel {
             }
         }
         p.numbers.insert("delay.steps".into(), 3);
+        p.numbers.insert("delay_b.steps".into(), 3);
         p.numbers.insert("pcf.pattern".into(), 0);
         // the channels' enables (this fork: no control of their own, SOLO and MUTE set them)
         for c in 1..=4 {
@@ -657,28 +668,61 @@ impl Panel {
     /// by 22 px a slot, from the slot the layout has it in (the default slots) to its slot now.
     pub fn slot_dy(&self, section: &str, name: &str) -> f32 {
         let (fx, step) = if section.starts_with("mixer") {
-            (fx_code(name.strip_suffix("_label").unwrap_or(name)), 22.0)
+            (fx_instance(name), 22.0)
         } else {
-            (fx_code(section), 90.0)
+            (fx_instance(section), 90.0)
         };
-        let Some(fx) = fx else { return 0.0 };
-        let at = |slots: &[u8; 4]| slots.iter().position(|&s| s == fx);
-        match (at(&orb_engine::frame::DEFAULT_SLOTS), at(&self.slots)) {
+        let Some((fx, inst)) = fx else { return 0.0 };
+        // the layout has a second instance where the first is
+        let home = orb_engine::frame::DEFAULT_SLOTS
+            .iter()
+            .position(|&s| s == fx);
+        match (home, self.slot_of(fx, inst)) {
             (Some(home), Some(now)) => step * (now as f32 - home as f32),
             _ => 0.0,
         }
     }
 
-    /// This fork: effect `fx` into the slot that holds `from`, swapping places with it (both
-    /// slots sent). Not an effect the engine has, or `from` in no slot: nothing.
-    pub fn swap_slot(&mut self, from: u8, fx: u8) {
-        let (Some(a), Some(b)) = (
-            self.slots.iter().position(|&s| s == from),
-            self.slots.iter().position(|&s| s == fx),
-        ) else {
-            return;
+    /// This fork: the slot (0..4) that holds instance `inst` of effect `fx` (0 the upper of
+    /// the slots that hold it, 1 the lower), if any.
+    pub fn slot_of(&self, fx: u8, inst: usize) -> Option<usize> {
+        (0..4).filter(|&s| self.slots[s] == fx).nth(inst)
+    }
+
+    /// This fork: whether a section's or a mixer knob's effect is in no slot (not drawn).
+    pub fn out_of_slots(&self, section: &str, name: &str) -> bool {
+        let fx = if section.starts_with("mixer") {
+            fx_instance(name)
+        } else {
+            fx_instance(section)
         };
-        if a == b || !FX_READY.contains(&fx) {
+        fx.is_some_and(|(fx, inst)| self.slot_of(fx, inst).is_none())
+    }
+
+    /// This fork: whether effect `fx` may go into slot `s` (the effect there leaves the rack):
+    /// an effect the engine has, the delay in at most two slots, the others in one.
+    pub fn can_put(&self, s: usize, fx: u8) -> bool {
+        let others = (0..4).filter(|&o| o != s && self.slots[o] == fx).count();
+        let most = if fx == orb_engine::frame::FX_DELAY {
+            1
+        } else {
+            0
+        };
+        s < 4 && self.slots[s] != fx && FX_READY.contains(&fx) && others <= most
+    }
+
+    /// This fork: effect `fx` into slot `s` ([`Panel::can_put`]), sent; the effect that was
+    /// there is in no slot then (not heard; its settings are kept).
+    pub fn put_slot(&mut self, s: usize, fx: u8) {
+        if self.can_put(s, fx) {
+            self.slots[s] = fx;
+            self.set_event(&format!("mixer.slot{}", s + 1), fx as i32);
+        }
+    }
+
+    /// This fork: slots `a` and `b` swap their effects (both sent).
+    pub fn swap_slots(&mut self, a: usize, b: usize) {
+        if a >= 4 || b >= 4 || self.slots[a] == self.slots[b] {
             return;
         }
         self.slots.swap(a, b);
@@ -917,7 +961,8 @@ impl Panel {
             "tr909f" => !self.flipped(1),
             "tr808" => c.kind == "knob" && self.flipped(0),
             "tr909" => c.kind == "knob" && c.name() != "flam" && self.flipped(1),
-            _ => false,
+            // an effect no slot holds (this fork), its face and its mixer knobs
+            sec => self.out_of_slots(sec, c.name()),
         }
     }
 
@@ -1236,10 +1281,11 @@ impl Panel {
                 row.len[i] = (row.len[i] as i32 + d).clamp(1, 16) as u8;
                 (format!("{sec}.{stem}"), row.len[i] as i32)
             }
-            ("delay", "steps") => {
-                let v = (self.numbers["delay.steps"] + d).clamp(1, 32);
-                self.numbers.insert("delay.steps".into(), v);
-                ("delay.steps".into(), v)
+            ("delay" | "delay_b", "steps") => {
+                let id = format!("{sec}.steps");
+                let v = (self.numbers[&id] + d).clamp(1, 32);
+                self.numbers.insert(id.clone(), v);
+                (id, v)
             }
             ("pcf", "pattern") => {
                 let v = (self.numbers["pcf.pattern"] + d).clamp(0, 54);
@@ -1964,11 +2010,12 @@ mod tests {
 
     #[test]
     fn a_slots_menu_swaps_effects_and_moves_their_controls() {
-        // this fork: COMP into DIST's slot (the second): they swap, both slots sent
+        use orb_engine::frame::{FX_COMP, FX_DELAY, FX_DIST, FX_PCF, FX_RVRB};
+        // this fork: the DIST slot (the second) and the COMP slot (the fourth) swap
         let mut p = Panel::new();
         assert_eq!(p.slot_dy("comp", "ratio"), 0.0);
-        p.swap_slot(orb_engine::frame::FX_DIST, orb_engine::frame::FX_COMP);
-        assert_eq!(p.slots, [1, 7, 3, 2]);
+        p.swap_slots(1, 3);
+        assert_eq!(p.slots, [FX_DELAY, FX_COMP, FX_PCF, FX_DIST]);
         let set = |id: &str, value| Event::Set {
             id: id.into(),
             value,
@@ -1981,12 +2028,25 @@ mod tests {
         assert_eq!(p.slot_dy("mixer3", "dist_label"), 44.0);
         assert_eq!(p.slot_dy("mixer3", "pan"), 0.0);
         assert_eq!(p.slot_dy("delay", "pan"), 0.0);
-        // an effect the engine does not have yet: nothing
+        // a second delay in the PCF's slot (the third): the PCF leaves the rack
+        assert!(p.out_of_slots("delay_b", "pan") && !p.out_of_slots("pcf", "freq"));
         p.events.clear();
-        p.swap_slot(orb_engine::frame::FX_DELAY, orb_engine::frame::FX_RVRB);
-        assert!(p.events.is_empty() && p.slots == [1, 7, 3, 2]);
+        p.put_slot(2, FX_DELAY);
+        assert_eq!(p.slots, [FX_DELAY, FX_COMP, FX_DELAY, FX_DIST]);
+        assert_eq!(p.events, [set("mixer.slot3", 1)]);
+        assert!(!p.out_of_slots("delay_b", "pan") && p.out_of_slots("pcf", "freq"));
+        assert!(p.out_of_slots("mixer2", "pcf_label") && !p.out_of_slots("mixer2", "delay_b"));
+        assert_eq!(p.slot_dy("delay_b", "pan"), 180.0);
+        assert_eq!(p.slot_dy("mixer1", "delay_b"), 44.0);
+        // not a third delay, not a second DIST, not an effect the engine does not have
+        for (s, fx) in [(1, FX_DELAY), (1, FX_DIST), (1, FX_RVRB)] {
+            assert!(!p.can_put(s, fx), "{s} {fx}");
+        }
+        // the PCF back
+        assert!(p.can_put(0, FX_PCF));
         // the engine's slots
         p.adopt("mixer.slot2", 2);
+        p.adopt("mixer.slot3", 3);
         p.adopt("mixer.slot4", 7);
         assert_eq!(p.slots, orb_engine::frame::DEFAULT_SLOTS);
     }
@@ -2106,7 +2166,8 @@ mod tests {
             .into_iter()
             .filter(|c| matches!(c.kind.as_str(), "switch" | "hswitch" | "vswitch"))
             .collect();
-        assert_eq!(switches.len(), 10);
+        // (this fork: the second delay's 3/16, + 1)
+        assert_eq!(switches.len(), 11);
         for c in &switches {
             if c.id == "transport.mode" {
                 // the mode switch shows a flag, not a controller value

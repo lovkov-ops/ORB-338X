@@ -524,6 +524,11 @@ pub struct MixerParams {
     /// This fork: the effect each of the four effects slots holds ([`SLOT`], [`FX_DELAY`]..),
     /// top to bottom; a channel's inserts run in their slots' order.
     pub slots: [u8; 4],
+    /// This fork: the second delay's controllers (ON, STEPS, MODE, FEEDBACK, PAN, as the
+    /// delay's 0..4; [`DELAY_B`]), heard when two slots hold the delay.
+    pub delay_b: [u8; 5],
+    /// This fork: each channel's send into the second delay ([`SEND_B`]).
+    pub send_b: [u8; 4],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -546,21 +551,32 @@ pub const FX_CHO: u8 = 4;
 pub const FX_FLA: u8 = 5;
 pub const FX_PHA: u8 = 6;
 pub const FX_COMP: u8 = 7;
+/// This fork: the mixer's controllers of the second delay (the lower of two slots that hold
+/// the delay): `DELAY_B + p`, p the delay's controller 0..4 ([`crate::delay::ENABLED`]..).
+pub const DELAY_B: u8 = SLOT + 4;
+/// This fork: the mixer's controller of channel c's send into the second delay, `SEND_B + c`.
+pub const SEND_B: u8 = DELAY_B + 5;
 /// The original's slots: the delay, the distortion, the PCF, the compressor.
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_COMP];
 
 /// This fork: whether `ctrl` is one of this fork's mixer controllers ([`LIMIT`],
 /// [`LIMIT_AMT`], [`WET`].., [`MORE`]..).
 pub fn is_fork_mixer(ctrl: u8) -> bool {
-    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..SLOT + 4).contains(&ctrl)
+    matches!(ctrl, LIMIT | LIMIT_AMT) || (WET..SEND_B + 4).contains(&ctrl)
 }
 
 impl MixerParams {
     /// This fork's controller `ctrl` ([`is_fork_mixer`]).
-    fn fork(&self, ctrl: u8) -> Option<u8> {
+    pub fn fork(&self, ctrl: u8) -> Option<u8> {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= SEND_B && is_fork_mixer(ctrl) => {
+                Some(self.send_b[(ctrl - SEND_B) as usize])
+            }
+            _ if ctrl >= DELAY_B && is_fork_mixer(ctrl) => {
+                Some(self.delay_b[(ctrl - DELAY_B) as usize])
+            }
             _ if ctrl >= SLOT && is_fork_mixer(ctrl) => Some(self.slots[(ctrl - SLOT) as usize]),
             _ if ctrl >= MORE && is_fork_mixer(ctrl) => {
                 let x = (ctrl - MORE) as usize;
@@ -579,6 +595,12 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= SEND_B && is_fork_mixer(ctrl) => {
+                self.send_b[(ctrl - SEND_B) as usize] = value
+            }
+            _ if ctrl >= DELAY_B && is_fork_mixer(ctrl) => {
+                self.delay_b[(ctrl - DELAY_B) as usize] = value;
+            }
             _ if ctrl >= SLOT && is_fork_mixer(ctrl) => {
                 self.slots[(ctrl - SLOT) as usize] = value.min(FX_COMP);
             }
@@ -601,6 +623,13 @@ impl MixerParams {
         self.wet = from.wet;
         self.more = from.more;
         self.slots = from.slots;
+        self.delay_b = from.delay_b;
+        self.send_b = from.send_b;
+    }
+
+    /// How many slots hold effect `fx`.
+    pub fn slots_of(&self, fx: u8) -> usize {
+        self.slots.iter().filter(|&&s| s == fx).count()
     }
 
     /// The order a channel runs its inserts in (0 the distortion, 1 the PCF, 2 the
@@ -634,6 +663,8 @@ impl Default for MixerParams {
             wet: [[WET_FULL; 3]; 4],
             more: [[0; 2]; 4],
             slots: DEFAULT_SLOTS,
+            delay_b: [1, 3, 1, 80, 64],
+            send_b: [0; 4],
         }
     }
 }
@@ -656,6 +687,8 @@ impl From<&song::Mixer> for MixerParams {
             wet: [[WET_FULL; 3]; 4],
             more: [[0; 2]; 4],
             slots: DEFAULT_SLOTS,
+            delay_b: [1, 3, 1, 80, 64],
+            send_b: [0; 4],
         }
     }
 }
@@ -674,6 +707,8 @@ impl MixerParams {
             wet: [[WET_FULL; 3]; 4],
             more: [[0; 2]; 4],
             slots: DEFAULT_SLOTS,
+            delay_b: [1, 3, 1, 80, 64],
+            send_b: [0; 4],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -990,6 +1025,12 @@ pub struct Frame {
     /// This fork: each channel's own copies of the PCF and the compressor ([`Routing::pcf_copy`],
     /// [`Routing::comp_copy`]).
     copies: [[Option<Box<voices::InsertCopy>>; 2]; 4],
+    /// This fork: the second delay (two slots hold the delay), with its own line, and the
+    /// controllers it was last given; its send bus, and each channel's send gain into it.
+    delay_b: Option<Box<crate::delay::Delay>>,
+    delay_b_set: [u8; 5],
+    send_b: Block,
+    send_b_gain: [f32; 4],
     /// This fork's master LIMIT in place of the master COMP ([`set_fork_master_limit`] at the
     /// frame's making): a song's master COMP (`comp_id` 1) is not heard.
     pub master_limit: bool,
@@ -1049,6 +1090,10 @@ impl Frame {
             voice_mix: [voices::VoiceMix::default(); 2],
             right: None,
             copies: Default::default(),
+            delay_b: None,
+            delay_b_set: [0; 5],
+            send_b: [GUARD; BLOCK],
+            send_b_gain: [0.0; 4],
             master_limit: FORK_MASTER_LIMIT.load(Ordering::Relaxed),
             limiter: crate::limiter::Limiter::default(),
         }
@@ -1085,6 +1130,13 @@ impl Frame {
                 // 0x10012CF2: (PAN[0] + PAN[1]) * T[send] * 0.5 + 1e-6
                 st((pg[0] as f64 + pg[1] as f64) * ts * VINTAGE_SEND + VINTAGE_OFFSET)
             };
+            // this fork: the send into the second delay, as the delay's send
+            let tb = t[p.send_b[c] as usize] as f64;
+            self.send_b_gain[c] = if !self.vintage {
+                st(t[lev] as f64 * tb + OFFSET as f64)
+            } else {
+                st((pg[0] as f64 + pg[1] as f64) * tb * VINTAGE_SEND + VINTAGE_OFFSET)
+            };
             // 0x10012D1A..0x10012D96: the meter byte, then the peak decays
             let m = t[lev] as f64 * ch.peak as f64;
             ch.meter = meter_byte(m, m > METER_FULL as f64);
@@ -1104,6 +1156,29 @@ impl Frame {
         self.devices.comp.update(&ctx);
         if let Some(r) = &mut self.right {
             r.update(&ctx);
+        }
+        // this fork: the second delay while two slots hold the delay (made with its own line,
+        // dropped with it), given the controllers that changed
+        if p.slots_of(FX_DELAY) >= 2 {
+            let db = self.delay_b.get_or_insert_with(|| {
+                let mut d = crate::delay::Delay::new(crate::process::ProcessState::new());
+                d.silence();
+                self.delay_b_set = crate::delay::DEFAULTS[..5].try_into().unwrap();
+                Box::new(d)
+            });
+            for (i, (&v, set)) in p
+                .delay_b
+                .iter()
+                .zip(self.delay_b_set.iter_mut())
+                .enumerate()
+            {
+                if v != *set {
+                    db.set_param(i as u8, v);
+                    *set = v;
+                }
+            }
+        } else {
+            self.delay_b = None;
         }
         // this fork: the channels' own copies of the PCF and the compressor, made from the
         // song's insert when a channel takes it (so a copy starts where the song's insert is),
@@ -1227,7 +1302,12 @@ impl Frame {
             ];
             // this fork: in their slots' order (the original's: the distortion, the PCF, the
             // compressor)
+            let in_slots = self.devices.mixer.live.slots;
             for k in order {
+                // this fork: an insert no slot holds is not heard
+                if !in_slots.contains(&[FX_DIST, FX_PCF, FX_COMP][k]) {
+                    continue;
+                }
                 if let Some((ins, song)) = inserts[k].take() {
                     ctx.stack_word = self.stack_word;
                     let b = if split_now {
@@ -1304,6 +1384,13 @@ impl Frame {
             for (s, &b) in self.state.send.iter_mut().zip(bs.iter()) {
                 *s = st(b as f64 * sg + *s as f64);
             }
+            // this fork: and into the second delay
+            if self.delay_b.is_some() {
+                let sg = self.send_b_gain[c] as f64;
+                for (s, &b) in self.send_b.iter_mut().zip(bs.iter()) {
+                    *s = st(b as f64 * sg + *s as f64);
+                }
+            }
             // 0x100136B7: smoothing, n = old*0.93 + target*0.07 stored as f32; the ramp steps
             // from the stored old value by (n_unrounded - old)/32 every two samples
             let old_l = ch.gain_l as f64;
@@ -1327,8 +1414,17 @@ impl Frame {
         }
         // 0x10013844: the send effect
         ctx.stack_word = None;
-        self.devices.delay.process(&mut self.state.send, l, r, &ctx);
-        self.stack_word = self.devices.delay.stack_word(self.out_end, self.stack_word);
+        if self.devices.mixer.live.slots.contains(&FX_DELAY) {
+            self.devices.delay.process(&mut self.state.send, l, r, &ctx);
+            self.stack_word = self.devices.delay.stack_word(self.out_end, self.stack_word);
+        } else {
+            // this fork: no slot holds the delay: not heard, its send bus emptied as it does
+            self.state.send = [GUARD; BLOCK];
+        }
+        // this fork: the second delay, on its own send bus
+        if let Some(db) = &mut self.delay_b {
+            db.process(&mut self.send_b, l, r, &ctx);
+        }
         // 0x10013883: the compressor on the master
         if self.state.master_comp {
             self.devices.comp.process_stereo(l, r, &ctx);
@@ -1927,5 +2023,9 @@ impl Engine {
         self.frame.devices.reset_all();
         // this fork: the channels' copies of the inserts start anew from the reset ones
         self.frame.copies = Default::default();
+        // and the second delay's line
+        if let Some(d) = &mut self.frame.delay_b {
+            d.silence();
+        }
     }
 }

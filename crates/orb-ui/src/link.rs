@@ -271,6 +271,21 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
             orb_engine::frame::WET + 3 * c as u8 + k as u8,
         ));
     }
+    // the second delay's controls and the channels' sends into it
+    if let Some(name) = id.strip_prefix("delay_b.") {
+        let p = ["on", "steps", "triplet", "feedback", "pan"]
+            .iter()
+            .position(|&n| n == name)?;
+        return Some(MixerTarget::Global(orb_engine::frame::DELAY_B + p as u8));
+    }
+    if let Some(c) = id
+        .strip_suffix(".delay_b")
+        .and_then(|s| s.strip_prefix("mixer"))
+        .and_then(|n| n.parse::<u8>().ok())
+        .filter(|n| (1..=4).contains(n))
+    {
+        return Some(MixerTarget::Global(orb_engine::frame::SEND_B + c - 1));
+    }
     // the effects slots' effects
     if let Some(s) = id
         .strip_prefix("mixer.slot")
@@ -343,6 +358,12 @@ fn new_song_knobs(
             // the faders (this fork: a double click sets them too)
             Some(MixerTarget::Global(0)) => Some(d.mixer.live.master),
             Some(MixerTarget::Global(orb_engine::frame::LIMIT_AMT)) => Some(d.mixer.live.limit_amt),
+            // this fork: the second delay's knobs and the sends into it
+            Some(MixerTarget::Global(g))
+                if (orb_engine::frame::DELAY_B..orb_engine::frame::SEND_B + 4).contains(&g) =>
+            {
+                d.mixer.live.fork(g)
+            }
             Some(MixerTarget::Channel(ch, 1)) => Some(d.mixer.live.channels[ch as usize].level),
             Some(MixerTarget::Channel(ch, 2)) => Some(d.mixer.live.channels[ch as usize].pan),
             Some(MixerTarget::Channel(ch, 3)) => Some(d.mixer.live.channels[ch as usize].send),
@@ -1251,6 +1272,15 @@ impl Link {
         }
         for (s, &fx) in m.slots.iter().enumerate() {
             panel.adopt(&format!("mixer.slot{}", s + 1), fx as i32);
+        }
+        for (p, name) in ["on", "steps", "triplet", "feedback", "pan"]
+            .into_iter()
+            .enumerate()
+        {
+            panel.adopt(&format!("delay_b.{name}"), m.delay_b[p] as i32);
+        }
+        for (c, &v) in m.send_b.iter().enumerate() {
+            panel.adopt(&format!("mixer{}.delay_b", c + 1), v as i32);
         }
         panel.adopt("mixer.pcf_id", m.pcf_id as i32);
         for (c, ch) in m.channels.iter().enumerate() {

@@ -1267,6 +1267,8 @@ fn knob_ids() -> Vec<String> {
         // the mixer's DIST, PCF and COMP knobs (this fork) are the original's keys: off in a
         // new song, and a double click does not set them
         .filter(|c| orb_ui::model::mixer_insert(&c.id).is_none())
+        // the second delay's (this fork) are hidden while one slot holds the delay
+        .filter(|c| !c.id.contains("delay_b"))
         .map(|c| c.id)
         .collect()
 }
@@ -1277,6 +1279,11 @@ fn engine_knob(h: &mut Harness, id: &str) -> u8 {
     let (section, name) = id.split_once('.').unwrap();
     if id == "transport.shuffle" {
         s.shuffle
+    } else if let Some(orb_ui::link::MixerTarget::Global(g)) = orb_ui::link::mixer_target(id)
+        && g >= orb_engine::frame::DELAY_B
+    {
+        // this fork: the second delay's knobs and the sends into it
+        s.mixer.fork(g).unwrap()
     } else if let Some(n) = section.strip_prefix("mixer") {
         let ch = &s.mixer.channels[n.parse::<usize>().unwrap() - 1];
         if name == "pan" { ch.pan } else { ch.send }
@@ -1523,4 +1530,26 @@ fn a_double_click_on_an_fx_key_sets_every_sound() {
         let m = h.app.panel.voice_mix(k);
         assert!(m.fx[1..12].iter().all(|&f| f), "{dev}: all on");
     }
+}
+
+/// This fork: the second delay's controls and the channels' sends into it are the mixer's
+/// controllers (msg 145 `{DELAY_B + p}`, `{SEND_B + c}`).
+#[test]
+fn the_second_delay_sends_the_mixers_controllers() {
+    use orb_engine::frame::{DELAY_B, SEND_B};
+    use orb_ui::link::{MixerTarget::Global, mixer_target};
+    for (p, name) in ["on", "steps", "triplet", "feedback", "pan"]
+        .into_iter()
+        .enumerate()
+    {
+        let id = format!("delay_b.{name}");
+        assert_eq!(mixer_target(&id), Some(Global(DELAY_B + p as u8)), "{id}");
+    }
+    for c in 1..=4u8 {
+        assert_eq!(
+            mixer_target(&format!("mixer{c}.delay_b")),
+            Some(Global(SEND_B + c - 1))
+        );
+    }
+    assert_eq!(mixer_target("delay_b.meter"), None);
 }

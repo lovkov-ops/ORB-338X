@@ -1509,7 +1509,61 @@ fn the_inserts_run_in_their_slots_order() {
     assert_eq!(e.frame.devices.mixer.live.insert_order(), [2, 0, 1]);
     assert_eq!(run(&mut e), ["comp", "dist", "pcf"]);
     assert_eq!(e.frame.devices.mixer.fork_param(SLOT), Some(FX_COMP));
-    assert!(is_fork_mixer(SLOT + 3) && !is_fork_mixer(SLOT + 4));
+    assert!(is_fork_mixer(SLOT + 3) && SLOT + 4 == DELAY_B);
+}
+
+/// This fork: two slots that hold the delay run a second delay, with its own line, its own
+/// controllers and its own sends; an effect no slot holds is not heard.
+#[test]
+fn a_second_delay_and_effects_out_of_the_slots() {
+    let render = |setup: &dyn Fn(&mut Engine)| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(0));
+        let mut e = Engine::new(tables(), d);
+        e.frame.devices.mixer.live.channels[0].send = 100;
+        setup(&mut e);
+        let mut buf = vec![0i16; 2 * 64 * 400];
+        e.render(&mut buf, 64 * 400);
+        (buf, e)
+    };
+    let (song, _) = render(&|_| {});
+    // the second delay's sends at 0: as the song (its line adds 1e-6 guards: nearly)
+    let two = |e: &mut Engine| e.mixer_global(SLOT + 1, FX_DELAY);
+    let (quiet, e) = render(&two);
+    assert!(e.frame.delay_b.is_some());
+    let near = song
+        .iter()
+        .zip(&quiet)
+        .all(|(a, b)| (*a as i32 - *b as i32).abs() <= 1);
+    assert!(near);
+    // a send into it: heard
+    let (sent, e) = render(&|e| {
+        two(e);
+        e.mixer_global(SEND_B, 120);
+        e.mixer_global(DELAY_B + 1, 5);
+    });
+    assert_ne!(sent, song);
+    assert_eq!(e.frame.devices.mixer.live.delay_b[1], 5);
+    assert_eq!(e.frame.devices.mixer.fork_param(SEND_B), Some(120));
+    // one delay slot again: the second delay goes
+    let (_, e) = render(&|e| {
+        two(e);
+        e.mixer_global(SLOT + 1, FX_DIST);
+    });
+    assert!(e.frame.delay_b.is_none());
+    // no slot holds the delay: no echo (as with no send)
+    let (none, _) = render(&|e| {
+        for s in 0..4 {
+            e.mixer_global(SLOT + s, FX_DIST);
+        }
+    });
+    let (dry, _) = render(&|e| e.frame.devices.mixer.live.channels[0].send = 0);
+    let near = none
+        .iter()
+        .zip(&dry)
+        .all(|(a, b)| (*a as i32 - *b as i32).abs() <= 1);
+    assert!(near);
+    assert!(is_fork_mixer(SEND_B + 3) && !is_fork_mixer(SEND_B + 4));
 }
 
 #[test]
