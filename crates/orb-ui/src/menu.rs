@@ -79,6 +79,10 @@ pub enum Cmd {
     KeyHelp,
     /// Help > About.
     About,
+    /// Help > Check for Updates (this fork, `update.rs`).
+    CheckUpdates,
+    /// "Check for Updates at Startup" of the Options menu (this fork).
+    ToggleUpdateCheck,
     /// "Choose file..." of the Mods menu: the browser for a mod.
     ChooseModFile,
     /// A kit from the Mods menu (or a mod file the browser chose).
@@ -978,6 +982,13 @@ impl App {
             Cmd::KeyHelp => self.show_key_help(),
             Cmd::Pattern(c) => self.run_clip_cmd(self.panel.focus, c),
             Cmd::About => self.show_about(),
+            Cmd::CheckUpdates => self.check_updates_now(),
+            Cmd::ToggleUpdateCheck => {
+                self.settings.check_updates = !self.settings.check_updates;
+                if let Err(e) = self.settings.save() {
+                    self.fail(e);
+                }
+            }
             Cmd::ChooseModFile => self.open_browser(Mode::ChooseMod),
             Cmd::UseKit(kit) => self.use_kit(kit),
             Cmd::ChooseVariant(p) => self.choose_variant(p),
@@ -1300,6 +1311,14 @@ impl App {
                                 cmd = Some(Cmd::ToggleStartupSound);
                                 ui.close();
                             }
+                            let mut up = self.settings.check_updates;
+                            if ui
+                                .checkbox(&mut up, "Check for Updates at Startup")
+                                .clicked()
+                            {
+                                cmd = Some(Cmd::ToggleUpdateCheck);
+                                ui.close();
+                            }
                             ui.separator();
                             let ctx = ui.ctx().clone();
                             let synth = format!(
@@ -1342,6 +1361,7 @@ impl App {
 /// The items of the Help menu, in order.
 const HELP_ITEMS: &[(&str, Cmd)] = &[
     ("Keyboard Shortcuts...", Cmd::KeyHelp),
+    ("Check for Updates...", Cmd::CheckUpdates),
     ("About ORB-338X...", Cmd::About),
 ];
 

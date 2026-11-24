@@ -324,6 +324,7 @@ fn main() -> eframe::Result {
                 }
                 Some(DebugPanic::Start) | None => {}
             }
+            let shooting = shot.is_some();
             let shot = shot.map(Shot::new);
             let mut app = match link {
                 Some(l) => App::with_link(panel, l, shot),
@@ -334,6 +335,10 @@ fn main() -> eframe::Result {
             app.menu = true;
             app.enable_logo_anim();
             app.settings = Settings::load();
+            // this fork: a newer release offered (update.rs); not in a screenshot
+            if !shooting {
+                app.check_updates_at_startup();
+            }
             // the song (or the new empty song) and its mod's startup sound; nothing in the demo,
             // which has no player
             // (the errors of the start are one box)

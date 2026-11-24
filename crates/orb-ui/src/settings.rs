@@ -4,7 +4,8 @@
 //! It is a TOML file (task-107) with the keys `songs_dir` and `mods_dir` (paths, absent when
 //! unset), `recent` (an array of paths, newest first), `last_song_dir` and `last_mod_dir`
 //! (paths, absent until a file is chosen: the folder of the last song chosen in Open, Save As
-//! or Export, and of the last mod; task-144), `startup_sound` (a bool) and the table
+//! or Export, and of the last mod; task-144), `startup_sound` (a bool), this fork's
+//! `check_updates` (a bool) and `skip_version` (a string; `update.rs`) and the table
 //! `preferred_mods` (an INFO name to the file name preferred among mods that share it,
 //! task-151), so it can be edited by hand. Where it lives: `$ORB_UI_CONFIG` if set; else
 //! `ORB-338X/ui.toml` in the platform's configuration folder (`$XDG_CONFIG_HOME`, or
@@ -49,6 +50,12 @@ pub struct Settings {
     /// to file name. Stored as the table `preferred_mods`. Names are compared ignoring ASCII
     /// case ([`Settings::preferred_mod`]).
     pub preferred_mods: BTreeMap<String, String>,
+    /// This fork: whether the app checks for a newer release at startup (`update.rs`; on by
+    /// default). Stored as the bool `check_updates`.
+    pub check_updates: bool,
+    /// This fork: the release the user chose to skip (its version number, `YYYY.MMDD.HHMM`):
+    /// the check at startup does not offer it. Stored as the string `skip_version`.
+    pub skip_version: Option<String>,
     /// Where this was read from and is written to (`None`: never persisted, as in tests).
     pub file: Option<PathBuf>,
 }
@@ -63,6 +70,8 @@ impl Default for Settings {
             last_song_dir: None,
             last_mod_dir: None,
             preferred_mods: BTreeMap::new(),
+            check_updates: true,
+            skip_version: None,
             file: None,
         }
     }
@@ -149,6 +158,9 @@ struct Stored<'a> {
     last_song_dir: Option<&'a Path>,
     #[serde(skip_serializing_if = "Option::is_none")]
     last_mod_dir: Option<&'a Path>,
+    check_updates: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    skip_version: Option<&'a str>,
     // a table, so last
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     preferred_mods: BTreeMap<&'a str, &'a str>,
@@ -193,6 +205,14 @@ impl Settings {
         if let Some(b) = table.get("startup_sound").and_then(|v| v.as_bool()) {
             s.startup_sound = b;
         }
+        if let Some(b) = table.get("check_updates").and_then(|v| v.as_bool()) {
+            s.check_updates = b;
+        }
+        s.skip_version = table
+            .get("skip_version")
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+            .map(str::to_string);
         s.songs_dir = table.get("songs_dir").and_then(path_of);
         s.mods_dir = table.get("mods_dir").and_then(path_of);
         s.last_song_dir = table.get("last_song_dir").and_then(path_of);
@@ -244,6 +264,8 @@ impl Settings {
             recent: self.recent.iter().filter_map(|p| storable(p)).collect(),
             last_song_dir: self.last_song_dir.as_deref().and_then(storable),
             last_mod_dir: self.last_mod_dir.as_deref().and_then(storable),
+            check_updates: self.check_updates,
+            skip_version: self.skip_version.as_deref(),
             preferred_mods: self
                 .preferred_mods
                 .iter()

@@ -183,6 +183,8 @@ pub struct App {
     /// (`rbsx.rs`).
     pub(crate) format_prompt: bool,
     pub(crate) about_serial: u32,
+    /// The update check and its window (this fork, `update.rs`).
+    pub(crate) update: crate::update::Update,
     /// The bass synth (0 or 1) whose GENERATE menu is open, if any, the menu's open list, and
     /// the scale and key note chosen for each synth (`generate.rs`, `scale.rs`).
     pub(crate) generate_open: Option<usize>,
@@ -280,6 +282,7 @@ impl App {
             about_open: false,
             format_prompt: false,
             about_serial: 0,
+            update: Default::default(),
             generate_open: None,
             generate_list: None,
             scale_keys: ScaleKeys::default(),
@@ -800,6 +803,7 @@ impl App {
         self.format_prompt_ui(&ctx);
         self.info_ui(&ctx);
         self.about_ui(&ctx);
+        self.update_ui(&ctx);
         self.key_help_ui(&ctx);
         self.mod_info_ui(&ctx);
         self.poll_export(&ctx);

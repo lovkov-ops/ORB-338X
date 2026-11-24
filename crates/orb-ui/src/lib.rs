@@ -36,4 +36,5 @@ pub mod session;
 pub mod settings;
 pub mod shortcuts;
 pub mod startup;
+pub mod update;
 pub mod version;

@@ -256,3 +256,27 @@ fn the_newest_old_names_settings_carry_over() {
     assert!(carry_over(&new));
     assert_eq!(std::fs::read_to_string(&new).unwrap(), "a = 2\n");
 }
+
+/// This fork: the update check's settings (`update.rs`): on by default, the skipped release
+/// absent until one is skipped, both kept through the file.
+#[test]
+fn the_update_check_settings_round_trip() {
+    let d = tempfile::tempdir().unwrap();
+    let file = d.path().join("ui.toml");
+    let mut s = Settings::load_from(&file);
+    assert!(s.check_updates && s.skip_version.is_none());
+    s.save().unwrap();
+    let t: toml::Table = fs::read_to_string(&file).unwrap().parse().unwrap();
+    assert_eq!(t["check_updates"].as_bool(), Some(true));
+    assert!(!t.contains_key("skip_version"));
+    s.check_updates = false;
+    s.skip_version = Some("2026.1124.1900".into());
+    s.save().unwrap();
+    let t: toml::Table = fs::read_to_string(&file).unwrap().parse().unwrap();
+    assert_eq!(t["skip_version"].as_str(), Some("2026.1124.1900"));
+    assert_eq!(Settings::load_from(&file), s);
+    // a file from before (no such keys) checks, with nothing skipped
+    fs::write(&file, "startup_sound = false\n").unwrap();
+    let old = Settings::load_from(&file);
+    assert!(old.check_updates && old.skip_version.is_none());
+}
