@@ -2124,11 +2124,11 @@ fn the_about_window_opens_centered_and_closes() {
         shapes.contains(orb_ui::about::VERSION),
         "the version is drawn"
     );
-    // (this fork) the original creator's page and the fork's latest release
+    // (this fork) the original creator's page and the fork's website (its downloads)
     assert_eq!(orb_ui::about::CREATOR_URL, "https://github.com/pingw33n");
     assert_eq!(
         orb_ui::about::DOWNLOAD_URL,
-        "https://github.com/lovkov-ops/ORB-338X/releases/latest"
+        "https://lovkov-ops.github.io/orb-338x"
     );
     assert_eq!(
         orb_ui::about::SONGS_URL,

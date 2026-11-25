@@ -28,8 +28,8 @@ pub const NAME: &str = "ORB-338X";
 /// The page of the original project's creator (this fork's About names them under its own
 /// credit).
 pub const CREATOR_URL: &str = "https://github.com/pingw33n";
-/// Where the latest release of this fork is downloaded.
-pub const DOWNLOAD_URL: &str = "https://github.com/lovkov-ops/ORB-338X/releases/latest";
+/// Where the latest release of this fork is downloaded: its website, with the download links.
+pub const DOWNLOAD_URL: &str = "https://lovkov-ops.github.io/orb-338x";
 /// The credit of this fork, the first line under the wordmark: the label, then the fork's
 /// author linked to the fork.
 pub const FORK_CREDIT: (&str, &str, &str) = (

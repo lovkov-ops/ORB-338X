@@ -537,7 +537,7 @@ impl Panel {
         }
     }
 
-    /// A double click on a lit SOLO (`mute` false) or MUTE: every channel's goes off.
+    /// A Shift click on a SOLO (`mute` false) or MUTE: every channel's goes off.
     pub fn clear_channels(&mut self, mute: bool) {
         if mute {
             self.mute = [false; 4];

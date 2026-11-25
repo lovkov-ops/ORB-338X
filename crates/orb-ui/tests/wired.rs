@@ -1807,3 +1807,29 @@ fn a_channels_c_key_opens_its_compressor() {
         vec![dev(Device::Mixer, 145, &[orb_engine::frame::OTT, 1])]
     );
 }
+
+/// (this fork) A Shift click on a mixer channel's SOLO turns every SOLO off, and on a MUTE every
+/// MUTE: every channel plays again. A plain click turns only its own on or off.
+#[test]
+fn a_shift_click_on_solo_or_mute_turns_all_of_them_off() {
+    let mut h = Harness::new();
+    for kind in ["solo", "activity"] {
+        let lit = |h: &Harness| {
+            let p = &h.app.panel;
+            if kind == "solo" { p.solo } else { p.mute }
+        };
+        for n in [1, 2, 4] {
+            h.click(&format!("mixer{n}.{kind}"));
+        }
+        h.click(&format!("mixer4.{kind}"));
+        assert_eq!(lit(&h), [true, true, false, false], "{kind}: plain clicks");
+        h.move_to(Harness::center(&format!("mixer2.{kind}")));
+        h.down(Modifiers::SHIFT);
+        h.up();
+        assert_eq!(lit(&h), [false; 4], "{kind}: a Shift click turns all off");
+        assert!(
+            (0..4).all(|c| h.app.panel.channel_active(c)),
+            "every channel plays"
+        );
+    }
+}
