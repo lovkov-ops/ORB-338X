@@ -62,6 +62,10 @@ pub struct GenState {
     pub flip: [bool; 2],
     pub voice_mix: [VoiceMix; 2],
     pub kits: [Option<String>; 2],
+    /// The 808's and the 909's sounds' SOLO and MUTE lamps (this fork), by instrument index
+    /// (1 BD .. 11).
+    pub drum_solo: [[bool; 12]; 2],
+    pub drum_mute: [[bool; 12]; 2],
     /// Each synth's sub-oscillator (this fork): its level (0..=127, the pattern-mode value)
     /// and the song-mode track's events, `(tick, level)` in tick order. No `.rbs` controller
     /// is theirs, so only an `.rbsx` keeps them.
@@ -219,6 +223,16 @@ pub fn encode(state: &GenState) -> Vec<u8> {
         lines.push(format!("{dev}.flip={}", state.flip[k] as u8));
         lines.push(format!("{dev}.pan={}", pans.join(",")));
         lines.push(format!("{dev}.lamps={}", lamps.join(",")));
+        // each sound's SOLO and MUTE lamp, 0 or 1, BD first
+        let bits = |b: &[bool; 12]| {
+            let v: Vec<&str> = b[1..12]
+                .iter()
+                .map(|&b| if b { "1" } else { "0" })
+                .collect();
+            v.join(",")
+        };
+        lines.push(format!("{dev}.solo={}", bits(&state.drum_solo[k])));
+        lines.push(format!("{dev}.mute={}", bits(&state.drum_mute[k])));
         lines.push(format!(
             "{dev}.kit={}",
             state.kits[k].as_deref().unwrap_or("")
@@ -353,6 +367,16 @@ pub fn decode(body: &[u8]) -> Option<GenState> {
             // the older files: one FX key a sound, on as every lamp on
             for (i, f) in v.split(',').take(11).enumerate() {
                 m.lamps[i + 1] = if f.trim() == "0" { 0 } else { voices::ALL };
+            }
+        }
+        for (key, lit) in [
+            ("solo", &mut state.drum_solo[k]),
+            ("mute", &mut state.drum_mute[k]),
+        ] {
+            if let Some(v) = get(&format!("{dev}.{key}")) {
+                for (i, b) in v.split(',').take(11).enumerate() {
+                    lit[i + 1] = b.trim() == "1";
+                }
             }
         }
         state.kits[k] = get(&format!("{dev}.kit"))
@@ -583,6 +607,8 @@ impl App {
             lfo,
             flip: [self.panel.flipped(0), self.panel.flipped(1)],
             voice_mix: [self.panel.voice_mix(0), self.panel.voice_mix(1)],
+            drum_solo: self.panel.drum_solo,
+            drum_mute: self.panel.drum_mute,
             // the sub's level as a save keeps the 303's knobs: in song mode the pattern-mode
             // copy, else the panel's
             sub: std::array::from_fn(|k| {
@@ -726,6 +752,11 @@ impl App {
                     self.panel.put_toggle(&format!("{sec}.fx{i}_{s}"), on);
                 }
             }
+            // each sound's SOLO and MUTE (none in a song without them), heard as the panel
+            // makes the mix
+            self.panel.drum_solo[k] = state.drum_solo[k];
+            self.panel.drum_mute[k] = state.drum_mute[k];
+            self.voice_mix_seen[k].silent = self.panel.voice_mix(k).silent;
             if let Some(name) = &state.kits[k] {
                 let kit = self.kit_for(name);
                 self.put_kit_of(k, Some(kit));
@@ -759,6 +790,8 @@ mod tests {
         st.generated[0] = true;
         st.mix_solo[1] = true;
         st.mix_mute[3] = true;
+        st.drum_solo[0][2] = true;
+        st.drum_mute[1][11] = true;
         st.done[Op::Move as usize][0] = true;
         st.lfo[1][0] = LfoState {
             rate: 90,
@@ -836,7 +869,10 @@ mod tests {
         assert!(text.contains("tr808.flip=0\ntr808.pan=64,64,10,64,"));
         assert!(text.contains("tr909.flip=1\ntr909.pan=127,64,"));
         assert!(text.contains("tr808.lamps=15,5,15,15,15,15,15,15,15,15,15\n"));
-        assert!(text.contains("tr909.lamps=15,15,15,15,15,15,15,15,15,15,0\ntr909.kit=PBE2\n"));
+        assert!(text.contains("tr909.lamps=15,15,15,15,15,15,15,15,15,15,0\ntr909.solo="));
+        assert!(text.contains("tr909.mute=0,0,0,0,0,0,0,0,0,0,1\ntr909.kit=PBE2\n"));
+        // (this fork) each drum sound's SOLO and MUTE
+        assert!(text.contains("tr808.solo=0,1,0,0,0,0,0,0,0,0,0\ntr808.mute=0,0,0,"));
         assert!(text.contains("mixer4.solo=0\nmixer4.mute=1\n"));
         // (this fork) the sub-oscillators
         assert!(text.contains("baze1.sub=0\nbaze1.sub.track=\n"));

@@ -185,6 +185,7 @@ pub fn cuts() -> &'static Cuts {
         tr909(&mut c);
         mixer_and_effects(&mut c);
         channel_comp(&mut c);
+        drum_solo(&mut c);
         app_icon(&mut c);
         generate_symbols(&mut c);
         c
@@ -2070,6 +2071,49 @@ fn mixer_and_effects(c: &mut Cuts) {
         })
         .collect();
     c.places.extend(dup);
+}
+
+/// The size of a drum machine sound's MUTE and SOLO lamps (this fork), the 808's and the
+/// 909's: the user's lamps sit 7 px apart on the 808 and 9 px on the 909, so each one's box is
+/// as wide.
+const SOLO_LAMP_W: [f32; 2] = [7.0, 9.0];
+
+/// (this fork) Each sound's MUTE and SOLO lamps on the 808 and the 909 (`Mockup::solo_808`,
+/// `solo_909`): on the 808 MUTE over SOLO right of the LEVEL (PAN) knob, on the 909 MUTE left
+/// of SOLO over the LEVEL label. MUTE lit green while the sound plays, SOLO amber; each drum
+/// machine's own pictures, the mockup's BD showing both unlit and SD both lit; every lamp the
+/// same pictures, by the cores' centers.
+fn drum_solo(c: &mut Cuts) {
+    let core = |m: &Mockup, g: &str| {
+        let b = bbox(&grp(m, &format!("{g}.0")));
+        (b.cx(), b.cy())
+    };
+    for (k, (sec, m, g0)) in [
+        ("tr808", Mockup::solo_808(), 20),
+        ("tr909", Mockup::solo_909(), 26),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let w = SOLO_LAMP_W[k];
+        let dev = &sec[2..];
+        for (i, id) in ["mute", "solo"].into_iter().enumerate() {
+            for (state, g) in [("off", g0 + 1), ("on", g0 + 2)] {
+                let g = format!("0.{g}.{i}");
+                let (cx, cy) = core(m, &g);
+                let name = format!("drum{dev}{id}_{state}");
+                let v = grp(m, &g);
+                c.parts
+                    .push(part(&name, cx - w / 2.0, cy - w / 2.0, w, w, &body(&v)));
+            }
+        }
+        for n in 1..=11 {
+            for (i, id) in ["mute", "solo"].into_iter().enumerate() {
+                let (cx, cy) = core(m, &format!("0.{}.{i}", g0 + n));
+                c.place(&format!("{sec}.{id}{n}"), cx - w / 2.0, cy - w / 2.0);
+            }
+        }
+    }
 }
 
 /// The size of the channel COMP face's COMP and OTT lamps (this fork): the lit one's glow fits.

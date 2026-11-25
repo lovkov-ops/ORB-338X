@@ -38,6 +38,10 @@ pub const FLIP_909: &str = include_str!("../../../assets/mockup/flip_909.svg");
 /// (`SVG FILES/mix c.svg`, `comp m.svg`), moved to the first channel's place as the FLIP faces.
 pub const MIX_C: &str = include_str!("../../../assets/mockup/mix_c.svg");
 pub const COMP_M: &str = include_str!("../../../assets/mockup/comp_m.svg");
+/// (this fork) The user's 808 and 909 with each sound's MUTE and SOLO lamps (`SVG FILES/808
+/// solo.svg`, `909 solo.svg`), moved to their places as the FLIP faces; only the lamps are cut.
+pub const SOLO_808: &str = include_str!("../../../assets/mockup/solo_808.svg");
+pub const SOLO_909: &str = include_str!("../../../assets/mockup/solo_909.svg");
 
 /// A box in panel pixels: left, top, right, bottom.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -169,6 +173,8 @@ impl Mockup {
                 "m9" => 4,
                 "mc" => 5,
                 "mm" => 6,
+                "s8" => 7,
+                "s9" => 8,
                 _ => 1,
             },
         };
@@ -229,6 +235,16 @@ impl Mockup {
     pub fn comp_m() -> &'static Mockup {
         static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
         M.get_or_init(|| Mockup::parse(COMP_M, "mm"))
+    }
+
+    pub fn solo_808() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(SOLO_808, "s8"))
+    }
+
+    pub fn solo_909() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(SOLO_909, "s9"))
     }
 
     pub fn panel_fx() -> &'static Mockup {

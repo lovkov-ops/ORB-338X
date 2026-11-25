@@ -365,6 +365,28 @@ mod tests {
         }
     }
 
+    /// (this fork) A silent sound (the drum machine's SOLO and MUTE) is not heard at all, dry or
+    /// through the distortion; another sound silent leaves it as it was.
+    #[test]
+    fn a_silent_drum_sound_is_not_heard() {
+        for is808 in [true, false] {
+            let (l, _) = stereo_hit(is808, 2, VoiceMix::default(), false);
+            for dist in [false, true] {
+                let mut quiet = VoiceMix::default();
+                quiet.silent[2] = true;
+                assert_eq!(
+                    stereo_hit(is808, 2, quiet, dist),
+                    (0, 0),
+                    "808 {is808} {dist}"
+                );
+            }
+            let mut other = VoiceMix::default();
+            other.silent[1] = true;
+            let (o, _) = stereo_hit(is808, 2, other, false);
+            assert!((o - l).abs() < l / 50, "808 {is808}: {o} vs {l}");
+        }
+    }
+
     #[test]
     fn a_note_is_heard_quickly_and_dies_out() {
         let tables = Arc::new(Tables::new());

@@ -502,6 +502,23 @@ fn tr808(b: &mut Builder) {
     }
     // FLIP in the AC column, in the second knobs' row (this fork; phase 2 turns the panel)
     b.part("flip", "toggle", "flip_off", col808(0) - 8.5, 30.5);
+    // each sound's MUTE over its SOLO, right of its LEVEL knob (this fork; cuts.rs places them)
+    for k in 1..12 {
+        b.part(
+            &format!("mute{k}"),
+            "sololed",
+            "drum808mute_off",
+            col808(k) + 8.0,
+            8.0,
+        );
+        b.part(
+            &format!("solo{k}"),
+            "sololed",
+            "drum808solo_off",
+            col808(k) + 8.0,
+            15.0,
+        );
+    }
     b.part(
         "select_bd",
         "area",
@@ -571,6 +588,18 @@ fn tr909(b: &mut Builder) {
     // keys (as high as they are), both centered in the AC column (4..26)
     b.part("flip", "toggle", "flip909_off", 7.5, KNOB_Y_909[1]);
     b.part("flam_button", "toggle", "toggle_flam_off", 7.5, STEPS_Y_909);
+    // each sound's MUTE left of its SOLO, over its LEVEL label (this fork; cuts.rs places them)
+    for k in 1..12 {
+        let x = column_909(k, 2);
+        b.part(
+            &format!("mute{k}"),
+            "sololed",
+            "drum909mute_off",
+            x - 9.0,
+            15.5,
+        );
+        b.part(&format!("solo{k}"), "sololed", "drum909solo_off", x, 15.5);
+    }
     b.part("select_bd", "area", "sel_42x14", 26.0, NAMES_Y_909);
     for i in 0..16 {
         let value = [1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 3, 0, 2, 0, 0, 0][i];
@@ -687,8 +716,8 @@ fn channel_comp(b: &mut Builder, c: usize) {
             25.0,
         );
     }
-    b.part("on", "toggle", "ccompon_off", 22.0, 50.0);
-    b.part("ott", "toggle", "ccompott_off", 38.0, 50.0);
+    b.part("on", "toggle", "ccompon_off", 22.0, 47.0);
+    b.part("ott", "toggle", "ccompott_off", 38.0, 47.0);
     b.knob("ratio", KNOB_22, 6.0, 66.0, 0.3);
     b.knob("thres", KNOB_22, 42.0, 66.0, 0.6);
     b.part("ratio_label", "ottlabel", "ccomplbl_ratio_off", 5.0, 90.4);

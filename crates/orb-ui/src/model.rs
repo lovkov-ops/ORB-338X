@@ -316,6 +316,12 @@ pub struct Panel {
     /// enable, `mixerN.mute` (1: plays), which the panel sends ([`Panel::apply_channels`]).
     pub solo: [bool; 4],
     pub mute: [bool; 4],
+    /// The 808's (0) and the 909's (1) sounds' SOLO and MUTE lamps (this fork), by the panel's
+    /// instrument index (1 BD .. 11), as the mixer channels': a sound is heard unless muted and,
+    /// while any sound of its drum machine is soloed, only if soloed itself
+    /// ([`Panel::voice_mix`]).
+    pub drum_solo: [[bool; 12]; 2],
+    pub drum_mute: [[bool; 12]; 2],
     /// The 303s' TUNE values as the engine had them (this fork): kept while the knob stays on
     /// their semitone, so a song saves the value it had, not its semitone's own.
     tune_raw: HashMap<String, i32>,
@@ -364,6 +370,23 @@ const LAYOUT_SLOTS: [u8; 4] = {
 
 /// This fork: the channel 0..=3 of a mixer channel's section (`mixer2`, its COMP face
 /// `ccomp2`).
+/// A drum machine sound's SOLO or MUTE lamp (this fork): `tr808.mute3` is (0, 3, false),
+/// `tr909.solo11` (1, 11, true).
+pub fn drum_lamp(id: &str) -> Option<(usize, usize, bool)> {
+    let (sec, name) = id.split_once('.')?;
+    let k = match sec {
+        "tr808" => 0,
+        "tr909" => 1,
+        _ => return None,
+    };
+    let (solo, n) = match name.strip_prefix("solo") {
+        Some(n) => (true, n),
+        None => (false, name.strip_prefix("mute")?),
+    };
+    let inst: usize = n.parse().ok()?;
+    (1..12).contains(&inst).then_some((k, inst, solo))
+}
+
 pub fn mixer_channel(sec: &str) -> usize {
     let n = sec.trim_start_matches("mixer").trim_start_matches("ccomp");
     n.parse::<usize>()
@@ -448,6 +471,8 @@ impl Panel {
             events: Vec::new(),
             solo: [false; 4],
             mute: [false; 4],
+            drum_solo: [[false; 12]; 2],
+            drum_mute: [[false; 12]; 2],
             tune_raw: HashMap::new(),
             audition: None,
             held: None,
@@ -534,6 +559,26 @@ impl Panel {
                 self.toggles.insert(id.clone(), on);
                 self.set_event(&id, on as i32);
             }
+        }
+    }
+
+    /// A Shift click on control `id` (this fork): on a mixer channel's SOLO or MUTE every
+    /// channel's of its kind off, on a drum machine sound's SOLO or MUTE every sound's of its
+    /// kind of that drum machine. False for any other control (the click is a plain one).
+    pub fn shift_press(&mut self, id: &str) -> bool {
+        let (sec, name) = id.split_once('.').unwrap_or((id, ""));
+        if let Some((k, _, solo)) = drum_lamp(id) {
+            if solo {
+                self.drum_solo[k] = [false; 12];
+            } else {
+                self.drum_mute[k] = [false; 12];
+            }
+            true
+        } else if sec.starts_with("mixer") && matches!(name, "solo" | "mutebtn" | "activity") {
+            self.clear_channels(name != "solo");
+            true
+        } else {
+            false
         }
     }
 
@@ -1030,6 +1075,7 @@ impl Panel {
             "tr808f" => !self.flipped(0),
             "tr909f" => !self.flipped(1),
             // (the FLIP face has no instrument switches: their sounds' upper pills choose)
+            // (a sound's SOLO and MUTE lamps, this fork, show on both faces)
             "tr808" => matches!(c.kind.as_str(), "knob" | "vswitch") && self.flipped(0),
             "tr909" => c.kind == "knob" && c.name() != "flam" && self.flipped(1),
             // a mixer channel's COMP face (this fork) over its MIX face, but the header's LEDs
@@ -1080,6 +1126,12 @@ impl Panel {
                 })
                 .fold(0, |b, s| b | 1 << s);
         }
+        // SOLO and MUTE (this fork): as the mixer's channels
+        let (solo, mute) = (self.drum_solo[k.min(1)], self.drum_mute[k.min(1)]);
+        let any_solo = solo[1..].iter().any(|&s| s);
+        for i in 1..12 {
+            m.silent[i] = if any_solo { !solo[i] } else { mute[i] };
+        }
         m
     }
 
@@ -1110,6 +1162,14 @@ impl Panel {
             }
             (_, "on") if sec.starts_with("pattern") => {
                 self.rows[index_of(sec, "pattern").unwrap_or(0).min(3)].enabled
+            }
+            ("tr808" | "tr909", _) if drum_lamp(id).is_some() => {
+                let (k, inst, solo) = drum_lamp(id).unwrap_or_default();
+                if solo {
+                    self.drum_solo[k][inst]
+                } else {
+                    self.drum_mute[k][inst]
+                }
             }
             (_, "solo") if sec.starts_with("mixer") => {
                 self.solo[index_of(sec, "mixer").unwrap_or(0).min(3)]
@@ -1152,6 +1212,16 @@ impl Panel {
             }
             // FLIP (this fork): the drum machine's other face; the panel's state, no message
             // and a sound's effects switch on that face (voice_mix)
+            // a sound's SOLO or MUTE lamp (this fork): the panel's state, heard by voice_mix
+            "tr808" | "tr909" if drum_lamp(id).is_some() => {
+                let (k, inst, solo) = drum_lamp(id).unwrap_or_default();
+                let lit = if solo {
+                    &mut self.drum_solo[k][inst]
+                } else {
+                    &mut self.drum_mute[k][inst]
+                };
+                *lit = !*lit;
+            }
             "tr808" | "tr909" if name == "flip" => {
                 let on = !self.toggles.get(id).copied().unwrap_or(false);
                 self.toggles.insert(id.into(), on);
@@ -1670,6 +1740,13 @@ impl Panel {
                 on_off(mode == Some(name == "ott"))
             }
             "toggle" => on_off(self.toggle_on(&c.id)),
+            // a drum machine sound's SOLO lamp, amber while soloed, and its MUTE lamp, green
+            // while the sound plays (unmuted, and soloed or none soloed), as a mixer channel's
+            // (this fork)
+            "sololed" => match drum_lamp(&c.id) {
+                Some((k, inst, false)) => on_off(!self.voice_mix(k).silent[inst]),
+                _ => on_off(self.toggle_on(&c.id)),
+            },
             // a mixer channel's C key (this fork): green while the channel's COMP or OTT is on
             "ccompkey" => on_off(self.ccomp_mode(mixer_channel(sec)).is_some()),
             "radio" => on_off(self.radio_on(&c.id)),

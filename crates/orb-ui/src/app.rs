@@ -1009,7 +1009,8 @@ impl App {
                 let down = r.is_pointer_button_down_on() || self.key_held(&c.id);
                 match kind {
                     "repeat" | "wind" => self.repeat(ui, c, &r),
-                    "switch" | "toggle" | "radio" | "trigger" | "grid" | "chanled" | "ccompkey" => {
+                    "switch" | "toggle" | "radio" | "trigger" | "grid" | "chanled" | "ccompkey"
+                    | "sololed" => {
                         // a right click on a pattern button opens the pattern menu instead
                         // (this fork, pattern_clip.rs): it does not select the pattern
                         let menu_click = pattern_button(&c.id).is_some()
@@ -1018,13 +1019,10 @@ impl App {
                             if let Some(k) = generate::synth_of(&c.id) {
                                 self.toggle_generate(k);
                             }
-                            // a mixer channel's SOLO or MUTE with Shift held (this fork):
-                            // every one of its kind off
-                            if matches!(c.name(), "solo" | "mutebtn" | "activity")
-                                && ui.input(|i| i.modifiers.shift)
-                            {
-                                self.panel.clear_channels(c.name() != "solo");
-                            } else {
+                            // a SOLO or MUTE of a mixer channel or of a drum machine's sound
+                            // with Shift held (this fork): every one of its kind off
+                            let shift = ui.input(|i| i.modifiers.shift);
+                            if !(shift && self.panel.shift_press(&c.id)) {
                                 self.panel.press(&c.id, now);
                             }
                         }

@@ -99,11 +99,12 @@ fn a_frame_of_the_panel() {
     // (2026-10-30): a change that makes a frame much bigger fails here (this fork, 2026-11-17:
     // 683 shapes, 646 and 657 meshes, 16282 and 19052 vertices with the step LEDs' numbers;
     // 2026-11-23: 732 shapes, 697 and 707 meshes, 18713 and 22384 vertices with the mixer's
-    // slot knobs and their labels)
+    // slot knobs and their labels; 2026-11-25: 799 shapes, 763 and 773 meshes, 18036 and 21292
+    // vertices with each drum sound's SOLO and MUTE lamps, + 44)
     for (c, max_vertices) in [(&native, 20_000), (&big, 24_000)] {
         assert!(c.shapes > 0 && c.meshes > 0 && c.vertices > 0);
-        assert!(c.shapes <= 770, "{} shapes", c.shapes);
-        assert!(c.meshes <= 740, "{} meshes", c.meshes);
+        assert!(c.shapes <= 770 + 44, "{} shapes", c.shapes);
+        assert!(c.meshes <= 740 + 44, "{} meshes", c.meshes);
         assert!(c.vertices <= max_vertices, "{} vertices", c.vertices);
     }
 }

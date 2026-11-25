@@ -1866,3 +1866,60 @@ fn a_shift_click_on_solo_or_mute_turns_all_of_them_off() {
         );
     }
 }
+
+/// (this fork) Each sound of the 808 and the 909 has a MUTE lamp (green while the sound plays)
+/// and a SOLO lamp (amber), on both faces: a muted sound is silent; while a sound of the drum
+/// machine is soloed only the soloed ones are heard, muted or not; a Shift click turns every
+/// SOLO or MUTE of that drum machine off. The other drum machine is untouched.
+#[test]
+fn a_drum_sounds_solo_and_mute_lamps() {
+    let controls = orb_ui::layout::controls();
+    let ctl = |id: &str| controls.iter().find(|c| c.id == id).unwrap().clone();
+    let mut h = Harness::new();
+    let part = |h: &Harness, id: &str| h.app.panel.part_name(&ctl(id), false, 0.0);
+    let silent = |h: &Harness, k: usize| h.app.panel.voice_mix(k).silent;
+    assert_eq!(part(&h, "tr808.mute1"), "drum808mute_on");
+    assert_eq!(part(&h, "tr909.solo2"), "drum909solo_off");
+    assert!(h.app.panel.voice_mix(0).neutral() && h.app.panel.voice_mix(1).neutral());
+    for k in 0..2 {
+        let dev = ["tr808", "tr909"][k];
+        // MUTE: that sound silent
+        h.click(&format!("{dev}.mute1"));
+        h.click(&format!("{dev}.mute3"));
+        let fam = format!("drum{}", &dev[2..]);
+        assert_eq!(part(&h, &format!("{dev}.mute1")), format!("{fam}mute_off"));
+        assert_eq!(part(&h, &format!("{dev}.mute2")), format!("{fam}mute_on"));
+        let s = silent(&h, k);
+        assert!(s[1] && s[3] && !s[2] && !s[11], "{dev}: {s:?}");
+        // SOLO: only the soloed heard, the muted soloed one too
+        h.click(&format!("{dev}.solo2"));
+        h.click(&format!("{dev}.solo3"));
+        assert_eq!(part(&h, &format!("{dev}.solo2")), format!("{fam}solo_on"));
+        // the green lamps of the sounds not heard off, the muted soloed one's lit
+        assert_eq!(part(&h, &format!("{dev}.mute4")), format!("{fam}mute_off"));
+        assert_eq!(part(&h, &format!("{dev}.mute3")), format!("{fam}mute_on"));
+        let s = silent(&h, k);
+        assert!(!s[2] && !s[3] && s[1] && s[4] && s[11], "{dev}: {s:?}");
+        assert!(
+            silent(&h, 1 - k).iter().all(|&x| !x),
+            "the other drum machine as it was"
+        );
+        // a Shift click on a SOLO: every SOLO off, the MUTEs as they were
+        h.move_to(Harness::center(&format!("{dev}.solo5")));
+        h.down(Modifiers::SHIFT);
+        h.up();
+        assert_eq!(h.app.panel.drum_solo[k], [false; 12]);
+        let s = silent(&h, k);
+        assert!(s[1] && s[3] && !s[2] && !s[5], "{dev}: {s:?}");
+        // on a MUTE: every MUTE off, the mix as the original's
+        h.move_to(Harness::center(&format!("{dev}.mute7")));
+        h.down(Modifiers::SHIFT);
+        h.up();
+        assert!(h.app.panel.voice_mix(k).neutral(), "{dev}");
+    }
+    // the lamps show on the FLIP face too
+    h.click("tr808.flip");
+    assert!(h.app.panel.flipped(0) && !h.app.panel.hidden(&ctl("tr808.solo4")));
+    h.click("tr808.solo4");
+    assert!(h.app.panel.drum_solo[0][4]);
+}

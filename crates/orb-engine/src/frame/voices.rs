@@ -13,8 +13,9 @@
 //! pan apply as for every channel.
 //!
 //! The pan is a balance: in the middle both sides take the voice whole, so a neutral mix (every
-//! pan in the middle, every lamp on) is the original's sound, and the engine then takes the
-//! original's path, bit for bit.
+//! pan in the middle, every lamp on, no sound silent) is the original's sound, and the engine
+//! then takes the original's path, bit for bit. A silent sound (the panel's SOLO and MUTE of
+//! the drum machine's sounds) goes into no bus at all; it keeps playing, unheard.
 
 use super::{BLOCK, Block, BlockContext, Devices, InsertEffect};
 
@@ -24,7 +25,7 @@ pub const PAN_CENTER: u8 = 64;
 /// Every slot's lamp on (bit s the slot s, top to bottom).
 pub const ALL: u8 = 0b1111;
 
-/// A drum machine's sounds' pans and slot lamps, by the panel's instrument index
+/// A drum machine's sounds' pans, slot lamps and silence, by the panel's instrument index
 /// (1 BD .. 11; 0, the accent, has no sound of its own and is not used).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VoiceMix {
@@ -33,6 +34,8 @@ pub struct VoiceMix {
     /// The lamps (bit s the effects slot s): off, the sound goes around that slot's insert, or
     /// does not go into its send effect.
     pub lamps: [u8; 12],
+    /// The sounds not heard (the panel's SOLO and MUTE): no bus gets them.
+    pub silent: [bool; 12],
 }
 
 impl Default for VoiceMix {
@@ -40,19 +43,23 @@ impl Default for VoiceMix {
         VoiceMix {
             pan: [PAN_CENTER; 12],
             lamps: [ALL; 12],
+            silent: [false; 12],
         }
     }
 }
 
 impl VoiceMix {
-    /// Every pan in the middle and every lamp on: the original's sound.
+    /// Every pan in the middle, every lamp on and no sound silent: the original's sound.
     pub fn neutral(&self) -> bool {
         *self == VoiceMix::default()
     }
 
     /// The left and right gains of instrument `inst`: a balance, 1 on both sides in the middle,
-    /// the other side going down to 0 toward either end.
+    /// the other side going down to 0 toward either end; 0 on both while it is silent.
     pub fn gains(&self, inst: usize) -> (f64, f64) {
+        if self.silent.get(inst).copied().unwrap_or(false) {
+            return (0.0, 0.0);
+        }
         let p = self.pan.get(inst).copied().unwrap_or(PAN_CENTER).min(127) as f64;
         let c = PAN_CENTER as f64;
         let l = if p <= c {
@@ -224,6 +231,12 @@ mod tests {
         let mut m = VoiceMix::default();
         m.lamps[3] = 0b0101;
         assert!(!m.neutral());
+        // a silent sound: on neither side, the others as they are
+        let mut m = VoiceMix::default();
+        m.silent[2] = true;
+        assert!(!m.neutral());
+        assert_eq!(m.gains(2), (0.0, 0.0));
+        assert_eq!(m.gains(1), (1.0, 1.0));
     }
 
     #[test]
