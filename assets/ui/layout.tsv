@@ -622,8 +622,8 @@ ccomp1.gr6	ccomp1	meter	gr_led_off	494.5	75	7	10
 ccomp1.gr7	ccomp1	meter	gr_led_off	501.5	75	7	10
 ccomp1.gr8	ccomp1	meter	gr_led_off	508.5	75	7	10
 ccomp1.gr9	ccomp1	meter	gr_led_off	515.5	75	7	10
-ccomp1.on	ccomp1	toggle	ccompon_off	476	101.32	8	8
-ccomp1.ott	ccomp1	toggle	ccompott_off	498	101.32	8	8
+ccomp1.on	ccomp1	toggle	ccompon_off	478	100	10	10
+ccomp1.ott	ccomp1	toggle	ccompott_off	494	99.99	10	10
 ccomp1.ratio	ccomp1	knob	knob_22	462	116	22	22
 ccomp1.thres	ccomp1	knob	knob_22	498	116	22	22
 ccomp1.ratio_label	ccomp1	ottlabel	ccomplbl_ratio_off	461	140.41	24	5
@@ -638,8 +638,8 @@ ccomp2.gr6	ccomp2	meter	gr_led_off	494.5	190	7	10
 ccomp2.gr7	ccomp2	meter	gr_led_off	501.5	190	7	10
 ccomp2.gr8	ccomp2	meter	gr_led_off	508.5	190	7	10
 ccomp2.gr9	ccomp2	meter	gr_led_off	515.5	190	7	10
-ccomp2.on	ccomp2	toggle	ccompon_off	476	216.32	8	8
-ccomp2.ott	ccomp2	toggle	ccompott_off	498	216.32	8	8
+ccomp2.on	ccomp2	toggle	ccompon_off	478	215	10	10
+ccomp2.ott	ccomp2	toggle	ccompott_off	494	214.99	10	10
 ccomp2.ratio	ccomp2	knob	knob_22	462	231	22	22
 ccomp2.thres	ccomp2	knob	knob_22	498	231	22	22
 ccomp2.ratio_label	ccomp2	ottlabel	ccomplbl_ratio_off	461	255.41	24	5
@@ -654,8 +654,8 @@ ccomp3.gr6	ccomp3	meter	gr_led_off	494.5	305	7	10
 ccomp3.gr7	ccomp3	meter	gr_led_off	501.5	305	7	10
 ccomp3.gr8	ccomp3	meter	gr_led_off	508.5	305	7	10
 ccomp3.gr9	ccomp3	meter	gr_led_off	515.5	305	7	10
-ccomp3.on	ccomp3	toggle	ccompon_off	476	331.32	8	8
-ccomp3.ott	ccomp3	toggle	ccompott_off	498	331.32	8	8
+ccomp3.on	ccomp3	toggle	ccompon_off	478	330	10	10
+ccomp3.ott	ccomp3	toggle	ccompott_off	494	329.99	10	10
 ccomp3.ratio	ccomp3	knob	knob_22	462	346	22	22
 ccomp3.thres	ccomp3	knob	knob_22	498	346	22	22
 ccomp3.ratio_label	ccomp3	ottlabel	ccomplbl_ratio_off	461	370.41	24	5
@@ -670,8 +670,8 @@ ccomp4.gr6	ccomp4	meter	gr_led_off	494.5	420	7	10
 ccomp4.gr7	ccomp4	meter	gr_led_off	501.5	420	7	10
 ccomp4.gr8	ccomp4	meter	gr_led_off	508.5	420	7	10
 ccomp4.gr9	ccomp4	meter	gr_led_off	515.5	420	7	10
-ccomp4.on	ccomp4	toggle	ccompon_off	476	446.32	8	8
-ccomp4.ott	ccomp4	toggle	ccompott_off	498	446.32	8	8
+ccomp4.on	ccomp4	toggle	ccompon_off	478	445	10	10
+ccomp4.ott	ccomp4	toggle	ccompott_off	494	444.99	10	10
 ccomp4.ratio	ccomp4	knob	knob_22	462	461	22	22
 ccomp4.thres	ccomp4	knob	knob_22	498	461	22	22
 ccomp4.ratio_label	ccomp4	ottlabel	ccomplbl_ratio_off	461	485.41	24	5

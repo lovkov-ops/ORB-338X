@@ -1177,10 +1177,24 @@ impl Panel {
                     _ => self.flip(id),
                 }
             }
-            // a channel's COMP face (this fork): ON, OTT, and the back key to the MIX face
+            // a channel's COMP face (this fork): the COMP and OTT lamps, and the back key to
+            // the MIX face. A lamp turns its kind on and the other off; the lit one, both off.
             s if s.starts_with("ccomp") => match name {
                 "back" => self.ccomp_open[mixer_channel(s)] = false,
-                "on" | "ott" => self.flip(id),
+                "on" | "ott" => {
+                    let ott = name == "ott";
+                    let lit = self.ccomp_mode(mixer_channel(s)) == Some(ott);
+                    // off before the OTT flag changes, on after: the engine never hears
+                    // the other kind for a moment
+                    let (on, flag) = (format!("{s}.on"), format!("{s}.ott"));
+                    if lit {
+                        self.set_toggle(&on, false);
+                        self.set_toggle(&flag, false);
+                    } else {
+                        self.set_toggle(&flag, ott);
+                        self.set_toggle(&on, true);
+                    }
+                }
                 _ => {}
             },
             // the master's LIMIT key (this fork, in place of the COMP key)
@@ -1200,6 +1214,21 @@ impl Panel {
                     self.flip(id);
                 }
             }
+        }
+    }
+
+    /// Mixer channel `c`'s compressor (this fork): `None` off, `Some(false)` the COMP,
+    /// `Some(true)` the OTT (the engine's ON with its OTT flag).
+    pub fn ccomp_mode(&self, c: usize) -> Option<bool> {
+        let n = c + 1;
+        self.toggle_on(&format!("ccomp{n}.on"))
+            .then(|| self.toggle_on(&format!("ccomp{n}.ott")))
+    }
+
+    /// Toggle `id` to `v`, sending it when it changes.
+    fn set_toggle(&mut self, id: &str, v: bool) {
+        if self.toggle_on(id) != v {
+            self.flip(id);
         }
     }
 
@@ -1634,19 +1663,15 @@ impl Panel {
                 }
             }
             "toggle" if c.id == "tr909.flam_button" => on_off(self.flam_button),
-            "toggle" => on_off(self.toggle_on(&c.id)),
-            // a mixer channel's C key (this fork): green while the channel's compressor is on,
-            // orange while its OTT is on too
-            "ccompkey" => {
-                let n = mixer_channel(sec) + 1;
-                let on = self.toggle_on(&format!("ccomp{n}.on"));
-                let ott = self.toggle_on(&format!("ccomp{n}.ott"));
-                match (on, ott) {
-                    (false, _) => format!("{fam}off"),
-                    (true, false) => format!("{fam}on"),
-                    (true, true) => format!("{fam}ott"),
-                }
+            // the channel COMP face's lamps (this fork): COMP lit for the compressor, OTT for
+            // the OTT, never both
+            "toggle" if sec.starts_with("ccomp") => {
+                let mode = self.ccomp_mode(mixer_channel(sec));
+                on_off(mode == Some(name == "ott"))
             }
+            "toggle" => on_off(self.toggle_on(&c.id)),
+            // a mixer channel's C key (this fork): green while the channel's COMP or OTT is on
+            "ccompkey" => on_off(self.ccomp_mode(mixer_channel(sec)).is_some()),
             "radio" => on_off(self.radio_on(&c.id)),
             "switch" | "hswitch" | "vswitch" => format!("{fam}{}", self.switch_position(&c.id)),
             "trigger" if c.id == "transport.play" => {
@@ -1659,6 +1684,10 @@ impl Panel {
             "trigger" | "wind" | "repeat" => push(),
             "led" => on_off(self.led_on(c, now)),
             // the COMP's RATIO and THRES labels (this fork): BAL and GAIN while its OTT is on
+            // (a channel's COMP face: while its OTT lamp is lit)
+            "ottlabel" if sec.starts_with("ccomp") => {
+                on_off(self.ccomp_mode(mixer_channel(sec)) == Some(true))
+            }
             "ottlabel" => on_off(self.toggle_on(&format!("{sec}.ott"))),
             // the mixer channel's MUTE LED (this fork): green while it plays
             "chanled" => on_off(self.channel_active(index_of(sec, "mixer").unwrap_or(0).min(3))),

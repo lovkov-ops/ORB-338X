@@ -2072,18 +2072,14 @@ fn mixer_and_effects(c: &mut Cuts) {
     c.places.extend(dup);
 }
 
-/// The lit colors of the channel COMP face's lamps (this fork): ON green, OTT amber, as the
-/// header's LEDs.
-const CCOMP_LAMPS: [(&str, &str, &str); 2] =
-    [("on", "#53d86a", "#c8f8cc"), ("ott", "#ffb000", "#ffe9a8")];
-/// How far the channel COMP face's ON and OTT lamps sit left and right of the mockup's OTT.
-pub const CCOMP_LAMP_DX: f32 = 11.0;
+/// The size of the channel COMP face's COMP and OTT lamps (this fork): the lit one's glow fits.
+const CCOMP_LAMP_W: f32 = 10.0;
 
 /// (this fork) Each mixer channel's C key and its COMP face (`Mockup::mix_c`, `comp_m`, drawn
 /// at the first channel's place; the other channels' 115 px lower each): the C key under LO
-/// (its letter orange while the channel's compressor is on); on the face the gain-reduction
-/// LEDs, the ON and OTT lamps side by side, RATIO and THRES, and the back key. The face's
-/// header LEDs and meter are the channel's own (the mixer's, drawn over it).
+/// (its letter green while the channel's COMP or OTT is on); on the face the gain-reduction
+/// LEDs, the COMP and OTT lamps (one lit at a time), RATIO and THRES, and the back key. The
+/// face's header LEDs and meter are the channel's own (the mixer's, drawn over it).
 fn channel_comp(c: &mut Cuts) {
     let (mc, mm) = (Mockup::mix_c(), Mockup::comp_m());
     let rows = |c: &mut Cuts, id: &str, x: f32, y: f32| {
@@ -2099,11 +2095,14 @@ fn channel_comp(c: &mut Cuts) {
     let letter = grp(mc, "0.2.2");
     c.parts
         .push(part("mixc_off", kb.x0, kb.y0, kb.w(), kb.h(), &body(&key)));
-    // lit green with the compressor on, orange with its OTT on too
-    for (name, col) in [("mixc_on", "#53d86a"), ("mixc_ott", "#ffb000")] {
-        let lit = format!("{}{}", body(&face), recolor(&letter, &[("#9aa7b8", col)]));
-        c.parts.push(part(name, kb.x0, kb.y0, kb.w(), kb.h(), &lit));
-    }
+    // lit green while the channel's COMP or OTT is on
+    let lit = format!(
+        "{}{}",
+        body(&face),
+        recolor(&letter, &[("#9aa7b8", "#53d86a")])
+    );
+    c.parts
+        .push(part("mixc_on", kb.x0, kb.y0, kb.w(), kb.h(), &lit));
     rows(c, "mixer#.c", kb.x0, kb.y0);
     // the back key: as drawn, pressed with a darker face
     let back = grp(mm, "0.2");
@@ -2128,13 +2127,13 @@ fn channel_comp(c: &mut Cuts) {
     c.take(&back);
     rows(c, "ccomp#.back", bb.x0, bb.y0);
     // the header's LEDs and meter: the channel's own (the meter's well stays)
-    for g in ["0.13", "0.14", "0.17"] {
+    for g in ["0.4", "0.5", "0.19"] {
         c.take(&grp(mm, g));
     }
     // the gain-reduction LEDs (the effects' COMP face's parts)
     for i in 0..9 {
-        let well = grp(mm, &format!("0.18.{}", 2 * i));
-        let light = grp(mm, &format!("0.18.{}", 2 * i + 1));
+        let well = grp(mm, &format!("0.20.{}", 2 * i));
+        let light = grp(mm, &format!("0.20.{}", 2 * i + 1));
         let wb = bbox(&well);
         c.take(&well);
         c.take(&light);
@@ -2142,8 +2141,8 @@ fn channel_comp(c: &mut Cuts) {
     }
     // RATIO and THRES, and their labels: BAL and GAIN while the OTT is on
     for (g, lg, id, alt) in [
-        ("0.19", "0.9", "ratio", "BAL"),
-        ("0.20", "0.12", "thres", "GAIN"),
+        ("0.21", "0.11", "ratio", "BAL"),
+        ("0.22", "0.16", "thres", "GAIN"),
     ] {
         let (x, y) = knob22(c, mm, g, None);
         rows(c, &format!("ccomp#.{id}"), x - 11.0, y - 11.0);
@@ -2168,56 +2167,25 @@ fn channel_comp(c: &mut Cuts) {
             .push(part(&format!("ccomplbl_{id}_on"), x, y, w, h, &t.s));
         rows(c, &format!("ccomp#.{id}_label"), x, y);
     }
-    // the ON and OTT lamps, as the mockup's OTT LED (lit: a colored core with its glint), left
-    // and right of where it is; the OTT label moves with its lamp, ON's is written
-    let led = grp(mm, "0.11");
-    let lb = bbox(&led);
-    let (cx, cy) = (lb.cx(), lb.cy());
-    let w = 8.0;
-    for (name, col, glint) in CCOMP_LAMPS {
-        let at = |dx: f32| (cx - w / 2.0 + dx, cy - w / 2.0);
-        let (x, y) = at(0.0);
-        c.parts
-            .push(part(&format!("ccomp{name}_off"), x, y, w, w, &body(&led)));
-        let n = crate::svg::n;
-        let lit = format!(
-            "{}<circle cx=\"{}\" cy=\"{}\" r=\"2.4\" fill=\"{col}\"/>\
-             <circle cx=\"{}\" cy=\"{}\" r=\"1.1\" fill=\"{glint}\"/>",
-            body(&led),
-            n(cx),
-            n(cy),
-            n(cx - 0.4),
-            n(cy - 0.5)
-        );
-        c.parts
-            .push(part(&format!("ccomp{name}_on"), x, y, w, w, &lit));
-        let dx = if name == "on" {
-            -CCOMP_LAMP_DX
-        } else {
-            CCOMP_LAMP_DX
-        };
-        let (px, py) = at(dx);
-        rows(c, &format!("ccomp#.{name}"), px, py);
+    // the COMP and OTT lamps: the mockup draws COMP lit and OTT dark; each lamp's two
+    // pictures are those, moved to its place (by the cores' centers); the labels stay
+    let (lit, dark) = (grp(mm, "0.13"), grp(mm, "0.14"));
+    let core = |g: &str| {
+        let b = bbox(&grp(mm, g));
+        (b.cx(), b.cy())
+    };
+    let (comp_at, ott_at) = (core("0.13.1"), core("0.14.1"));
+    let w = CCOMP_LAMP_W;
+    for (name, (cx, cy)) in [("on", comp_at), ("ott", ott_at)] {
+        let (x, y) = (cx - w / 2.0, cy - w / 2.0);
+        for (state, v, (fx, fy)) in [("off", &dark, ott_at), ("on", &lit, comp_at)] {
+            let svg = moved(v, cx - fx, cy - fy);
+            c.parts
+                .push(part(&format!("ccomp{name}_{state}"), x, y, w, w, &svg));
+        }
+        rows(c, &format!("ccomp#.{name}"), x, y);
     }
-    c.take(&led);
-    let ott = grp(mm, "0.10");
-    let ob = bbox(&ott);
-    c.replace(&ott, &moved(&ott, CCOMP_LAMP_DX, 0.0));
-    let mut on = crate::svg::Svg::new();
-    crate::font::text(
-        &mut on,
-        cx - CCOMP_LAMP_DX,
-        ob.y0 + ob.h() / 2.0,
-        ob.h() - 0.07,
-        crate::font::Anchor::Middle,
-        "#9aa7b8",
-        "ON",
-    );
-    c.background_with(
-        mm,
-        "comp",
-        "bg_ccomp",
-        Bx::new(456.0, 50.0, 70.0, 115.0),
-        &on.s,
-    );
+    c.take(&lit);
+    c.take(&dark);
+    c.background(mm, "comp", "bg_ccomp", Bx::new(456.0, 50.0, 70.0, 115.0));
 }

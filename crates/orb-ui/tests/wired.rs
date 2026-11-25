@@ -1751,9 +1751,9 @@ fn the_tape_and_ott_lamps_reach_the_engine() {
 }
 
 /// (this fork) Each mixer channel's own compressor: its C key opens the COMP face in place of
-/// the MIX face, the back key closes it; ON, RATIO, THRES and OTT reach the engine, and the C
-/// key is lit while the compressor is on. On the channel the song's compressor is on
-/// (`comp_id`), the face sets that one.
+/// the MIX face, the back key closes it; the COMP and OTT lamps (one lit at a time), RATIO and
+/// THRES reach the engine, and the C key is lit green while either is on. On the channel the
+/// song's compressor is on (`comp_id`), the face sets that one.
 #[test]
 fn a_channels_c_key_opens_its_compressor() {
     use orb_engine::frame::CCOMP;
@@ -1775,19 +1775,52 @@ fn a_channels_c_key_opens_its_compressor() {
     h.drag("ccomp2.ratio", 20.0);
     let v = orb_ui::behavior::knob_send(h.app.panel.knob("ccomp2.ratio")) as u8;
     assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[CCOMP + 5, v])]);
-    // the C key green with the compressor on; with the OTT orange, the labels BAL and GAIN
+    // the C key green with the COMP on; the OTT in its place: the COMP lamp off, the C key
+    // as green, the labels BAL and GAIN
     let part = |h: &Harness, id: &str| h.app.panel.part_name(&ctl(id), false, 0.0);
+    let lamps = |h: &Harness| [part(h, "ccomp2.on"), part(h, "ccomp2.ott")];
     assert_eq!(part(&h, "mixer2.c"), "mixc_on");
+    assert_eq!(lamps(&h), ["ccompon_on", "ccompott_off"]);
     assert_eq!(part(&h, "ccomp2.ratio_label"), "ccomplbl_ratio_off");
     h.click("ccomp2.ott");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[CCOMP + 7, 1])]);
+    assert_eq!(lamps(&h), ["ccompon_off", "ccompott_on"]);
     h.calls(2);
     h.frame(vec![]);
     let s = h.snap();
     assert_eq!(s.mixer.ccomp[1], [1, v, 64, 1]);
     assert!(s.mixer.ccomp[0][0] == 0);
-    assert_eq!(part(&h, "mixer2.c"), "mixc_ott");
+    assert_eq!(part(&h, "mixer2.c"), "mixc_on");
     assert_eq!(part(&h, "ccomp2.ratio_label"), "ccomplbl_ratio_on");
     assert_eq!(part(&h, "ccomp2.thres_label"), "ccomplbl_thres_on");
+    // the COMP lamp: back to the COMP; the lit one: both off, the C key dark
+    h.click("ccomp2.on");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[CCOMP + 7, 0])]);
+    assert_eq!(lamps(&h), ["ccompon_on", "ccompott_off"]);
+    assert_eq!(part(&h, "ccomp2.ratio_label"), "ccomplbl_ratio_off");
+    h.click("ccomp2.on");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[CCOMP + 4, 0])]);
+    assert_eq!(lamps(&h), ["ccompon_off", "ccompott_off"]);
+    assert_eq!(part(&h, "mixer2.c"), "mixc_off");
+    // the OTT from off: its flag, then on; off again: off, then its flag
+    h.click("ccomp2.ott");
+    assert_eq!(
+        h.take_log(),
+        vec![
+            dev(Device::Mixer, 145, &[CCOMP + 7, 1]),
+            dev(Device::Mixer, 145, &[CCOMP + 4, 1])
+        ]
+    );
+    assert_eq!(lamps(&h), ["ccompon_off", "ccompott_on"]);
+    h.click("ccomp2.ott");
+    assert_eq!(
+        h.take_log(),
+        vec![
+            dev(Device::Mixer, 145, &[CCOMP + 4, 0]),
+            dev(Device::Mixer, 145, &[CCOMP + 7, 0])
+        ]
+    );
+    assert_eq!(part(&h, "mixer2.c"), "mixc_off");
     h.click("ccomp2.back");
     assert!(!h.app.panel.ccomp_open[1]);
     // the song's compressor on channel 3: its face sets the song's

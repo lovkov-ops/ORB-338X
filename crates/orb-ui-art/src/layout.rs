@@ -687,8 +687,8 @@ fn channel_comp(b: &mut Builder, c: usize) {
             25.0,
         );
     }
-    b.part("on", "toggle", "ccompon_off", 20.0, 51.0);
-    b.part("ott", "toggle", "ccompott_off", 42.0, 51.0);
+    b.part("on", "toggle", "ccompon_off", 22.0, 50.0);
+    b.part("ott", "toggle", "ccompott_off", 38.0, 50.0);
     b.knob("ratio", KNOB_22, 6.0, 66.0, 0.3);
     b.knob("thres", KNOB_22, 42.0, 66.0, 0.6);
     b.part("ratio_label", "ottlabel", "ccomplbl_ratio_off", 5.0, 90.4);
