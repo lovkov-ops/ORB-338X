@@ -327,7 +327,7 @@ pub struct Panel {
     tune_raw: HashMap<String, i32>,
     /// A 303 key pressed in pitch mode (this fork, `audition.rs`): the synth, the pattern and
     /// the step it wrote, for the app to play the note; taken by the app.
-    pub audition: Option<(usize, u8, usize)>,
+    pub audition: Option<(usize, u8, usize, bool)>,
     /// The knob or fader being dragged (set by the window): the engine's value does not move it.
     pub held: Option<String>,
     knobs: HashMap<String, i32>,
@@ -1392,6 +1392,11 @@ impl Panel {
             s.flash_until = now + NOTE_FLASH;
             s.flash_note = note;
             sent = Some((0, note));
+            // this fork: out of pitch mode the key's note is heard, the song playing or not
+            // (a Shift click is not: `App` drops it)
+            if !s.pitch_mode {
+                self.audition = Some((k, pattern, edit, true));
+            }
             if s.pitch_mode {
                 // this fork: the key's step plays, a rest becomes a note (as Note/Pause would)
                 let st = &mut s.patterns[pattern as usize][edit];
@@ -1400,7 +1405,7 @@ impl Panel {
                     also = Some((5, 0));
                 }
                 s.move_edit(1);
-                self.audition = Some((k, pattern, edit));
+                self.audition = Some((k, pattern, edit, false));
             }
         } else {
             let st = &mut s.patterns[pattern as usize][edit];
@@ -1857,7 +1862,15 @@ impl Panel {
                 .strip_prefix("key")
                 .and_then(|n| n.strip_suffix("_led"))
                 .and_then(|n| n.parse::<u8>().ok())
-                .is_some_and(|note| s.note_lit(pattern, note, now)),
+                .is_some_and(|note| match self.playing_step303[k] {
+                    // this fork: while it plays (out of pitch mode), the note of the step that
+                    // plays; none on a rest
+                    Some(i) if self.transport.playing && !s.pitch_mode => {
+                        let st = &s.patterns[pattern as usize][i];
+                        !st.rest && st.note == note
+                    }
+                    _ => s.note_lit(pattern, note, now),
+                }),
         }
     }
 
@@ -2484,6 +2497,50 @@ mod tests {
             .filter(|e| matches!(e, Event::Step303 { .. }))
             .count();
         assert_eq!(n, 1);
+    }
+
+    /// (this fork) Out of pitch mode a key writes the edit step and is heard, the song playing
+    /// or not, without moving the edit step; while it plays, the keys light the playing step's
+    /// note (none on a rest), stopped the edit step's.
+    #[test]
+    fn the_303_keys_play_and_light_the_playing_step() {
+        let ctl = |id: &str| {
+            crate::layout::controls()
+                .into_iter()
+                .find(|c| c.id == id)
+                .unwrap()
+        };
+        let lit = |p: &Panel, n: u8| p.led_on(&ctl(&format!("tb303_1.key{n}_led")), 0.0);
+        let mut p = Panel::new();
+        p.synth[0].edit = 3;
+        p.press("tb303_1.key7", 0.0);
+        assert_eq!(p.audition, Some((0, 0, 3, true)));
+        assert_eq!((p.synth[0].patterns[0][3].note, p.synth[0].edit), (7, 3));
+        p.audition = None;
+        p.transport.playing = true;
+        p.press("tb303_1.key9", 0.0);
+        assert_eq!(
+            p.audition,
+            Some((0, 0, 3, true)),
+            "heard while it plays too"
+        );
+        // the playing step 1 is a note 5, step 2 a rest
+        p.synth[0].patterns[0][0] = Step303 {
+            note: 5,
+            rest: false,
+            ..Default::default()
+        };
+        p.playing_step303[0] = Some(0);
+        assert!(lit(&p, 5) && !lit(&p, 9));
+        p.playing_step303[0] = Some(1);
+        assert!((0..13).all(|n| !lit(&p, n)), "a rest lights no key");
+        // stopped: the edit step's note
+        p.transport.playing = false;
+        assert!(lit(&p, 9) && !lit(&p, 5));
+        // pitch mode: heard only while stopped, as before
+        p.press("tb303_1.pitch_button", 0.0);
+        p.press("tb303_1.key2", 1.0);
+        assert_eq!(p.audition, Some((0, 0, 0, false)));
     }
 
     #[test]

@@ -108,6 +108,18 @@ pub fn render_note(
     });
     engine.stop();
     engine.set_song_mode(0);
+    // a song file may hold a selection past 31 (the panel and the player keep 31): the
+    // other rows tick too, and their arrays have 32 patterns
+    for d in [
+        Device::Tb303_1,
+        Device::Tb303_2,
+        Device::Tr808,
+        Device::Tr909,
+    ] {
+        if song.device_payload(d)[1] > 31 {
+            engine.device_param(d, 1, 31);
+        }
+    }
     let dev = if synth == 0 {
         Device::Tb303_1
     } else {
@@ -172,13 +184,13 @@ impl App {
         orb_engine::load::convert(&parsed).ok()
     }
 
-    /// A key pressed in pitch mode this frame ([`crate::model::Panel::audition`]): heard while
-    /// the song is stopped and there is a player.
+    /// A 303 key pressed this frame ([`crate::model::Panel::audition`]): heard while there is a
+    /// player; in pitch mode only while the song is stopped, out of it (this fork) at any time.
     pub(crate) fn audition_step(&mut self) {
-        let Some((synth, pattern, step)) = self.panel.audition.take() else {
+        let Some((synth, pattern, step, any_time)) = self.panel.audition.take() else {
             return;
         };
-        if self.panel.transport.playing || self.link.is_none() {
+        if (self.panel.transport.playing && !any_time) || self.link.is_none() {
             return;
         }
         let Some(song) = self.audition_song() else {

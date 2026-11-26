@@ -1945,6 +1945,28 @@ fn a_shift_click_on_a_drum_sounds_name_chooses_it_without_playing_it() {
     assert!(h.audio.preview_position().is_some());
 }
 
+/// (this fork) A click on a 303 key out of pitch mode writes its note and plays it, while the
+/// song plays too; a Shift click only writes it, as a Shift click on a drum sound's name.
+#[test]
+fn a_303_key_plays_its_note_and_a_shift_click_does_not() {
+    let mut h = Harness::new();
+    h.click("transport.play");
+    h.calls(2);
+    h.move_to(Harness::center("tb303_1.key7"));
+    h.down(Modifiers::SHIFT);
+    h.up();
+    h.calls(1);
+    assert_eq!(h.app.panel.synth[0].patterns[0][0].note, 7);
+    assert_eq!(h.audio.preview_position(), None);
+    h.click("tb303_1.key4");
+    h.calls(1);
+    assert_eq!(h.app.panel.synth[0].patterns[0][0].note, 4);
+    assert_eq!(h.app.panel.synth[0].edit, 0);
+    assert!(h.audio.preview_position().is_some());
+    h.click("transport.stop");
+    h.calls(2);
+}
+
 /// (this fork) The 303s' channels' sidechain on their COMP faces: the SC knob and the lamp
 /// that picks the BD, the 808's (red, off) or the 909's (orange, on), with its label; they
 /// reach the engine, and the drum machines' channels have none.

@@ -1049,6 +1049,11 @@ impl App {
                             let shift = ui.input(|i| i.modifiers.shift);
                             if !(shift && self.panel.shift_press(&c.id)) {
                                 self.panel.press(&c.id, now);
+                                // a 303 key with Shift held (this fork): its note is written
+                                // but not heard, as a Shift click on a drum's name
+                                if shift && c.section.starts_with("tb303_") {
+                                    self.panel.audition = None;
+                                }
                             }
                         }
                         // an effects lamp of a FLIP face (this fork): a double click, as
