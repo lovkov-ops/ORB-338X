@@ -79,6 +79,25 @@ impl Harness {
         }
     }
 
+    /// One call of the engine and a tick of eframe's `App::logic` with the window shown or
+    /// hidden (no egui pass: egui's time stands still), 10 ms of the clock apart.
+    fn logic(&mut self, hidden: bool) {
+        let mut out = vec![0i16; 2 * CALL_FRAMES];
+        self.audio.render_i16(&mut out);
+        let mut input = RawInput::default();
+        input.viewports.insert(
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo {
+                minimized: Some(false),
+                occluded: Some(hidden),
+                ..Default::default()
+            },
+        );
+        let app = &mut self.app;
+        let _ = self.ctx.run_logic(&input, |ctx| app.hidden_tick(ctx));
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+
     fn open(&mut self, path: &Path) {
         self.app.open_song(path);
         assert!(self.app.errors.is_empty(), "{:?}", self.app.errors);
@@ -175,6 +194,35 @@ fn an_lfo_at_no_amount_sends_nothing_and_its_knobs_start_at_their_defaults() {
     assert!(h.cutoffs_sent(0).is_empty());
     assert_eq!(h.app.lfo_base(0, 0), None);
     assert!(h.app.gen_state().is_empty());
+}
+
+#[test]
+fn the_lfo_keeps_moving_while_the_window_is_hidden() {
+    // a full screen window on a Space the user left draws no frames: the LFO goes on anyway
+    let mut h = Harness::new();
+    h.open(&song());
+    let [cutoff, rate, amount, _] = lfo::ids(0, 0);
+    let base = h.app.panel.value(&cutoff).unwrap();
+    h.set(&rate, 127); // 20 Hz free
+    h.set(&amount, 32);
+    h.calls(2);
+    // shown, the frames step the LFO, not the logic tick
+    h.start_log();
+    for _ in 0..5 {
+        h.logic(false);
+    }
+    assert!(h.cutoffs_sent(0).is_empty());
+    for _ in 0..30 {
+        h.logic(true);
+    }
+    let sent = h.cutoffs_sent(0);
+    assert!(sent.len() > 5, "{sent:?}");
+    let (lo, hi) = (*sent.iter().min().unwrap(), *sent.iter().max().unwrap());
+    assert!(lo < base && hi > base, "{lo} {base} {hi}");
+    assert_eq!(h.app.panel.value(&cutoff), Some(base));
+    // shown again, the frames go on from there
+    h.calls(10);
+    assert!(!h.cutoffs_sent(0).is_empty());
 }
 
 #[test]

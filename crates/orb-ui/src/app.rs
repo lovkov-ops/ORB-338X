@@ -202,10 +202,11 @@ pub struct App {
     pub(crate) gen_redo: [Vec<(u8, [crate::model::Step303; 16])>; 2],
     /// The LFOs of each bass synth's five large knobs (`lfo.rs`), indexed by synth then knob
     /// (`lfo::PARAMS`): their mode buttons, their running state, and the egui time of the last
-    /// step.
+    /// step with the clock's instant of it (a hidden window's egui time stands still).
     pub(crate) lfo_mode: [[crate::lfo::Mode; 5]; 2],
     pub(crate) lfo_run: [[crate::lfo::Runner; 5]; 2],
     pub(crate) lfo_time: Option<f64>,
+    pub(crate) lfo_stamp: Option<std::time::Instant>,
     pub(crate) rng: crate::random::Rng,
     /// The pattern Copy or Cut took last (`pattern_clip.rs`).
     pub(crate) pattern_clip: Option<crate::pattern_clip::PatternClip>,
@@ -293,6 +294,7 @@ impl App {
                 std::array::from_fn(|p| crate::lfo::Runner::new(11 + 10 * k as u64 + p as u64))
             }),
             lfo_time: None,
+            lfo_stamp: None,
             rng: crate::random::Rng::from_time(),
             pattern_clip: None,
             clip_text: None,
@@ -407,7 +409,28 @@ impl App {
     }
 }
 
+impl App {
+    /// What goes on while the window is hidden (minimized, covered, or full screen on a Space
+    /// the user left): eframe draws no frames then, so `show` does not run, but the engine's
+    /// side of the panel (the song position) and the LFOs keep moving from here.
+    pub fn hidden_tick(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.viewport().visible()) != Some(false) {
+            return;
+        }
+        if let Some(link) = &mut self.link {
+            let before = link.recorded_revision();
+            link.sync(&mut self.panel);
+            self.doc.modified |= link.recorded_revision() != before;
+        }
+        self.lfo_step_hidden(ctx);
+    }
+}
+
 impl eframe::App for App {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.hidden_tick(ctx);
+    }
+
     fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
         egui_extras::install_image_loaders(ui.ctx());
         self.close_check(&ui.ctx().clone());

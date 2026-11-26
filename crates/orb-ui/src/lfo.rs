@@ -333,6 +333,7 @@ impl App {
     pub(crate) fn lfo_step(&mut self, ctx: &Context, now: f64) {
         let dt = (now - self.lfo_time.unwrap_or(now)).clamp(0.0, 0.25);
         self.lfo_time = Some(now);
+        self.lfo_stamp = Some(std::time::Instant::now());
         let mut running = false;
         for k in 0..2 {
             for p in 0..PARAMS.len() {
@@ -342,6 +343,14 @@ impl App {
         if running {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
+    }
+
+    /// [`App::lfo_step`] while the window is hidden, where egui's time stands still: the time
+    /// goes on by the clock since the last step.
+    pub(crate) fn lfo_step_hidden(&mut self, ctx: &Context) {
+        let since = self.lfo_stamp.map_or(0.0, |t| t.elapsed().as_secs_f64());
+        let now = self.lfo_time.unwrap_or(0.0) + since;
+        self.lfo_step(ctx, now);
     }
 
     /// [`App::lfo_step`] for synth `k`'s knob `p`: whether its LFO runs.
