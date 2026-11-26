@@ -1420,8 +1420,9 @@ impl App {
             let hit = hit.filter(|&i| is808 || i != 0 || !self.panel.flipped(1));
             if let Some(i) = hit {
                 self.panel.select_instrument(is808, i);
-                // this fork: the click (not the held button) plays the drum (audition.rs)
-                if ui.input(|i| i.pointer.primary_pressed()) {
+                // this fork: the click (not the held button) plays the drum (audition.rs); a
+                // Shift click only chooses it, so it does not get in the way of the song
+                if ui.input(|i| i.pointer.primary_pressed() && !i.modifiers.shift) {
                     self.audition_drum(is808, i);
                 }
             }

@@ -1923,3 +1923,24 @@ fn a_drum_sounds_solo_and_mute_lamps() {
     h.click("tr808.solo4");
     assert!(h.app.panel.drum_solo[0][4]);
 }
+
+/// (this fork) A click on a drum sound's name chooses it and plays it; a Shift click only
+/// chooses it, so it does not get in the way of the song that plays.
+#[test]
+fn a_shift_click_on_a_drum_sounds_name_chooses_it_without_playing_it() {
+    let mut h = Harness::new();
+    // the 808's name pills: 12 columns of 29.5 px from x 96, y 355..365
+    let name = |i: usize| Pos2::new(94.0 + 29.5 * i as f32 + 5.0, 360.0);
+    h.move_to(name(2));
+    h.down(Modifiers::SHIFT);
+    h.up();
+    h.calls(1);
+    assert_eq!(h.app.panel.inst808, 2);
+    assert_eq!(h.audio.preview_position(), None);
+    h.move_to(name(7));
+    h.down(Modifiers::NONE);
+    h.up();
+    h.calls(1);
+    assert_eq!(h.app.panel.inst808, 7);
+    assert!(h.audio.preview_position().is_some());
+}
