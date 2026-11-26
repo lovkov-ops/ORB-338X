@@ -68,6 +68,9 @@ pub enum Answer {
 /// A menu command.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Cmd {
+    /// Edit > Undo and Redo (this fork, undo.rs).
+    Undo,
+    Redo,
     New,
     Open,
     Save,
@@ -566,6 +569,8 @@ impl App {
         mod_name: String,
         kit: Kit,
     ) {
+        // a song opened: the edits of the one before cannot be undone (this fork, undo.rs)
+        self.undo.clear();
         // only a changed kit plays its sound (task-099); the first song has no previous kit
         if !self.settled || self.doc.kit != kit {
             self.mod_opened(&kit);
@@ -913,6 +918,8 @@ impl App {
         };
         if let Some(samples) = samples {
             link.set_mod(samples, &mut self.panel);
+            // (this fork, undo.rs) a mod opened: the history is forgotten
+            self.undo.clear();
             // `sub_426C67` after the change (0x427030): orb has one song, the only user of
             // its mod; a kit that did not change plays nothing (task-099)
             if kit != self.doc.kit {
@@ -954,6 +961,8 @@ impl App {
     /// Runs a menu command.
     pub fn command(&mut self, cmd: Cmd) {
         match cmd {
+            Cmd::Undo => self.undo(),
+            Cmd::Redo => self.redo(),
             Cmd::New => self.new_song(),
             Cmd::Open => self.open_browser(Mode::OpenSong),
             Cmd::Save => self.save(),
@@ -1035,6 +1044,7 @@ impl App {
             }
         });
         self.doc.modified |= edited;
+        self.undo.edited |= edited;
         // with a player the events are drained at the sync that follows
         self.events_seen = if self.link.is_some() {
             0
@@ -1218,6 +1228,19 @@ impl App {
                             }
                         });
                         ui.menu_button("Edit", |ui| {
+                            // this fork: Undo and Redo of every edit (undo.rs)
+                            for (label, sc, c, on) in [
+                                ("Undo", shortcuts::UNDO, Cmd::Undo, self.undo.can_undo()),
+                                ("Redo", shortcuts::REDO, Cmd::Redo, self.undo.can_redo()),
+                            ] {
+                                let b = egui::Button::new(label)
+                                    .shortcut_text(shortcuts::text(ui.ctx(), &sc));
+                                if ui.add_enabled(on, b).clicked() {
+                                    cmd = Some(c);
+                                    ui.close();
+                                }
+                            }
+                            ui.separator();
                             let paste = self.can_paste_pattern();
                             if let Some(c) = crate::pattern_clip::pattern_menu_items(ui, paste) {
                                 cmd = Some(Cmd::Pattern(c));

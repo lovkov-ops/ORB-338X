@@ -2041,3 +2041,109 @@ fn a_303_channels_sidechain_dips_on_the_bd_even_muted() {
     assert!(dry != on808 && dry != on909 && on808 != on909);
     assert!(render(false, false, true) != render(true, false, true));
 }
+
+// ---- Edit > Undo and Redo (this fork, undo.rs) ---------------------------------------------
+
+/// (this fork) Undo brings back the controls and the patterns step by step, a knob's drag one
+/// step, a drum step in its pattern while another is selected; Redo takes them again, and a
+/// new edit forgets what Redo had.
+#[test]
+fn undo_and_redo_bring_back_the_controls_and_the_patterns() {
+    let mut h = Harness::new();
+    let cutoff = h.app.panel.knob("tb303_1.cutoff");
+    let note = h.engine_patterns(0)[2];
+    h.drag("tb303_1.cutoff", 40.0);
+    let dragged = h.app.panel.knob("tb303_1.cutoff");
+    assert_ne!(dragged, cutoff);
+    assert_eq!(h.app.undo.len(), 1, "a drag is one step");
+    h.click("tb303_1.key7");
+    // the 808's BD on step 1 of pattern 1, then pattern 2 selected (no step)
+    let o = layout::TR808_ORIGIN;
+    h.click_at(Pos2::new(o.0 + 16.0 + 8.0, o.1 + 91.0 + 8.0));
+    h.click("pattern3.pattern2");
+    h.calls(2);
+    assert_eq!(h.app.undo.len(), 3);
+    assert_eq!(h.engine_patterns(2)[3], 1);
+    assert_eq!(h.engine_patterns(0)[2], 7);
+    h.take_log();
+    h.app.undo();
+    h.calls(2);
+    // the BD's step of pattern 1 (`{p, step, sound, v}`), pattern 2 still selected
+    assert_eq!(h.take_log(), [dev(Device::Tr808, 62, &[0, 0, 1, 0])]);
+    assert_eq!(h.engine_patterns(2)[3], 0);
+    assert_eq!(h.app.panel.rows[2].pattern, 1);
+    h.app.undo();
+    h.calls(2);
+    assert_eq!(h.engine_patterns(0)[2], note);
+    assert_eq!(h.app.panel.synth[0].patterns[0][0].note, note);
+    h.app.undo();
+    h.calls(2);
+    assert_eq!(h.app.panel.knob("tb303_1.cutoff"), cutoff);
+    let sent = orb_ui::behavior::knob_send(cutoff) as u8;
+    assert_eq!(
+        h.take_log().last(),
+        Some(&dev(Device::Tb303_1, 40, &[3, sent]))
+    );
+    assert!(!h.app.undo.can_undo());
+    h.app.undo();
+    for _ in 0..3 {
+        h.app.redo();
+    }
+    h.calls(2);
+    assert_eq!(h.app.panel.knob("tb303_1.cutoff"), dragged);
+    assert_eq!(h.engine_patterns(0)[2], 7);
+    assert_eq!(h.engine_patterns(2)[3], 1);
+    assert!(!h.app.undo.can_redo());
+    h.app.undo();
+    assert!(h.app.undo.can_redo());
+    h.click("mixer2.solo");
+    assert!(!h.app.undo.can_redo(), "a new edit forgets the redo steps");
+}
+
+/// (this fork) Cmd+Z undoes, Shift+Cmd+Z redoes (Ctrl elsewhere), while the song plays too:
+/// it goes on.
+#[test]
+fn cmd_z_undoes_and_shift_cmd_z_redoes() {
+    let mut h = Harness::new();
+    h.click("transport.play");
+    h.calls(2);
+    h.click("mixer2.solo");
+    assert!(h.app.panel.solo[1]);
+    let key = |h: &mut Harness, mods: Modifiers| {
+        for pressed in [true, false] {
+            let ev = Event::Key {
+                key: egui::Key::Z,
+                physical_key: Some(egui::Key::Z),
+                pressed,
+                repeat: false,
+                modifiers: mods,
+            };
+            h.frame_mods(vec![ev], mods);
+        }
+    };
+    key(&mut h, Modifiers::COMMAND);
+    assert!(!h.app.panel.solo[1]);
+    assert!(h.app.panel.channel_active(0));
+    key(&mut h, Modifiers::COMMAND | Modifiers::SHIFT);
+    assert!(h.app.panel.solo[1]);
+    assert!(!h.app.panel.channel_active(0));
+    h.calls(2);
+    assert!(h.snap().playing);
+    // the undo itself is no step, and Z alone is not Undo
+    assert_eq!(h.app.undo.len(), 1);
+    h.click("transport.stop");
+    h.calls(2);
+}
+
+/// (this fork) The history keeps the last 100 steps; opening a song forgets it.
+#[test]
+fn the_history_keeps_100_steps_and_a_song_opened_forgets_it() {
+    let mut h = Harness::new();
+    for _ in 0..orb_ui::undo::LIMIT + 3 {
+        h.click("mixer2.solo");
+    }
+    assert_eq!(h.app.undo.len(), orb_ui::undo::LIMIT);
+    h.app.open_now(&root().join("tests/songs/shipped/Calm.rbs"));
+    h.calls(2);
+    assert!(!h.app.undo.can_undo() && !h.app.undo.can_redo());
+}

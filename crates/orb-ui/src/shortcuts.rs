@@ -12,6 +12,11 @@ pub const SAVE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key
 pub const KEYS_SYNTH: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::F);
 /// "Select Patterns from Keyboard".
 pub const KEYS_PATTERNS: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::G);
+/// Edit > Undo and Redo (this fork, undo.rs). Redo is caught first: the Undo shortcut takes
+/// Shift too.
+pub const UNDO: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::Z);
+pub const REDO: KeyboardShortcut =
+    KeyboardShortcut::new(Modifiers::COMMAND.plus(Modifiers::SHIFT), Key::Z);
 /// The file browser's path field.
 pub const EDIT_PATH: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::L);
 

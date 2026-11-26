@@ -292,6 +292,8 @@ pub fn groups(is_mac: bool) -> Vec<Group> {
                 menu_row(is_mac, &shortcuts::NEW, "File > New"),
                 menu_row(is_mac, &shortcuts::OPEN, "File > Open..."),
                 menu_row(is_mac, &shortcuts::SAVE, "File > Save"),
+                menu_row(is_mac, &shortcuts::UNDO, "Edit > Undo"),
+                menu_row(is_mac, &shortcuts::REDO, "Edit > Redo"),
                 menu_row(
                     is_mac,
                     &crate::pattern_clip::COPY,
@@ -760,17 +762,36 @@ mod tests {
                 .map(|r| r.keys.clone())
                 .collect()
         };
-        // (this fork: Cmd/Ctrl+C, X, V copy, cut and paste a pattern)
+        // (this fork: Cmd/Ctrl+Z undoes, with Shift redoes; C, X, V copy, cut and paste a
+        // pattern)
         assert_eq!(
             text(true),
             [
-                "Cmd+N", "Cmd+O", "Cmd+S", "Cmd+C", "Cmd+X", "Cmd+V", "Cmd+F", "Cmd+G"
+                "Cmd+N",
+                "Cmd+O",
+                "Cmd+S",
+                "Cmd+Z",
+                "Shift+Cmd+Z",
+                "Cmd+C",
+                "Cmd+X",
+                "Cmd+V",
+                "Cmd+F",
+                "Cmd+G"
             ]
         );
         assert_eq!(
             text(false),
             [
-                "Ctrl+N", "Ctrl+O", "Ctrl+S", "Ctrl+C", "Ctrl+X", "Ctrl+V", "Ctrl+F", "Ctrl+G"
+                "Ctrl+N",
+                "Ctrl+O",
+                "Ctrl+S",
+                "Ctrl+Z",
+                "Ctrl+Shift+Z",
+                "Ctrl+C",
+                "Ctrl+X",
+                "Ctrl+V",
+                "Ctrl+F",
+                "Ctrl+G"
             ]
         );
     }

@@ -826,6 +826,14 @@ impl Link {
         &self.patterns
     }
 
+    /// This fork (undo.rs): the panel's views of the patterns (the 303s' steps, the rows'
+    /// lengths and shuffles, the drum machines' selected patterns) read again from the
+    /// pattern arrays, after an undo or a redo changed them.
+    pub fn refresh_views(&mut self, panel: &mut Panel) {
+        self.shown = [None; 4];
+        self.fill_views(panel);
+    }
+
     // ---- loading ------------------------------------------------------------------------
 
     /// Opens `song`: builds it and queues it as the newest song, and resets the panel to its
@@ -1110,6 +1118,30 @@ impl Link {
                     header_sub(ROW_DEVICES[*synth]) + 3,
                     &[*pattern, *step as u8, *field, *value],
                 )]
+            }
+            Event::PatternByte {
+                row,
+                pattern,
+                at,
+                value,
+            } => {
+                let (_, plen, slen) = layout(*row);
+                if *row >= 4 || *pattern >= 32 || *at >= plen {
+                    return vec![];
+                }
+                self.patterns[*row][plen * *pattern as usize + at] = *value;
+                let d = ROW_DEVICES[*row];
+                // the header's shuffle and length `{p, field, v}`, a step's byte
+                // `{p, step, field, v}` (a 303's field, a drum machine's sound)
+                let (sub, data) = match at {
+                    0 | 1 => (header_sub(d), vec![*pattern, *at as u8, *value]),
+                    _ => {
+                        let (step, field) = ((at - 2) / slen, (at - 2) % slen);
+                        let data = vec![*pattern, step as u8, field as u8, *value];
+                        (header_sub(d) + 3, data)
+                    }
+                };
+                vec![dev(d, sub, &data)]
             }
             Event::Clear303 { synth, pattern } => {
                 let (_, plen, _) = layout(*synth);

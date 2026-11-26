@@ -48,6 +48,15 @@ pub enum Event {
     },
     /// The Clear button emptied a 303 pattern (sent whole, msg 41 sub 44).
     Clear303 { synth: usize, pattern: u8 },
+    /// This fork (the Edit menu's Undo and Redo, undo.rs): one byte of row `row`'s pattern
+    /// `pattern` as the link keeps it, selected or not: `at` 0 the shuffle, 1 the length, then
+    /// the steps' bytes (a 303's six fields, a drum machine's twelve sounds).
+    PatternByte {
+        row: usize,
+        pattern: u8,
+        at: usize,
+        value: u8,
+    },
 }
 
 /// The transport (ticks, 768 per bar).
@@ -341,6 +350,60 @@ pub struct Panel {
 impl Default for Panel {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// This fork: the panel's side of what the Edit menu's Undo and Redo bring back (undo.rs):
+/// every control's setting, the effects' slots, SOLO and MUTE, Vintage and the rows' on/off.
+/// Not the transport, the pattern selection or the views (FLIP, the COMP faces, the edit
+/// step, pitch mode); the patterns' data is the link's.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Edits {
+    knobs: HashMap<String, i32>,
+    faders: HashMap<String, i32>,
+    toggles: HashMap<String, bool>,
+    switches: HashMap<String, u8>,
+    numbers: HashMap<String, i32>,
+    tune_raw: HashMap<String, i32>,
+    pcf_id: u8,
+    comp_id: u8,
+    more: [[bool; 2]; 4],
+    slots: [u8; 4],
+    solo: [bool; 4],
+    mute: [bool; 4],
+    drum_solo: [[bool; 12]; 2],
+    drum_mute: [[bool; 12]; 2],
+    vintage: bool,
+    enabled: [bool; 4],
+}
+
+impl Edits {
+    /// The one knob or fader whose setting is all that differs from `other`, if so (a drag,
+    /// a turn of the wheel: one step of the undo history however many frames it takes).
+    pub fn one_control_from(&self, other: &Edits) -> Option<String> {
+        let rest = |e: &Edits| {
+            let mut e = e.clone();
+            e.knobs.clear();
+            e.faders.clear();
+            e
+        };
+        if rest(self) != rest(other) {
+            return None;
+        }
+        let mut changed = self
+            .knobs
+            .iter()
+            .filter(|(id, v)| other.knobs.get(*id) != Some(v))
+            .chain(
+                self.faders
+                    .iter()
+                    .filter(|(id, v)| other.faders.get(*id) != Some(v)),
+            )
+            .map(|(id, _)| id);
+        match (changed.next(), changed.next()) {
+            (Some(id), None) => Some(id.clone()),
+            _ => None,
+        }
     }
 }
 
@@ -672,6 +735,113 @@ impl Panel {
 
     fn emit(&mut self, e: Event) {
         self.events.push(e);
+    }
+
+    // ---- undo and redo (this fork, undo.rs) ---------------------------------------------
+
+    /// What the panel would give back on an undo to now ([`Edits`]).
+    pub fn edits(&self) -> Edits {
+        Edits {
+            knobs: self.knobs.clone(),
+            faders: self.faders.clone(),
+            // a drum machine's FLIP key is a view
+            toggles: self
+                .toggles
+                .iter()
+                .filter(|(id, _)| !id.ends_with(".flip"))
+                .map(|(id, &v)| (id.clone(), v))
+                .collect(),
+            switches: self.switches.clone(),
+            numbers: self.numbers.clone(),
+            tune_raw: self.tune_raw.clone(),
+            pcf_id: self.pcf_id,
+            comp_id: self.comp_id,
+            more: self.more,
+            slots: self.slots,
+            solo: self.solo,
+            mute: self.mute,
+            drum_solo: self.drum_solo,
+            drum_mute: self.drum_mute,
+            vintage: self.vintage,
+            enabled: std::array::from_fn(|r| self.rows[r].enabled),
+        }
+    }
+
+    /// Brings `e` back, sending the engine only what differs from now, as the controls'
+    /// own changes would.
+    pub fn restore(&mut self, e: &Edits) {
+        for s in 0..4 {
+            if self.slots[s] != e.slots[s] {
+                self.slots[s] = e.slots[s];
+                self.set_event(&format!("mixer.slot{}", s + 1), e.slots[s] as i32);
+            }
+        }
+        /// The ids whose value `then` has and `now` has not, in order.
+        fn diff<V: PartialEq>(now: &HashMap<String, V>, then: &HashMap<String, V>) -> Vec<String> {
+            let mut ids: Vec<String> = then
+                .iter()
+                .filter(|(id, v)| now.get(*id) != Some(*v))
+                .map(|(id, _)| id.clone())
+                .collect();
+            ids.sort();
+            ids
+        }
+        for id in diff(&self.switches, &e.switches) {
+            self.set_switch(&id, e.switches[&id]);
+        }
+        for id in diff(&self.numbers, &e.numbers) {
+            let n = e.numbers[&id];
+            self.numbers.insert(id.clone(), n);
+            self.set_event(&id, n);
+        }
+        for id in diff(&self.toggles, &e.toggles) {
+            let v = e.toggles[&id];
+            self.toggles.insert(id.clone(), v);
+            self.set_event(&id, v as i32);
+        }
+        for id in diff(&self.faders, &e.faders) {
+            self.set_fader(&id, e.faders[&id]);
+        }
+        for id in diff(&self.knobs, &e.knobs) {
+            self.set_knob(&id, e.knobs[&id]);
+        }
+        // the inserts' channels as they were (the knobs may have chosen them in another order)
+        if self.pcf_id != e.pcf_id {
+            self.pcf_id = e.pcf_id;
+            self.set_event("mixer.pcf_id", e.pcf_id as i32);
+        }
+        if self.comp_id != e.comp_id {
+            self.comp_id = e.comp_id;
+            self.set_event("mixer.comp_id", e.comp_id as i32);
+        }
+        for c in 0..4 {
+            for (k, name) in ["pcf", "comp"].into_iter().enumerate() {
+                if self.more[c][k] != e.more[c][k] {
+                    self.more[c][k] = e.more[c][k];
+                    let v = e.more[c][k] as i32;
+                    self.set_event(&format!("mixer{}.{name}_more", c + 1), v);
+                }
+            }
+        }
+        self.knobs = e.knobs.clone();
+        // a TUNE's value as the song had it, not its semitone's own
+        for id in diff(&self.tune_raw, &e.tune_raw) {
+            let raw = e.tune_raw[&id];
+            self.tune_raw.insert(id.clone(), raw);
+            self.set_event(&id, raw);
+        }
+        self.solo = e.solo;
+        self.mute = e.mute;
+        self.apply_channels();
+        self.drum_solo = e.drum_solo;
+        self.drum_mute = e.drum_mute;
+        self.set_vintage(e.vintage);
+        for r in 0..4 {
+            if self.rows[r].enabled != e.enabled[r] {
+                self.rows[r].enabled = e.enabled[r];
+                self.set_event(&format!("pattern{}.on", r + 1), e.enabled[r] as i32);
+            }
+        }
     }
 
     pub(crate) fn set_event(&mut self, id: &str, value: i32) {
@@ -2541,6 +2711,34 @@ mod tests {
         p.press("tb303_1.pitch_button", 0.0);
         p.press("tb303_1.key2", 1.0);
         assert_eq!(p.audition, Some((0, 0, 0, false)));
+    }
+
+    /// (this fork) An undo's restore sends only what differs, the inserts' channels as they
+    /// were, and gives the panel back its settings.
+    #[test]
+    fn a_restore_sends_only_what_differs() {
+        let mut p = Panel::new();
+        let e = p.edits();
+        p.set_knob("tb303_1.cutoff", 100);
+        p.set_knob("mixer2.pcf", KNOB_MAX);
+        p.press("mixer3.solo", 0.0);
+        assert_ne!(p.edits(), e);
+        p.events.clear();
+        p.restore(&e);
+        assert_eq!(p.edits(), e);
+        let ids: Vec<_> = p
+            .events
+            .iter()
+            .filter_map(|ev| match ev {
+                Event::Set { id, .. } => Some(id.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(ids.contains(&"tb303_1.cutoff") && ids.contains(&"mixer.pcf_id"));
+        assert!(!ids.contains(&"tb303_1.reso"));
+        p.events.clear();
+        p.restore(&e);
+        assert!(p.events.is_empty(), "{:?}", p.events);
     }
 
     #[test]

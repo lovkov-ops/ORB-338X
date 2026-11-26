@@ -199,6 +199,8 @@ pub struct App {
     /// UNDO and REDO steps: the pattern number and its steps (generate.rs).
     pub(crate) generated: [bool; 2],
     pub(crate) gen_undo: [Vec<(u8, [crate::model::Step303; 16])>; 2],
+    /// This fork: the Edit menu's Undo and Redo (undo.rs).
+    pub undo: crate::undo::History,
     pub(crate) gen_redo: [Vec<(u8, [crate::model::Step303; 16])>; 2],
     /// The LFOs of each bass synth's five large knobs (`lfo.rs`), indexed by synth then knob
     /// (`lfo::PARAMS`): their mode buttons, their running state, and the egui time of the last
@@ -288,6 +290,7 @@ impl App {
             op_done: [[false; 2]; 3],
             generated: [false; 2],
             gen_undo: [Vec::new(), Vec::new()],
+            undo: Default::default(),
             gen_redo: [Vec::new(), Vec::new()],
             lfo_mode: [[crate::lfo::Mode::default(); 5]; 2],
             lfo_run: std::array::from_fn(|k| {
@@ -687,6 +690,8 @@ impl App {
         let view = View::fit(avail, ui.ctx().pixels_per_point());
         let now = ui.input(|i| i.time);
         self.panel.held = None;
+        // the state before this frame's input, for Undo (this fork, undo.rs)
+        self.undo_frame_start(ui);
 
         // While the file browser, the prompt or the error box is open the panel takes no keys
         // and no clicks of its own.
@@ -714,6 +719,12 @@ impl App {
                     // field's, not the panel's
                     self.holds.clear();
                 } else {
+                    // Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z: Edit > Undo and Redo (this fork, undo.rs)
+                    if shortcuts::consume(ui, &shortcuts::REDO) {
+                        self.redo();
+                    } else if shortcuts::consume(ui, &shortcuts::UNDO) {
+                        self.undo();
+                    }
                     self.keyboard(ui);
                     // Cmd/Ctrl+C, X, V: the focused row's pattern (pattern_clip.rs)
                     self.pattern_clipboard_keys(ui);
@@ -794,6 +805,7 @@ impl App {
                 if mix != self.voice_mix_seen[k] {
                     self.voice_mix_seen[k] = mix;
                     self.doc.modified = true;
+                    self.undo.edited = true;
                 }
             }
             let before = link.recorded_revision();
@@ -831,6 +843,8 @@ impl App {
         self.key_help_ui(&ctx);
         self.mod_info_ui(&ctx);
         self.poll_export(&ctx);
+        // this frame's edits, one step of Undo (undo.rs)
+        self.undo_frame_end(now);
         if let Some(t) = self.clip_text.take() {
             ctx.copy_text(t);
         }
