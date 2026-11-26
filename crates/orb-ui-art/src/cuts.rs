@@ -185,6 +185,7 @@ pub fn cuts() -> &'static Cuts {
         tr909(&mut c);
         mixer_and_effects(&mut c);
         channel_comp(&mut c);
+        channel_comp_sc(&mut c);
         drum_solo(&mut c);
         app_icon(&mut c);
         generate_symbols(&mut c);
@@ -2118,6 +2119,8 @@ fn drum_solo(c: &mut Cuts) {
 
 /// The size of the channel COMP face's COMP and OTT lamps (this fork): the lit one's glow fits.
 const CCOMP_LAMP_W: f32 = 10.0;
+/// The width of the sidechain lamp's label (808 / 909) on the 303s' COMP face.
+const SC_LABEL_W: f32 = 12.0;
 
 /// (this fork) Each mixer channel's C key and its COMP face (`Mockup::mix_c`, `comp_m`, drawn
 /// at the first channel's place; the other channels' 115 px lower each): the C key under LO
@@ -2232,4 +2235,96 @@ fn channel_comp(c: &mut Cuts) {
     c.take(&lit);
     c.take(&dark);
     c.background(mm, "comp", "bg_ccomp", Bx::new(456.0, 50.0, 70.0, 115.0));
+}
+
+/// The 303s' channels' COMP face with the sidechain (this fork, the user's `comp sc 303 1` and
+/// `2`): the controls of [`channel_comp`] a little higher, and under them the SC knob and the
+/// lamp that picks the BD the channel dips to, red at the 808 (the mockup `1`) and orange at
+/// the 909 (`2`), with its label. The drum machines' channels keep the COMP face.
+fn channel_comp_sc(c: &mut Cuts) {
+    let (ms, md) = (Mockup::comp_sc(), Mockup::comp_sc2());
+    let rows = |c: &mut Cuts, id: &str, x: f32, y: f32| {
+        for ch in 0..2 {
+            let id = id.replace('#', &(ch + 1).to_string());
+            c.place(&id, x, y + 115.0 * ch as f32);
+        }
+    };
+    // the back key, the header's LEDs and meter (the meter's well stays)
+    let back = grp(ms, "0.3");
+    let bb = bbox(&back);
+    c.take(&back);
+    rows(c, "ccomp#.back", bb.x0, bb.y0);
+    for g in ["0.5", "0.6", "0.24"] {
+        c.take(&grp(ms, g));
+    }
+    for i in 0..9 {
+        let well = grp(ms, &format!("0.25.{}", 2 * i));
+        let light = grp(ms, &format!("0.25.{}", 2 * i + 1));
+        let wb = bbox(&well);
+        c.take(&well);
+        c.take(&light);
+        rows(c, &format!("ccomp#.gr{}", i + 1), wb.x0 - 0.5, wb.y0 - 0.5);
+    }
+    // RATIO and THRES and their labels (the COMP face's pictures)
+    for (g, lg, id) in [("0.26", "0.12", "ratio"), ("0.27", "0.17", "thres")] {
+        let (x, y) = knob22(c, ms, g, None);
+        rows(c, &format!("ccomp#.{id}"), x - 11.0, y - 11.0);
+        let v = grp(ms, lg);
+        let lb = bbox(&v);
+        c.take(&v);
+        rows(
+            c,
+            &format!("ccomp#.{id}_label"),
+            lb.cx() - OTT_LABEL_W / 2.0,
+            lb.y0 - 0.5,
+        );
+    }
+    // the COMP (RB338) and OTT lamps, by their cores' centers
+    let w = CCOMP_LAMP_W;
+    for (name, g) in [("on", "0.14"), ("ott", "0.15")] {
+        let core = bbox(&grp(ms, &format!("{g}.1")));
+        c.take(&grp(ms, g));
+        rows(
+            c,
+            &format!("ccomp#.{name}"),
+            core.cx() - w / 2.0,
+            core.cy() - w / 2.0,
+        );
+    }
+    // the SC knob: the small knob (14 x 14), centered on the drawn one's body
+    let sc = grp(ms, "0.20");
+    let kb = bbox(&grp(ms, "0.20.1"));
+    c.take(&sc);
+    rows(c, "ccomp#.sc", kb.cx() - 7.0, kb.cy() - 7.0);
+    // the source lamp: off the 808 (red, the mockup 1's), on the 909 (orange, the mockup 2's),
+    // by the core's center; and its label, 808 or 909
+    let core = bbox(&grp(ms, "0.21.4"));
+    let (x, y) = (core.cx() - w / 2.0, core.cy() - w / 2.0);
+    for (state, m) in [("off", ms), ("on", md)] {
+        let v = grp(m, "0.21");
+        let b = bbox(&grp(m, "0.21.4"));
+        let svg = moved(&v, core.cx() - b.cx(), core.cy() - b.cy());
+        c.parts
+            .push(part(&format!("ccompsrc_{state}"), x, y, w, w, &svg));
+    }
+    c.take(&grp(ms, "0.21"));
+    rows(c, "ccomp#.sc_src", x, y);
+    let lb = bbox(&grp(ms, "0.19"));
+    let (lw, lh) = (SC_LABEL_W, lb.h() + 1.0);
+    let (lx, ly) = (lb.cx() - lw / 2.0, lb.y0 - 0.5);
+    for (state, m) in [("off", ms), ("on", md)] {
+        let v = grp(m, "0.19");
+        let b = bbox(&v);
+        let svg = moved(&v, lb.cx() - b.cx(), lb.y0 - b.y0);
+        c.parts
+            .push(part(&format!("ccompsclbl_{state}"), lx, ly, lw, lh, &svg));
+    }
+    c.take(&grp(ms, "0.19"));
+    rows(c, "ccomp#.sc_label", lx, ly);
+    c.background(
+        ms,
+        "comp-303-a",
+        "bg_ccomp_sc",
+        Bx::new(456.0, 50.0, 70.0, 115.0),
+    );
 }

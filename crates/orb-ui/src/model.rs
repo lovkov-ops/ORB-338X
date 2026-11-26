@@ -1251,6 +1251,8 @@ impl Panel {
             // the MIX face. A lamp turns its kind on and the other off; the lit one, both off.
             s if s.starts_with("ccomp") => match name {
                 "back" => self.ccomp_open[mixer_channel(s)] = false,
+                // a 303's sidechain lamp: the 808's BD (off) or the 909's (on)
+                "sc_src" => self.flip(id),
                 "on" | "ott" => {
                     let ott = name == "ott";
                     let lit = self.ccomp_mode(mixer_channel(s)) == Some(ott);
@@ -1735,6 +1737,9 @@ impl Panel {
             "toggle" if c.id == "tr909.flam_button" => on_off(self.flam_button),
             // the channel COMP face's lamps (this fork): COMP lit for the compressor, OTT for
             // the OTT, never both
+            "toggle" if sec.starts_with("ccomp") && name == "sc_src" => {
+                on_off(self.toggle_on(&c.id))
+            }
             "toggle" if sec.starts_with("ccomp") => {
                 let mode = self.ccomp_mode(mixer_channel(sec));
                 on_off(mode == Some(name == "ott"))
@@ -1766,6 +1771,8 @@ impl Panel {
                 on_off(self.ccomp_mode(mixer_channel(sec)) == Some(true))
             }
             "ottlabel" => on_off(self.toggle_on(&format!("{sec}.ott"))),
+            // a 303's sidechain lamp's label (this fork): 808 or 909, as the lamp
+            "sclabel" => on_off(self.toggle_on(&format!("{sec}.sc_src"))),
             // the mixer channel's MUTE LED (this fork): green while it plays
             "chanled" => on_off(self.channel_active(index_of(sec, "mixer").unwrap_or(0).min(3))),
             "grid" => {

@@ -300,6 +300,12 @@ pub trait ChannelDevice: SongDevice {
     fn process_voices(&mut self, _out: &mut dyn FnMut(usize, &Block)) -> bool {
         false
     }
+    /// Not a slot (this fork, [`crate::sidechain`]): whether the drum machine's BD was triggered
+    /// since the last call (heard or not: a silent BD still counts); the call clears it.
+    /// `false` for the 303s and the placeholders.
+    fn take_bd_hit(&mut self) -> bool {
+        false
+    }
 }
 
 /// An insert effect: the distortion, the PCF or the compressor.
@@ -563,6 +569,9 @@ pub struct MixerParams {
     pub ott: [u8; 2],
     /// This fork: each channel's compressor (`ccomp[c][p]`, p [`CCOMP_ON`]..; [`CCOMP`]).
     pub ccomp: [[u8; 4]; 4],
+    /// This fork: the 303s' channels' sidechain (`sc[c][p]`, c 0 the first 303, 1 the second,
+    /// p [`SC_AMOUNT`], [`SC_SOURCE`]; [`SC`], [`crate::sidechain`]).
+    pub sc: [[u8; 2]; 2],
 }
 
 /// This fork: the mixer's controller of channel c's insert k wet amount (0..=127, see
@@ -638,8 +647,14 @@ pub const CCOMP_THRES: usize = 2;
 pub const CCOMP_OTT: usize = 3;
 /// A channel's compressor at first: off, the song's compressor's ctor values, OTT off.
 pub const CCOMP_DEFAULTS: [u8; 4] = [0, 70, 64, 0];
+/// This fork: the 303s' channels' sidechain, the SC knob and the 808 / 909 lamp of their COMP
+/// faces: `SC + 2c + p`, c 0 the first 303, 1 the second, p [`SC_AMOUNT`] (0 off ..= 127),
+/// [`SC_SOURCE`] (0 the 808's BD, 1 the 909's; [`MixerParams::sc`], [`crate::sidechain`]).
+pub const SC: u8 = CCOMP + 16;
+pub const SC_AMOUNT: usize = 0;
+pub const SC_SOURCE: usize = 1;
 /// One past this fork's last mixer controller.
-pub const FORK_END: u8 = CCOMP + 16;
+pub const FORK_END: u8 = SC + 4;
 /// The slots at first: the delay, the distortion, the PCF and the reverb (the original's
 /// fourth, the compressor, is each channel's own now, [`CCOMP`]).
 pub const DEFAULT_SLOTS: [u8; 4] = [FX_DELAY, FX_DIST, FX_PCF, FX_RVRB];
@@ -656,6 +671,10 @@ impl MixerParams {
         match ctrl {
             LIMIT => Some(self.limit),
             LIMIT_AMT => Some(self.limit_amt),
+            _ if ctrl >= SC && is_fork_mixer(ctrl) => {
+                let x = (ctrl - SC) as usize;
+                Some(self.sc[x / 2][x % 2])
+            }
             _ if ctrl >= CCOMP && is_fork_mixer(ctrl) => {
                 let x = (ctrl - CCOMP) as usize;
                 Some(self.ccomp[x / 4][x % 4])
@@ -710,6 +729,11 @@ impl MixerParams {
         match ctrl {
             LIMIT => self.limit = value,
             LIMIT_AMT => self.limit_amt = value.min(127),
+            _ if ctrl >= SC && is_fork_mixer(ctrl) => {
+                let x = (ctrl - SC) as usize;
+                let max = if x % 2 == SC_AMOUNT { 127 } else { 1 };
+                self.sc[x / 2][x % 2] = value.min(max);
+            }
             _ if ctrl >= CCOMP && is_fork_mixer(ctrl) => {
                 let x = (ctrl - CCOMP) as usize;
                 let knob = matches!(x % 4, CCOMP_AMOUNT | CCOMP_THRES);
@@ -794,6 +818,7 @@ impl MixerParams {
         self.tape = from.tape;
         self.ott = from.ott;
         self.ccomp = from.ccomp;
+        self.sc = from.sc;
     }
 
     /// This fork: the byte of a second insert's controller `ctrl` ([`WET_B`]..[`FORK_END`]).
@@ -877,6 +902,7 @@ impl Default for MixerParams {
             tape: [0; 2],
             ott: [0; 2],
             ccomp: [CCOMP_DEFAULTS; 4],
+            sc: [[0; 2]; 2],
         }
     }
 }
@@ -914,6 +940,7 @@ impl From<&song::Mixer> for MixerParams {
             tape: [0; 2],
             ott: [0; 2],
             ccomp: [CCOMP_DEFAULTS; 4],
+            sc: [[0; 2]; 2],
         }
     }
 }
@@ -947,6 +974,7 @@ impl MixerParams {
             tape: [0; 2],
             ott: [0; 2],
             ccomp: [CCOMP_DEFAULTS; 4],
+            sc: [[0; 2]; 2],
         };
         for (c, ch) in p.channels.iter_mut().enumerate() {
             let o = 5 + 6 * c;
@@ -1278,6 +1306,8 @@ pub struct Frame {
     pub meters_ccomp: [u8; 4],
     /// This fork: each channel's EQ ([`MixerParams::eq`]).
     eqs: [crate::eq::ChannelEq; 4],
+    /// This fork: the 303s' channels' sidechain ([`MixerParams::sc`]).
+    duckers: [crate::sidechain::Ducker; 2],
     /// This fork: each channel's DIST kinds' memory (`kinds[c][d][side]`: d 0 the DIST, 1 the
     /// second; side 0 the bus or a split drum machine's left, 1 its right;
     /// [`MixerParams::dist_kind`]).
@@ -1371,6 +1401,7 @@ impl Frame {
             meters_b: [0; 4],
             meters_ccomp: [0; 4],
             eqs: Default::default(),
+            duckers: Default::default(),
             kinds: Default::default(),
             otts: Default::default(),
             chains: Default::default(),
@@ -1737,6 +1768,9 @@ impl Frame {
             // 0x1001F3B3: the tempo (globals +4) the step loop passes, into its local there
             self.stack_word = Some(self.seq.globals.tempo as i32);
         }
+        // this fork: the BDs the drum machines triggered in this step, for the 303s' sidechain
+        // (taken every block, so none waits for a later one)
+        let bd_hits = [2, 3].map(|c| self.devices.channels[c].take_bd_hit());
         let mi = (self.state.meter_index + METER_STEP) & 63;
         self.state.meter_index = mi;
         let mi = mi as usize;
@@ -2053,6 +2087,16 @@ impl Frame {
                 } else {
                     eq.process(0, bus);
                 }
+            }
+            // this fork: a 303's channel's sidechain, dipped by the chosen drum machine's BD
+            // (sidechain.rs; at SC 0 the bus is untouched)
+            if c < 2 {
+                let [amount, source] = self.devices.mixer.live.sc[c];
+                let d = &mut self.duckers[c];
+                if bd_hits[source.min(1) as usize] {
+                    d.hit();
+                }
+                d.process(bus, amount, ctx.tempo);
             }
             // the channel's left and right signals and its send sources (this fork: each slot's):
             // the bus for every channel the original's way
@@ -2856,6 +2900,7 @@ impl Engine {
         for eq in &mut self.frame.eqs {
             eq.silence();
         }
+        self.frame.duckers = Default::default();
         for fx in self.frame.kinds.iter_mut().flatten().flatten() {
             fx.silence();
         }

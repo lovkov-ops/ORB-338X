@@ -35,6 +35,7 @@ pub mod process;
 pub mod reverb;
 pub mod samples;
 pub mod seq;
+pub mod sidechain;
 pub mod song;
 pub mod tables;
 pub mod tape;

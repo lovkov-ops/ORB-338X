@@ -349,6 +349,11 @@ pub fn fork_mixer_ids() -> Vec<(String, u8)> {
             ids.push(format!("ccomp{c}.{n}"));
         }
     }
+    for c in 1..=2 {
+        for n in SC_NAMES {
+            ids.push(format!("ccomp{c}.{n}"));
+        }
+    }
     let mut v: Vec<(String, u8)> = ids
         .into_iter()
         .filter_map(|id| match mixer_target(&id) {
@@ -431,6 +436,23 @@ pub fn ccomp_of(id: &str) -> Option<(usize, usize)> {
     (c < 4).then_some((c, i))
 }
 
+/// This fork: the 303s' channels' sidechain controls on their COMP faces, in controller order
+/// ([`orb_engine::frame::SC`]): the SC knob and the 808 / 909 lamp.
+pub const SC_NAMES: [&str; 2] = ["sc", "sc_src"];
+
+/// This fork: the channel (0 or 1, the 303s) and control (`SC_NAMES`) of a sidechain control's
+/// id (`ccomp1.sc`).
+pub fn sc_of(id: &str) -> Option<(usize, usize)> {
+    let (sec, name) = id.split_once('.')?;
+    let c = sec
+        .strip_prefix("ccomp")?
+        .parse::<usize>()
+        .ok()?
+        .checked_sub(1)?;
+    let i = SC_NAMES.iter().position(|&n| n == name)?;
+    (c < 2).then_some((c, i))
+}
+
 /// This fork: what a channel COMP face's control `(c, i)` sets on the channel the song's
 /// compressor is on (`comp_id`, 2..5 channel 1..4): the song's compressor's ON, RATIO and THRES
 /// and its OTT, which an `.rbs` keeps; the other channels have their own ([`CCOMP_NAMES`]).
@@ -453,6 +475,12 @@ pub fn mixer_target(id: &str) -> Option<MixerTarget> {
         "dist.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND)),
         "dist_b.kind" => return Some(MixerTarget::Global(orb_engine::frame::DIST_KIND + 1)),
         _ => {}
+    }
+    // this fork: the 303s' channels' sidechain
+    if let Some((c, i)) = sc_of(id) {
+        return Some(MixerTarget::Global(
+            orb_engine::frame::SC + 2 * c as u8 + i as u8,
+        ));
     }
     // this fork: the channels' own compressors
     if let Some((c, i)) = ccomp_of(id) {
@@ -1539,6 +1567,12 @@ impl Link {
                 }
             }
         }
+        // the 303s' channels' sidechain
+        for (c, p) in m.sc.iter().enumerate() {
+            for (name, &v) in SC_NAMES.iter().zip(p) {
+                panel.adopt(&format!("ccomp{}.{name}", c + 1), v as i32);
+            }
+        }
         for (id, g) in TAPE_OTT {
             if let Some(v) = m.fork(g) {
                 panel.adopt(id, v as i32);
@@ -1602,7 +1636,7 @@ mod tests {
         assert_eq!(ctrls, (WET..FORK_END).collect::<Vec<_>>());
         assert!(
             ids.iter()
-                .any(|(id, g)| id == "ccomp4.ott" && *g == FORK_END - 1)
+                .any(|(id, g)| id == "ccomp2.sc_src" && *g == FORK_END - 1)
         );
         assert!(
             ids.iter()

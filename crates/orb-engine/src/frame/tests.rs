@@ -2082,5 +2082,63 @@ fn a_channels_own_compressor() {
     m.set_fork(CCOMP + 4 * 3 + CCOMP_THRES as u8, 200);
     assert_eq!(m.fork(CCOMP + 4 * 3 + CCOMP_THRES as u8), Some(127));
     assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
-    assert_eq!(FORK_END, CCOMP + 16);
+    assert_eq!(SC, CCOMP + 16);
+}
+
+/// A silent drum machine whose BD is triggered every `every` blocks (the sidechain's source).
+struct Kick {
+    every: u32,
+    n: u32,
+}
+impl SongDevice for Kick {}
+impl ChannelDevice for Kick {
+    fn process(&mut self, bus: &mut Block, _ctx: &BlockContext) {
+        bus.fill(0.0);
+        self.n += 1;
+    }
+    fn take_bd_hit(&mut self) -> bool {
+        self.n % self.every == 1
+    }
+}
+
+/// (this fork) The 303s' channels' sidechain ([`SC`]): at SC 0 the channel as without one; up,
+/// the chosen drum machine's BDs dip it, the other's do not.
+#[test]
+fn a_303_channels_sidechain() {
+    let render = |sc: [[u8; 2]; 2]| {
+        let mut d = Devices::implemented(None);
+        d.channels[0] = Box::new(Ramp(3));
+        d.channels[1] = Box::new(Ramp(5));
+        d.channels[2] = Box::new(Kick { every: 50, n: 0 });
+        let mut e = Engine::new(tables(), d);
+        for (c, p) in sc.iter().enumerate() {
+            for (i, &v) in p.iter().enumerate() {
+                e.mixer_global(SC + 2 * c as u8 + i as u8, v);
+            }
+        }
+        let mut buf = vec![0i16; 2 * 64 * 200];
+        e.render(&mut buf, 64 * 200);
+        (buf, e)
+    };
+    let (dry, e) = render([[0, 0]; 2]);
+    assert_eq!(e.frame.devices.mixer.live.sc, [[0, 0]; 2]);
+    let (first, e) = render([[127, 0], [0, 0]]);
+    assert_ne!(first, dry);
+    assert_eq!(e.frame.devices.mixer.live.sc[0], [127, 0]);
+    let (second, _) = render([[0, 0], [127, 0]]);
+    assert_ne!(second, dry);
+    assert_ne!(second, first);
+    let (less, _) = render([[40, 0], [0, 0]]);
+    assert_ne!(less, first);
+    assert_ne!(less, dry);
+    // the 909 (silent here, no BD) chosen: nothing
+    let (other, _) = render([[127, 1], [127, 1]]);
+    assert_eq!(other, dry);
+    let mut m = MixerParams::default();
+    m.set_fork(SC + 2 + SC_SOURCE as u8, 9);
+    m.set_fork(SC + SC_AMOUNT as u8, 200);
+    assert_eq!(m.sc, [[127, 0], [0, 1]]);
+    assert_eq!(m.fork(SC + 3), Some(1));
+    assert!(is_fork_mixer(FORK_END - 1) && !is_fork_mixer(FORK_END));
+    assert_eq!(FORK_END, SC + 4);
 }

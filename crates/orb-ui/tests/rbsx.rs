@@ -515,3 +515,30 @@ fn an_rbsx_keeps_the_tape_and_the_ott() {
     assert_eq!((snap2.mixer.tape, snap2.mixer.ott), ([1, 0], [1, 0]));
     assert!(h2.app.panel.toggle_on("delay.tape") && h2.app.panel.toggle_on("comp.ott"));
 }
+
+/// (this fork) An `.rbsx` keeps the 303s' channels' sidechain (the SC knob and the 808 / 909
+/// lamp of their COMP faces).
+#[test]
+fn an_rbsx_keeps_the_303s_sidechain() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut h = Harness::new();
+    h.app.panel.press("ccomp2.sc_src", 0.0);
+    h.app.link.as_mut().unwrap().send_value("ccomp2.sc", 90);
+    h.calls(2);
+    h.calls(2);
+    let snap = *h.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap.mixer.sc, [[0, 0], [90, 1]]);
+    let out = dir.path().join("sc.rbsx");
+    h.app.command(Cmd::SaveAs);
+    h.app.chosen(Mode::SaveSong, out.clone());
+    assert!(h.app.errors.is_empty(), "{:?}", h.app.errors);
+
+    let mut h2 = Harness::new();
+    h2.open(&out);
+    h2.calls(2);
+    h2.calls(2);
+    let snap2 = *h2.app.link.as_mut().unwrap().player().snapshot();
+    assert_eq!(snap2.mixer.sc, [[0, 0], [90, 1]]);
+    assert!(h2.app.panel.toggle_on("ccomp2.sc_src"));
+    assert!(!h2.app.panel.toggle_on("ccomp1.sc_src"));
+}

@@ -38,6 +38,10 @@ pub const FLIP_909: &str = include_str!("../../../assets/mockup/flip_909.svg");
 /// (`SVG FILES/mix c.svg`, `comp m.svg`), moved to the first channel's place as the FLIP faces.
 pub const MIX_C: &str = include_str!("../../../assets/mockup/mix_c.svg");
 pub const COMP_M: &str = include_str!("../../../assets/mockup/comp_m.svg");
+/// (this fork) The user's COMP face of the 303s' channels with the sidechain (`SVG FILES/comp sc
+/// 303 1.svg`: the lamp at 808, `2`: at 909), placed on channel 1.
+pub const COMP_SC: &str = include_str!("../../../assets/mockup/comp_sc.svg");
+pub const COMP_SC2: &str = include_str!("../../../assets/mockup/comp_sc2.svg");
 /// (this fork) The user's 808 and 909 with each sound's MUTE and SOLO lamps (`SVG FILES/808
 /// solo.svg`, `909 solo.svg`), moved to their places as the FLIP faces; only the lamps are cut.
 pub const SOLO_808: &str = include_str!("../../../assets/mockup/solo_808.svg");
@@ -175,6 +179,8 @@ impl Mockup {
                 "mm" => 6,
                 "s8" => 7,
                 "s9" => 8,
+                "sc" => 9,
+                "sd" => 10,
                 _ => 1,
             },
         };
@@ -235,6 +241,16 @@ impl Mockup {
     pub fn comp_m() -> &'static Mockup {
         static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
         M.get_or_init(|| Mockup::parse(COMP_M, "mm"))
+    }
+
+    pub fn comp_sc() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(COMP_SC, "sc"))
+    }
+
+    pub fn comp_sc2() -> &'static Mockup {
+        static M: std::sync::OnceLock<Mockup> = std::sync::OnceLock::new();
+        M.get_or_init(|| Mockup::parse(COMP_SC2, "sd"))
     }
 
     pub fn solo_808() -> &'static Mockup {

@@ -212,6 +212,9 @@ pub struct Tr909 {
     tom_step: [u16; 128],
     /// DT (`flt_1014E64C`, the same ctor, [`crate::tables::tr909_decay`]).
     decay: [f32; 16],
+    /// This fork: the BD was triggered since [`ChannelDevice::take_bd_hit`] last looked (the
+    /// 303s' sidechain, [`crate::sidechain`]), heard or not.
+    bd_hit: bool,
 }
 
 const SIMPLE_RS: usize = 0;
@@ -252,6 +255,7 @@ impl Tr909 {
             process,
             tom_step: crate::tables::tr909_tom_step(),
             decay: crate::tables::tr909_decay(),
+            bd_hit: false,
         }
     }
 
@@ -279,7 +283,10 @@ impl Tr909 {
     fn trigger(&mut self, i: usize) {
         let lv = self.live;
         match i {
-            BD => self.bass(lv[BD_LEVEL], lv[BD_DECAY], lv[BD_TUNE], lv[BD_ATTACK]),
+            BD => {
+                self.bd_hit = true;
+                self.bass(lv[BD_LEVEL], lv[BD_DECAY], lv[BD_TUNE], lv[BD_ATTACK])
+            }
             SD => self.snare(lv[SD_LEVEL], lv[SD_TONE], lv[SD_TUNE], lv[SD_SNAPPY]),
             LT => self.pitched(
                 i,
@@ -600,6 +607,10 @@ impl SongDevice for Tr909 {
 }
 
 impl ChannelDevice for Tr909 {
+    fn take_bd_hit(&mut self) -> bool {
+        std::mem::take(&mut self.bd_hit)
+    }
+
     fn playing_pattern(&self) -> Option<u8> {
         Some(self.cur_pattern)
     }

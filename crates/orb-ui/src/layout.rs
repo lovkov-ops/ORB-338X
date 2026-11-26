@@ -151,8 +151,9 @@ mod tests {
         // TAPE lamps, + 2, the COMPs' OTT lamps and knob labels, + 6; the FLIP faces' four
         // effects lamps a sound in place of an FX key, + 66; each mixer channel's C key, + 4,
         // and its COMP face, nine gain-reduction LEDs, ON, OTT, RATIO, THRES, their labels and
-        // the back key, + 64; each drum sound's MUTE and SOLO lamps, + 44)
-        assert_eq!(c.len(), 913);
+        // the back key, + 64; each drum sound's MUTE and SOLO lamps, + 44; the 303s' COMP
+        // faces' sidechain knob, lamp and label, + 6)
+        assert_eq!(c.len(), 919);
         assert!(c.iter().all(|c| c.w > 0.0 && c.h > 0.0));
         let play = c.iter().find(|c| c.id == "transport.play").unwrap();
         // the mockup's play key (this fork, orb-ui-art's cuts.rs)

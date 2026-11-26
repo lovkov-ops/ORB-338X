@@ -1944,3 +1944,78 @@ fn a_shift_click_on_a_drum_sounds_name_chooses_it_without_playing_it() {
     assert_eq!(h.app.panel.inst808, 7);
     assert!(h.audio.preview_position().is_some());
 }
+
+/// (this fork) The 303s' channels' sidechain on their COMP faces: the SC knob and the lamp
+/// that picks the BD, the 808's (red, off) or the 909's (orange, on), with its label; they
+/// reach the engine, and the drum machines' channels have none.
+#[test]
+fn a_303_channels_sidechain_knob_and_lamp() {
+    use orb_engine::frame::SC;
+    let controls = orb_ui::layout::controls();
+    let has = |id: &str| controls.iter().any(|c| c.id == id);
+    let ctl = |id: &str| controls.iter().find(|c| c.id == id).unwrap().clone();
+    assert!(has("ccomp1.sc") && has("ccomp2.sc_src") && has("ccomp2.sc_label"));
+    assert!(!has("ccomp3.sc") && !has("ccomp4.sc_src"));
+    let mut h = Harness::new();
+    let part = |h: &Harness, id: &str| h.app.panel.part_name(&ctl(id), false, 0.0);
+    assert!(h.app.panel.hidden(&ctl("ccomp1.sc")));
+    h.click("mixer1.c");
+    assert!(!h.app.panel.hidden(&ctl("ccomp1.sc")));
+    assert_eq!(part(&h, "ccomp1.sc_src"), "ccompsrc_off");
+    assert_eq!(part(&h, "ccomp1.sc_label"), "ccompsclbl_off");
+    h.take_log();
+    h.click("ccomp1.sc_src");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[SC + 1, 1])]);
+    assert_eq!(part(&h, "ccomp1.sc_src"), "ccompsrc_on");
+    assert_eq!(part(&h, "ccomp1.sc_label"), "ccompsclbl_on");
+    h.drag("ccomp1.sc", 20.0);
+    let v = orb_ui::behavior::knob_send(h.app.panel.knob("ccomp1.sc")) as u8;
+    assert!(v > 0);
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[SC, v])]);
+    h.calls(2);
+    h.frame(vec![]);
+    assert_eq!(h.snap().mixer.sc, [[v, 1], [0, 0]]);
+    // the lamp again: back to the 808
+    h.click("ccomp1.sc_src");
+    assert_eq!(h.take_log(), vec![dev(Device::Mixer, 145, &[SC + 1, 0])]);
+    assert_eq!(part(&h, "ccomp1.sc_src"), "ccompsrc_off");
+}
+
+/// (this fork) A shipped song with the 303s' sidechain up dips the 303s on the BDs: it sounds
+/// otherwise than without it, with the 808's BD or the 909's, and with the BDs muted too (a
+/// muted BD still dips them). At SC 0 the lamp changes nothing.
+#[test]
+fn a_303_channels_sidechain_dips_on_the_bd_even_muted() {
+    // both drum machines play their BDs from the start
+    let render = |sc: bool, src: bool, mute: bool| {
+        let mut h = Harness::with_song("tests/songs/shipped/Trakka Rekka.rbs");
+        if mute {
+            h.click("tr808.mute1");
+            h.click("tr909.mute1");
+        }
+        for c in 1..=2 {
+            h.click(&format!("mixer{c}.c"));
+            if sc {
+                h.drag(&format!("ccomp{c}.sc"), 200.0);
+            }
+            if src {
+                h.click(&format!("ccomp{c}.sc_src"));
+            }
+        }
+        h.click("transport.play");
+        let mut out = vec![];
+        for _ in 0..400 {
+            out.extend(h.calls(1));
+        }
+        out
+    };
+    let dry = render(false, false, false);
+    assert!(
+        dry == render(false, true, false),
+        "SC at 0: the lamp changes nothing"
+    );
+    let on808 = render(true, false, false);
+    let on909 = render(true, true, false);
+    assert!(dry != on808 && dry != on909 && on808 != on909);
+    assert!(render(false, false, true) != render(true, false, true));
+}

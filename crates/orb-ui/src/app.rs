@@ -734,6 +734,8 @@ impl App {
             let y = y + self.panel.slot_dy(sec, "");
             // a drum machine's FLIP face, a mixer channel's COMP face (this fork)
             let name = match layout::row_at(x, y) {
+                // the 303s' channels' with the sidechain
+                Some(r) if name == "bg_mixer" && self.panel.ccomp_open[r] && r < 2 => "bg_ccomp_sc",
                 Some(r) if name == "bg_mixer" && self.panel.ccomp_open[r] => "bg_ccomp",
                 _ => self.panel.background(name),
             };
@@ -1023,7 +1025,7 @@ impl App {
                     paint_part(ui, &name, view.rect(x, c.y, 9.0, 16.0));
                 }
             }
-            "led" | "meter" | "ottlabel" => {
+            "led" | "meter" | "ottlabel" | "sclabel" => {
                 let name = self.panel.part_name(c, false, now);
                 paint_part(ui, &name, rect);
             }
@@ -1503,7 +1505,7 @@ fn part_size(name: &str) -> (f32, f32) {
         "bg_transport" => (592.0, 50.0),
         logo_anim::LOGO_PART => (logo_anim::LOGO_W, logo_anim::LOGO_H),
         // (this fork: a mixer channel's COMP face in place of its MIX face)
-        "bg_pattern" | "bg_mixer" | "bg_ccomp" => (70.0, 115.0),
+        "bg_pattern" | "bg_mixer" | "bg_ccomp" | "bg_ccomp_sc" => (70.0, 115.0),
         "bg_tb303" | "bg_tr808" | "bg_tr909" | "bg_tr808_flip" | "bg_tr909_flip" => (366.0, 115.0),
         "bg_master" => (82.0, 100.0),
         // this fork: the four effects slots, 90 px each

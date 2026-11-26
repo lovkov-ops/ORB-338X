@@ -160,6 +160,9 @@ pub struct Tr808 {
     process: ProcessState,
     /// T808 (`word_1014CBD8`, built by the first 808 ctor, [`crate::tables::tr808_tom_step`]).
     tom_step: [u16; 128],
+    /// This fork: the BD was triggered since [`ChannelDevice::take_bd_hit`] last looked (the
+    /// 303s' sidechain, [`crate::sidechain`]), heard or not.
+    bd_hit: bool,
 }
 
 const SIMPLE_RS: usize = 0;
@@ -197,6 +200,7 @@ impl Tr808 {
             samples,
             process,
             tom_step: crate::tables::tr808_tom_step(),
+            bd_hit: false,
         }
     }
 
@@ -224,7 +228,10 @@ impl Tr808 {
     fn trigger(&mut self, i: usize) {
         let lv = self.live;
         match i {
-            BD => self.bass_or_cymbal(true),
+            BD => {
+                self.bd_hit = true;
+                self.bass_or_cymbal(true)
+            }
             CY => self.bass_or_cymbal(false),
             SD => self.snare(),
             LT | MT | HT => self.tom(i),
@@ -503,6 +510,10 @@ impl SongDevice for Tr808 {
 }
 
 impl ChannelDevice for Tr808 {
+    fn take_bd_hit(&mut self) -> bool {
+        std::mem::take(&mut self.bd_hit)
+    }
+
     fn playing_pattern(&self) -> Option<u8> {
         Some(self.cur_pattern)
     }

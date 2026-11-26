@@ -107,6 +107,9 @@ fn main() -> ExitCode {
                 Some("fx") => orb_ui_art::mockup::Mockup::panel_fx(),
                 Some("808f") => orb_ui_art::mockup::Mockup::flip_808(),
                 Some("909f") => orb_ui_art::mockup::Mockup::flip_909(),
+                Some("mm") => orb_ui_art::mockup::Mockup::comp_m(),
+                Some("sc") => orb_ui_art::mockup::Mockup::comp_sc(),
+                Some("sd") => orb_ui_art::mockup::Mockup::comp_sc2(),
                 _ => orb_ui_art::mockup::Mockup::panel_1(),
             };
             print!("{}", orb_ui_art::mockup::dump(m));

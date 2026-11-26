@@ -723,6 +723,13 @@ fn channel_comp(b: &mut Builder, c: usize) {
     b.part("ratio_label", "ottlabel", "ccomplbl_ratio_off", 5.0, 90.4);
     b.part("thres_label", "ottlabel", "ccomplbl_thres_off", 41.0, 90.4);
     b.part("back", "trigger", "ccompback_rest", 54.5, 100.0);
+    // the 303s' channels (this fork): the sidechain, the SC knob and the lamp that picks the
+    // BD (off the 808's, on the 909's) with its label (the background `bg_ccomp_sc`)
+    if c < 2 {
+        b.knob("sc", KNOB_SMALL, 9.5, 92.0, 0.0);
+        b.part("sc_src", "toggle", "ccompsrc_off", 30.0, 95.0);
+        b.part("sc_label", "sclabel", "ccompsclbl_off", 29.0, 107.0);
+    }
 }
 
 fn master(b: &mut Builder) {
